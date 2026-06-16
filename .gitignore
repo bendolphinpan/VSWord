@@ -1,0 +1,51 @@
+# VSWord root repository ignore rules
+# Keep source/docs tracked; exclude generated dependencies, build outputs, caches, and local tools.
+
+# Project-local toolchains / downloaded runtimes / backups
+.tools/
+.backup/
+
+# Dependency directories
+node_modules/
+**/node_modules/
+
+# Code OSS build outputs / generated artifacts
+code-oss/out/
+code-oss/out-*/
+code-oss/.build/
+code-oss/.eslintcache
+code-oss/.cache/
+code-oss/.parcel-cache/
+code-oss/.vscode-test/
+code-oss/.playwright/
+code-oss/test-results/
+code-oss/playwright-report/
+
+# Logs and temp files
+docs/phase0/logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+.DS_Store
+Thumbs.db
+*.tmp
+*.temp
+
+# OS/editor local noise
+.vscode/settings.json
+.idea/
+
+# Large package/build archives
+*.tgz
+*.tar.gz
+*.zip
+*.7z
+*.asar
+*.vsix
+
+# Environment/secrets
+.env
+.env.*
+!.env.example
