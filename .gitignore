@@ -49,3 +49,6 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+
+# WSL NTFS symlink not supported: ignore test fixtures that contain symlinks
+code-oss/extensions/terminal-suggest/src/test/fixtures/

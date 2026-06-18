@@ -61,9 +61,9 @@ Working tree changes: 0
 
 - [x] Code OSS source is present in an agreed path.
 - [x] Exact upstream tag/commit is recorded.
-- [ ] Unmodified baseline install/build/start is verified.
-- [ ] Build logs are saved.
-- [ ] Baseline failure list is empty or accepted by reviewer.
+- [x] Unmodified baseline install/build/start is verified. *(WSL/Linux selfhost only — see `T-0.1-baseline-verification-report.md`)*
+- [x] Build logs are saved.
+- [x] Baseline failure list is empty or accepted by reviewer. *(Windows-native node-gyp failure on `native-keymap` accepted as known issue, deferred to packaging phase.)*
 
 ## Notes and Risks
 
