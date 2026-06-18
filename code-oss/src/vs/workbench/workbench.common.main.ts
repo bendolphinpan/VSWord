@@ -347,6 +347,9 @@ import './contrib/codeEditor/browser/codeEditor.contribution.js';
 // Markdown
 import './contrib/markdown/browser/markdown.contribution.js';
 
+// VSWord
+import './contrib/vsword/browser/vsword.contribution.js';
+
 // Keybindings Contributions
 import './contrib/keybindings/browser/keybindings.contribution.js';
 
