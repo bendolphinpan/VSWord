@@ -27,7 +27,6 @@ import { IViewContainersRegistry, IViewsRegistry, Extensions, ViewContainerLocat
 import { IWorkbenchLayoutService, Parts } from '../../../services/layout/browser/layoutService.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IHostService } from '../../../services/host/browser/host.js';
-import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
 
@@ -177,10 +176,8 @@ export class VswordWorkbenchShellContribution {
 	static readonly ID = 'workbench.contrib.vsword.shell';
 
 	constructor(
-		@IViewsService viewsService: IViewsService,
 		@IWorkbenchLayoutService layoutService: IWorkbenchLayoutService
 	) {
 		layoutService.setPartHidden(true, Parts.PANEL_PART);
-		viewsService.openView(VSWORD_HOME_VIEW_ID, true).catch(() => undefined);
 	}
 }
