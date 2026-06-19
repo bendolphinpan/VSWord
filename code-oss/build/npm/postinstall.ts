@@ -150,10 +150,33 @@ function removeParcelWatcherPrebuild(dir: string) {
 	for (const moduleName of parcelModules) {
 		if (moduleName.startsWith('watcher-')) {
 			const modulePath = path.join(parcelModuleFolder, moduleName);
-			fs.rmSync(modulePath, { recursive: true, force: true });
-			log(dir, `Removed @parcel/watcher prebuilt module ${modulePath}`);
+			removeParcelWatcherPrebuildModule(dir, modulePath);
 		}
 	}
+}
+
+function removeParcelWatcherPrebuildModule(dir: string, modulePath: string): void {
+	for (let attempt = 1; attempt <= 3; attempt++) {
+		try {
+			fs.rmSync(modulePath, { recursive: true, force: true });
+			log(dir, `Removed @parcel/watcher prebuilt module ${modulePath}`);
+			return;
+		} catch (error) {
+			if (process.platform !== 'win32' || !isWindowsFileLockError(error) || attempt === 3) {
+				throw error;
+			}
+			log(dir, `Retrying removal of @parcel/watcher prebuilt module ${modulePath}: ${String(error.code)}`);
+			sleepSync(50 * attempt);
+		}
+	}
+}
+
+function sleepSync(milliseconds: number): void {
+	Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+function isWindowsFileLockError(error: unknown): error is NodeJS.ErrnoException {
+	return !!error && typeof error === 'object' && 'code' in error && ['EPERM', 'EACCES', 'EBUSY'].includes(String(error.code));
 }
 
 function getNpmrcConfigKeys(npmrcPath: string): string[] {
