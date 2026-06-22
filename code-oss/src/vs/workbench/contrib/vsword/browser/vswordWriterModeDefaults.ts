@@ -58,6 +58,11 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				// Auto-reveal the Outline (Markdown headings tree) when the user
 				// opens a doc — Markdown's natural navigator.
 				'outline.collapseItems': 'alwaysExpand',
+				// Window title: drop ${activeEditorShort} from the default template
+				// so the OS title bar shows workspace + app only — the editor tab
+				// already shows the filename. Avoids the duplicate-title perception
+				// where the filename reads twice (tab + title bar).
+				'window.title': '${dirty}${rootName}${separator}${appName}',
 			}
 		}
 	]);
