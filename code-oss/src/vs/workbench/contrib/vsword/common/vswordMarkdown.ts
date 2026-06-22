@@ -43,5 +43,12 @@ export function createUntitledMarkdownResource(date: Date = new Date()): URI {
 		lastDayKey = today;
 	}
 	newMarkdownCounter++;
-	return URI.from({ scheme: Schemas.untitled, path: `/${today}_new${newMarkdownCounter}.md` });
+	// IMPORTANT: untitled resources derive their tab "description" (the grey
+	// suffix after the slash) from `resource.path` when it differs from the
+	// basename — see UntitledTextEditorInput#getDescription. Setting path to
+	// `/foo.md` makes name=`foo.md` and description=`/foo.md`, which renders
+	// in the tab as `foo.md / foo.md` (the duplicate title the user reported).
+	// Using the bare filename — no leading slash — keeps name === resource.path
+	// so the description is suppressed and the tab shows the filename once.
+	return URI.from({ scheme: Schemas.untitled, path: `${today}_new${newMarkdownCounter}.md` });
 }
