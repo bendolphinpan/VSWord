@@ -224,6 +224,11 @@ export abstract class AbstractExtensionsScannerService extends Disposable implem
 			allSystemExtensions = allSystemExtensions.filter(ext => !skipSet.has(ext.identifier.id.toLowerCase()));
 		}
 
+		if (this.productService.disabledBuiltInExtensions?.length) {
+			const disabledSet = new Set(this.productService.disabledBuiltInExtensions.map(id => id.toLowerCase()));
+			allSystemExtensions = allSystemExtensions.filter(ext => !disabledSet.has(ext.identifier.id.toLowerCase()));
+		}
+
 		return this.applyScanOptions(allSystemExtensions, ExtensionType.System, { pickLatest: false });
 	}
 
