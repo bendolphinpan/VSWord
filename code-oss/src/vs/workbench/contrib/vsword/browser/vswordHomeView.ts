@@ -5,9 +5,7 @@
 
 import { $, append, clearNode, addDisposableListener } from '../../../../base/browser/dom.js';
 import { Codicon } from '../../../../base/common/codicons.js';
-import { Schemas } from '../../../../base/common/network.js';
 import { ThemeIcon } from '../../../../base/common/themables.js';
-import { URI } from '../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../nls.js';
 import { IConfigurationService } from '../../../../platform/configuration/common/configuration.js';
 import { IContextKeyService } from '../../../../platform/contextkey/common/contextkey.js';
@@ -29,6 +27,7 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
+import { createUntitledMarkdownResource } from '../common/vswordMarkdown.js';
 
 export const VSWORD_HOME_VIEW_CONTAINER_ID = 'workbench.view.vsword.home';
 export const VSWORD_HOME_VIEW_ID = 'vsword.home';
@@ -141,9 +140,11 @@ class VswordHomeView extends ViewPane {
 	}
 
 	private async newMarkdownDocument(): Promise<void> {
-		const timestamp = new Date().toISOString().replace(/[-:.TZ]/g, '').slice(0, 14);
-		const resource = URI.from({ scheme: Schemas.untitled, path: `/VSWord-${timestamp}.md` });
-		await this.editorService.openEditor({ resource, languageId: 'markdown', options: { pinned: true } });
+		await this.editorService.openEditor({
+			resource: createUntitledMarkdownResource(),
+			languageId: 'markdown',
+			options: { pinned: true }
+		});
 	}
 }
 

@@ -8,5 +8,6 @@ import { VswordWorkbenchShellContribution } from './vswordHomeView.js';
 
 // Effects-only imports. Each sub-module is responsible for its own registration.
 import './vswordHelloAction.js';
+import './vswordActions.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
