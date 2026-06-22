@@ -205,6 +205,88 @@ export function getCanvasHtml(): string {
 	.md-preview strong { font-weight: 600; }
 	.md-preview em { font-style: italic; }
 
+	/* Text node */
+	.text-node { cursor: move; }
+	.text-node-bg {
+		fill: var(--vscode-editorWidget-background, #fffbe8);
+		stroke: var(--vscode-editorWidget-border, #d4c97e);
+		stroke-width: 1;
+		rx: 4; ry: 4;
+	}
+	.text-node:hover .text-node-bg, .text-node.selected .text-node-bg {
+		stroke: var(--vscode-focusBorder, #0078d4);
+		stroke-width: 2;
+	}
+	.text-content {
+		font-family: var(--vscode-font-family, sans-serif);
+		font-size: 13px;
+		color: var(--vscode-foreground, #222);
+		width: 100%; height: 100%;
+		padding: 6px 8px;
+		background: transparent;
+		border: none;
+		outline: none;
+		resize: none;
+		box-sizing: border-box;
+		white-space: pre-wrap;
+		overflow: hidden;
+	}
+
+	/* Group node */
+	.group-node { cursor: move; }
+	.group-bg {
+		fill: var(--vscode-editorGroupHeader-tabsBackground, rgba(120,120,120,0.08));
+		stroke: var(--vscode-editorGroup-border, #888);
+		stroke-width: 1.5;
+		stroke-dasharray: 6 4;
+		rx: 8; ry: 8;
+	}
+	.group-node:hover .group-bg, .group-node.selected .group-bg {
+		stroke: var(--vscode-focusBorder, #0078d4);
+	}
+	.group-header {
+		fill: var(--vscode-editorGroup-border, rgba(120,120,120,0.2));
+		rx: 8; ry: 8;
+	}
+	.group-label-text {
+		font-family: var(--vscode-font-family, sans-serif);
+		font-size: 12px;
+		font-weight: 600;
+		fill: var(--vscode-foreground, #333);
+		pointer-events: none;
+		user-select: none;
+	}
+
+	/* Drawing node */
+	.drawing-node { cursor: move; }
+	.drawing-stroke {
+		fill: none;
+		stroke: var(--vscode-editor-foreground, #333);
+		stroke-width: 2;
+		stroke-linecap: round;
+		stroke-linejoin: round;
+	}
+	.drawing-node.selected .drawing-stroke {
+		stroke: var(--vscode-focusBorder, #0078d4);
+	}
+	.drawing-bbox {
+		fill: transparent;
+		stroke: none;
+	}
+	.drawing-node:hover .drawing-bbox, .drawing-node.selected .drawing-bbox {
+		stroke: var(--vscode-focusBorder, #0078d4);
+		stroke-dasharray: 4 3;
+		stroke-width: 1;
+	}
+
+	#toolbar button.tool-active {
+		background: var(--vscode-button-hoverBackground, #006cbd);
+		outline: 2px solid var(--vscode-focusBorder, #0078d4);
+	}
+	#canvas-container.tool-text { cursor: text; }
+	#canvas-container.tool-group { cursor: crosshair; }
+	#canvas-container.tool-draw { cursor: crosshair; }
+
 	/* Empty state */
 	#empty-state {
 		position: fixed;
@@ -227,6 +309,10 @@ export function getCanvasHtml(): string {
 	<button id="btn-zoom-in" title="Zoom in">+</button>
 	<button id="btn-fit" title="Fit to view">Fit</button>
 	<button id="btn-reset" title="Reset zoom">1:1</button>
+	<span style="width:1px;height:18px;background:var(--vscode-editorGroup-border,#999);margin:0 4px"></span>
+	<button id="btn-add-text" title="Add text note (T)">+ Text</button>
+	<button id="btn-add-group" title="Add group (G)">+ Group</button>
+	<button id="btn-draw" title="Draw freehand (D)">✎ Draw</button>
 </div>
 
 <div id="canvas-container">
@@ -272,6 +358,8 @@ export function getCanvasHtml(): string {
 	let expandedNodes = {}; // nodeId -> true
 	let fileContents = {};  // nodeId -> string
 	let pendingLoad = {};   // nodeId -> true (request sent, waiting)
+	let currentTool = null; // null | 'text' | 'group' | 'draw'
+	let editingNodeId = null; // text node currently being edited
 
 	// Viewport transform
 	function applyViewport() {
@@ -364,14 +452,114 @@ export function getCanvasHtml(): string {
 		return node.height;
 	}
 
-	// Render file cards
+	// Render all node types
 	function renderNodes() {
 		nodesGroup.innerHTML = '';
 		emptyState.style.display = state.nodes.length === 0 ? 'block' : 'none';
 
-		for (const node of state.nodes) {
-			if (node.type !== 'file') continue; // Phase 1: only file nodes
+		// Group nodes are drawn first (behind), then others on top
+		const groups = state.nodes.filter(function(n) { return n.type === 'group'; });
+		const others = state.nodes.filter(function(n) { return n.type !== 'group'; });
+		for (const node of groups) renderOneNode(node);
+		for (const node of others) renderOneNode(node);
+	}
 
+	function renderOneNode(node) {
+		if (node.type === 'file') return renderFileNode(node);
+		if (node.type === 'text') return renderTextNode(node);
+		if (node.type === 'group') return renderGroupNode(node);
+		if (node.type === 'drawing') return renderDrawingNode(node);
+	}
+
+	function renderTextNode(node) {
+		const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		g.setAttribute('class', 'text-node' + (selectedId === node.id ? ' selected' : ''));
+		g.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
+		g.dataset.id = node.id;
+		g.dataset.nodeType = 'text';
+		const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+		rect.setAttribute('class', 'text-node-bg');
+		rect.setAttribute('width', node.width);
+		rect.setAttribute('height', node.height);
+		g.appendChild(rect);
+		const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+		fo.setAttribute('x', 0);
+		fo.setAttribute('y', 0);
+		fo.setAttribute('width', node.width);
+		fo.setAttribute('height', node.height);
+		const isEditing = editingNodeId === node.id;
+		if (isEditing) {
+			const ta = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
+			ta.setAttribute('class', 'text-content');
+			ta.value = node.text || '';
+			ta.dataset.editFor = node.id;
+			fo.appendChild(ta);
+		} else {
+			const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+			div.setAttribute('class', 'text-content');
+			div.textContent = node.text || '(empty note — double-click to edit)';
+			fo.appendChild(div);
+		}
+		g.appendChild(fo);
+		nodesGroup.appendChild(g);
+		if (isEditing) {
+			const ta = fo.querySelector('textarea');
+			if (ta) { ta.focus(); ta.select && ta.select(); }
+		}
+	}
+
+	function renderGroupNode(node) {
+		const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		g.setAttribute('class', 'group-node' + (selectedId === node.id ? ' selected' : ''));
+		g.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
+		g.dataset.id = node.id;
+		g.dataset.nodeType = 'group';
+		const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+		rect.setAttribute('class', 'group-bg');
+		rect.setAttribute('width', node.width);
+		rect.setAttribute('height', node.height);
+		g.appendChild(rect);
+		// Header strip
+		const header = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+		header.setAttribute('class', 'group-header');
+		header.setAttribute('x', 0);
+		header.setAttribute('y', 0);
+		header.setAttribute('width', node.width);
+		header.setAttribute('height', 22);
+		g.appendChild(header);
+		const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+		label.setAttribute('class', 'group-label-text');
+		label.setAttribute('x', 10);
+		label.setAttribute('y', 15);
+		label.textContent = node.label || 'Group';
+		g.appendChild(label);
+		nodesGroup.appendChild(g);
+	}
+
+	function renderDrawingNode(node) {
+		const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		g.setAttribute('class', 'drawing-node' + (selectedId === node.id ? ' selected' : ''));
+		g.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
+		g.dataset.id = node.id;
+		g.dataset.nodeType = 'drawing';
+		// Invisible bbox for hit-testing & selection rectangle
+		const bbox = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+		bbox.setAttribute('class', 'drawing-bbox');
+		bbox.setAttribute('width', node.width);
+		bbox.setAttribute('height', node.height);
+		g.appendChild(bbox);
+		// Polyline from points (relative to node origin)
+		if (node.points && node.points.length >= 2) {
+			const ptsStr = node.points.map(function(p) { return p[0] + ',' + p[1]; }).join(' ');
+			const pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+			pl.setAttribute('class', 'drawing-stroke');
+			pl.setAttribute('points', ptsStr);
+			g.appendChild(pl);
+		}
+		nodesGroup.appendChild(g);
+	}
+
+	function renderFileNode(node) {
 			const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
 			const isExpanded = !!expandedNodes[node.id];
 			const renderHeight = getNodeHeight(node);
@@ -480,7 +668,6 @@ export function getCanvasHtml(): string {
 			}
 
 			nodesGroup.appendChild(g);
-		}
 	}
 
 		function renderEdges() {
@@ -528,15 +715,16 @@ export function getCanvasHtml(): string {
 		}
 
 		function getPortPoint(node, port) {
-			const cx = node.x + node.width / 2;
-			const cy = node.y + node.height / 2;
-			switch (port) {
-				case 'top': return { x: cx, y: node.y };
-				case 'right': return { x: node.x + node.width, y: cy };
-				case 'bottom': return { x: cx, y: node.y + node.height };
-				case 'left': return { x: node.x, y: cy };
-				default: return { x: cx, y: cy };
-			}
+				const h = (node.type === 'file' && expandedNodes[node.id]) ? getNodeHeight(node) : node.height;
+				const cx = node.x + node.width / 2;
+				const cy = node.y + h / 2;
+				switch (port) {
+					case 'top': return { x: cx, y: node.y };
+					case 'right': return { x: node.x + node.width, y: cy };
+					case 'bottom': return { x: cx, y: node.y + h };
+					case 'left': return { x: node.x, y: cy };
+					default: return { x: cx, y: cy };
+				}
 		}
 
 		function buildEdgePath(from, to, fromPort, toPort) {
@@ -598,6 +786,50 @@ export function getCanvasHtml(): string {
 	}
 
 	svg.addEventListener('mousedown', function(e) {
+		// If a tool is active and we click empty space, create a node / start drawing
+		if (currentTool) {
+			const onNode = e.target.closest('[data-id]');
+			if (!onNode) {
+				const pos = screenToCanvas(e.clientX, e.clientY);
+				if (currentTool === 'text') {
+					const newNode = {
+						id: 'text_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+						type: 'text',
+						x: Math.round(pos.x), y: Math.round(pos.y),
+						width: 200, height: 80,
+						parentId: null,
+						text: ''
+					};
+					state.nodes.push(newNode);
+					editingNodeId = newNode.id;
+					selectedId = newNode.id;
+					vscode.postMessage({ type: 'nodeCreated', node: newNode });
+					setTool(null);
+					renderNodes();
+					e.preventDefault();
+					return;
+				}
+				if (currentTool === 'group') {
+					dragState = {
+						type: 'create-group',
+						startX: pos.x, startY: pos.y, curX: pos.x, curY: pos.y
+					};
+					e.preventDefault();
+					return;
+				}
+				if (currentTool === 'draw') {
+					dragState = {
+						type: 'draw',
+						startX: pos.x, startY: pos.y,
+						points: [[0, 0]],
+						minX: pos.x, minY: pos.y, maxX: pos.x, maxY: pos.y
+					};
+					e.preventDefault();
+					return;
+				}
+			}
+		}
+
 		// Check for preview button click (expand/collapse)
 		const previewBtn = e.target.closest('[data-preview-btn]');
 		if (previewBtn) {
@@ -616,6 +848,9 @@ export function getCanvasHtml(): string {
 			e.preventDefault();
 			return;
 		}
+
+		// Don't start drag on the textarea itself — let it receive input
+		if (e.target.tagName === 'TEXTAREA') return;
 
 		// Check for edge click first (for selection)
 		const edgeEl = e.target.closest('[data-edge="true"]');
@@ -641,9 +876,9 @@ export function getCanvasHtml(): string {
 			return;
 		}
 
-		const target = e.target.closest('.card');
+		// Any node-like target (file card / text / group / drawing)
+		const target = e.target.closest('[data-id]');
 		if (target) {
-			// Start card drag
 			const nodeId = target.dataset.id;
 			const node = state.nodes.find(function(n) { return n.id === nodeId; });
 			if (!node) return;
@@ -652,9 +887,14 @@ export function getCanvasHtml(): string {
 				type: 'card',
 				nodeId: nodeId,
 				offsetX: canvasPos.x - node.x,
-				offsetY: canvasPos.y - node.y
+				offsetY: canvasPos.y - node.y,
+				// snapshot children of group at drag start for group-move
+				childOffsets: node.type === 'group' ? state.nodes
+					.filter(function(c) { return c.parentId === node.id; })
+					.map(function(c) { return { id: c.id, dx: c.x - node.x, dy: c.y - node.y }; }) : null
 			};
 			selectedId = nodeId;
+			editingNodeId = null;
 			renderNodes();
 			e.preventDefault();
 		} else {
@@ -668,6 +908,7 @@ export function getCanvasHtml(): string {
 			};
 			document.getElementById('canvas-container').classList.add('panning');
 			selectedId = null;
+			editingNodeId = null;
 			renderNodes();
 			renderEdges();
 		}
@@ -681,12 +922,17 @@ export function getCanvasHtml(): string {
 			if (node) {
 				node.x = Math.round(canvasPos.x - dragState.offsetX);
 				node.y = Math.round(canvasPos.y - dragState.offsetY);
-				// Update DOM directly for performance (no full re-render)
-				const el = nodesGroup.querySelector('[data-id="' + dragState.nodeId + '"]');
-				if (el) {
-					el.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
+				// Move children along with group
+				if (dragState.childOffsets) {
+					for (const co of dragState.childOffsets) {
+						const child = state.nodes.find(function(n) { return n.id === co.id; });
+						if (child) {
+							child.x = node.x + co.dx;
+							child.y = node.y + co.dy;
+						}
+					}
 				}
-				// Also re-render edges connected to this node
+				renderNodes();
 				renderEdges();
 			}
 		} else if (dragState.type === 'pan') {
@@ -698,29 +944,85 @@ export function getCanvasHtml(): string {
 			dragState.curX = canvasPos.x;
 			dragState.curY = canvasPos.y;
 			renderEdges();
+		} else if (dragState.type === 'create-group') {
+			const canvasPos = screenToCanvas(e.clientX, e.clientY);
+			dragState.curX = canvasPos.x;
+			dragState.curY = canvasPos.y;
+			renderCreatePreview();
+		} else if (dragState.type === 'draw') {
+			const canvasPos = screenToCanvas(e.clientX, e.clientY);
+			const px = canvasPos.x - dragState.startX;
+			const py = canvasPos.y - dragState.startY;
+			dragState.points.push([px, py]);
+			if (canvasPos.x < dragState.minX) dragState.minX = canvasPos.x;
+			if (canvasPos.y < dragState.minY) dragState.minY = canvasPos.y;
+			if (canvasPos.x > dragState.maxX) dragState.maxX = canvasPos.x;
+			if (canvasPos.y > dragState.maxY) dragState.maxY = canvasPos.y;
+			renderCreatePreview();
 		}
 	});
+
+	// Live preview for in-progress create-group / draw
+	let previewEl = null;
+	function renderCreatePreview() {
+		if (previewEl) { previewEl.remove(); previewEl = null; }
+		if (!dragState) return;
+		if (dragState.type === 'create-group') {
+			const x = Math.min(dragState.startX, dragState.curX);
+			const y = Math.min(dragState.startY, dragState.curY);
+			const w = Math.abs(dragState.curX - dragState.startX);
+			const h = Math.abs(dragState.curY - dragState.startY);
+			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			rect.setAttribute('class', 'group-bg');
+			rect.setAttribute('x', x); rect.setAttribute('y', y);
+			rect.setAttribute('width', w); rect.setAttribute('height', h);
+			nodesGroup.appendChild(rect);
+			previewEl = rect;
+		} else if (dragState.type === 'draw') {
+			const pts = dragState.points.map(function(p) { return (dragState.startX + p[0]) + ',' + (dragState.startY + p[1]); }).join(' ');
+			const pl = document.createElementNS('http://www.w3.org/2000/svg', 'polyline');
+			pl.setAttribute('class', 'drawing-stroke');
+			pl.setAttribute('points', pts);
+			nodesGroup.appendChild(pl);
+			previewEl = pl;
+		}
+	}
 
 	document.addEventListener('mouseup', function(e) {
 		if (dragState) {
 			if (dragState.type === 'card') {
-				// Send updated positions to host for persistence
-				vscode.postMessage({ type: 'nodesMoved', nodes: state.nodes.map(function(n) { return { id: n.id, x: n.x, y: n.y }; }) });
+				// Determine which nodes moved
+				const ids = [dragState.nodeId];
+				if (dragState.childOffsets) {
+					for (const co of dragState.childOffsets) ids.push(co.id);
+				}
+				const movedNodes = state.nodes
+					.filter(function(n) { return ids.indexOf(n.id) !== -1; })
+					.map(function(n) { return { id: n.id, x: n.x, y: n.y }; });
+				// Detect group containment for the dragged node (skip if it's itself a group)
+				const draggedNode = state.nodes.find(function(n) { return n.id === dragState.nodeId; });
+				if (draggedNode && draggedNode.type !== 'group') {
+					const newParent = findContainingGroup(draggedNode);
+					const newParentId = newParent ? newParent.id : null;
+					if (draggedNode.parentId !== newParentId) {
+						draggedNode.parentId = newParentId;
+						vscode.postMessage({ type: 'nodeParentChanged', nodeId: draggedNode.id, parentId: newParentId });
+					}
+				}
+				vscode.postMessage({ type: 'nodesMoved', nodes: movedNodes });
 			} else if (dragState.type === 'pan') {
 				vscode.postMessage({ type: 'viewportChanged', viewport: state.viewport });
 			} else if (dragState.type === 'edge') {
 				// Check if released on a card or port
-				const targetCard = e.target.closest('.card');
+				const targetCard = e.target.closest('[data-id]');
 				const targetPort = e.target.closest('.port');
 				if (targetCard) {
 					const toId = targetCard.dataset.id || (targetPort && targetPort.dataset.nodeId);
 					if (toId && toId !== dragState.fromId) {
-						// Determine target port
 						let toPort = 'center';
 						if (targetPort && targetPort.dataset.port) {
 							toPort = targetPort.dataset.port;
 						}
-						// Create new edge
 						const newEdge = {
 							id: 'edge_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
 							from: dragState.fromId,
@@ -734,19 +1036,129 @@ export function getCanvasHtml(): string {
 					}
 				}
 				renderEdges();
+			} else if (dragState.type === 'create-group') {
+				if (previewEl) { previewEl.remove(); previewEl = null; }
+				const x = Math.min(dragState.startX, dragState.curX);
+				const y = Math.min(dragState.startY, dragState.curY);
+				const w = Math.abs(dragState.curX - dragState.startX);
+				const h = Math.abs(dragState.curY - dragState.startY);
+				if (w > 30 && h > 30) {
+					const newNode = {
+						id: 'group_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+						type: 'group',
+						x: Math.round(x), y: Math.round(y),
+						width: Math.round(w), height: Math.round(h),
+						parentId: null,
+						label: 'Group'
+					};
+					state.nodes.push(newNode);
+					// Capture nodes whose center falls inside this rectangle as children
+					const reparented = [];
+					for (const n of state.nodes) {
+						if (n.id === newNode.id) continue;
+						if (n.type === 'group') continue;
+						const cx = n.x + n.width / 2;
+						const cy = n.y + n.height / 2;
+						if (cx >= newNode.x && cx <= newNode.x + newNode.width &&
+							cy >= newNode.y && cy <= newNode.y + newNode.height) {
+							n.parentId = newNode.id;
+							reparented.push({ id: n.id, parentId: newNode.id });
+						}
+					}
+					selectedId = newNode.id;
+					vscode.postMessage({ type: 'nodeCreated', node: newNode });
+					for (const r of reparented) {
+						vscode.postMessage({ type: 'nodeParentChanged', nodeId: r.id, parentId: r.parentId });
+					}
+					setTool(null);
+					renderNodes();
+				} else {
+					setTool(null);
+				}
+			} else if (dragState.type === 'draw') {
+				if (previewEl) { previewEl.remove(); previewEl = null; }
+				if (dragState.points && dragState.points.length > 2) {
+					// Normalize points to bbox origin
+					const offsetX = dragState.minX - dragState.startX;
+					const offsetY = dragState.minY - dragState.startY;
+					const normalizedPoints = dragState.points.map(function(p) { return [p[0] - offsetX, p[1] - offsetY]; });
+					const w = Math.max(20, dragState.maxX - dragState.minX);
+					const h = Math.max(20, dragState.maxY - dragState.minY);
+					const newNode = {
+						id: 'draw_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+						type: 'drawing',
+						x: Math.round(dragState.minX), y: Math.round(dragState.minY),
+						width: Math.round(w), height: Math.round(h),
+						parentId: null,
+						points: normalizedPoints.map(function(p) { return [Math.round(p[0]), Math.round(p[1])]; })
+					};
+					state.nodes.push(newNode);
+					vscode.postMessage({ type: 'nodeCreated', node: newNode });
+					setTool(null);
+					renderNodes();
+				} else {
+					setTool(null);
+				}
 			}
 			dragState = null;
 			document.getElementById('canvas-container').classList.remove('panning');
 		}
 	});
 
-	// ---- Double-click to open file ----
+	function findContainingGroup(node) {
+		const cx = node.x + node.width / 2;
+		const cy = node.y + node.height / 2;
+		// Pick the smallest containing group (innermost)
+		let best = null;
+		let bestArea = Infinity;
+		for (const g of state.nodes) {
+			if (g.type !== 'group') continue;
+			if (g.id === node.id) continue;
+			if (cx >= g.x && cx <= g.x + g.width && cy >= g.y && cy <= g.y + g.height) {
+				const area = g.width * g.height;
+				if (area < bestArea) { best = g; bestArea = area; }
+			}
+		}
+		return best;
+	}
+
+	// ---- Double-click ----
 	svg.addEventListener('dblclick', function(e) {
-		const target = e.target.closest('.card');
-		if (target) {
-			vscode.postMessage({ type: 'openFile', nodeId: target.dataset.id });
+		const target = e.target.closest('[data-id]');
+		if (!target) return;
+		const nodeId = target.dataset.id;
+		const node = state.nodes.find(function(n) { return n.id === nodeId; });
+		if (!node) return;
+		if (node.type === 'file') {
+			vscode.postMessage({ type: 'openFile', nodeId: nodeId });
+		} else if (node.type === 'text') {
+			editingNodeId = nodeId;
+			selectedId = nodeId;
+			renderNodes();
+		} else if (node.type === 'group') {
+			// Inline label rename via prompt — simple but works
+			const newLabel = window.prompt('Group label', node.label || 'Group');
+			if (newLabel !== null) {
+				node.label = newLabel;
+				vscode.postMessage({ type: 'nodeUpdated', node: { id: node.id, label: newLabel } });
+				renderNodes();
+			}
 		}
 	});
+
+	// Commit text edits on textarea blur or Esc
+	document.addEventListener('focusout', function(e) {
+		if (e.target.tagName === 'TEXTAREA' && e.target.dataset.editFor) {
+			const id = e.target.dataset.editFor;
+			const node = state.nodes.find(function(n) { return n.id === id; });
+			if (node) {
+				node.text = e.target.value;
+				vscode.postMessage({ type: 'nodeUpdated', node: { id: node.id, text: node.text } });
+			}
+			editingNodeId = null;
+			renderNodes();
+		}
+	}, true);
 
 	// ---- Zoom (wheel) ----
 	svg.addEventListener('wheel', function(e) {
@@ -811,6 +1223,20 @@ export function getCanvasHtml(): string {
 		vscode.postMessage({ type: 'viewportChanged', viewport: state.viewport });
 	}
 
+	// ---- Tool buttons ----
+	function setTool(name) {
+		currentTool = name;
+		const container = document.getElementById('canvas-container');
+		container.classList.remove('tool-text', 'tool-group', 'tool-draw');
+		document.querySelectorAll('#toolbar button.tool-active').forEach(function(b) { b.classList.remove('tool-active'); });
+		if (name === 'text') { container.classList.add('tool-text'); document.getElementById('btn-add-text').classList.add('tool-active'); }
+		else if (name === 'group') { container.classList.add('tool-group'); document.getElementById('btn-add-group').classList.add('tool-active'); }
+		else if (name === 'draw') { container.classList.add('tool-draw'); document.getElementById('btn-draw').classList.add('tool-active'); }
+	}
+	document.getElementById('btn-add-text').addEventListener('click', function() { setTool(currentTool === 'text' ? null : 'text'); });
+	document.getElementById('btn-add-group').addEventListener('click', function() { setTool(currentTool === 'group' ? null : 'group'); });
+	document.getElementById('btn-draw').addEventListener('click', function() { setTool(currentTool === 'draw' ? null : 'draw'); });
+
 	// ---- Receive messages from host ----
 	window.addEventListener('message', function(e) {
 		const msg = e.data;
@@ -830,17 +1256,63 @@ export function getCanvasHtml(): string {
 	// Request initial data
 	vscode.postMessage({ type: 'ready' });
 
-	// ---- Keyboard: Delete selected edge ----
+	// ---- Keyboard shortcuts ----
 	document.addEventListener('keydown', function(e) {
+		// Ignore typing inside text inputs / textareas
+		const tag = e.target && e.target.tagName;
+		if (tag === 'TEXTAREA' || tag === 'INPUT') {
+			if (e.key === 'Escape') {
+				e.target.blur();
+			}
+			return;
+		}
+		if (e.key === 'Escape') {
+			setTool(null);
+			selectedId = null;
+			editingNodeId = null;
+			renderNodes();
+			renderEdges();
+			return;
+		}
+		if (e.key === 't' || e.key === 'T') { setTool(currentTool === 'text' ? null : 'text'); return; }
+		if (e.key === 'g' || e.key === 'G') { setTool(currentTool === 'group' ? null : 'group'); return; }
+		if (e.key === 'd' || e.key === 'D') { setTool(currentTool === 'draw' ? null : 'draw'); return; }
 		if (e.key === 'Delete' || e.key === 'Backspace') {
-			if (selectedId && selectedId.startsWith('edge_')) {
-				// Remove edge
+			if (!selectedId) return;
+			if (selectedId.startsWith('edge_')) {
 				state.edges = state.edges.filter(function(edge) { return edge.id !== selectedId; });
 				vscode.postMessage({ type: 'edgeDeleted', edgeId: selectedId });
 				selectedId = null;
 				renderEdges();
 				e.preventDefault();
+				return;
 			}
+			// Delete a node (and reparent children of a deleted group to null)
+			const id = selectedId;
+			const removed = state.nodes.find(function(n) { return n.id === id; });
+			if (!removed) return;
+			// Cascade for groups: orphan their children but don't delete them
+			if (removed.type === 'group') {
+				for (const child of state.nodes) {
+					if (child.parentId === id) {
+						child.parentId = null;
+						vscode.postMessage({ type: 'nodeParentChanged', nodeId: child.id, parentId: null });
+					}
+				}
+			}
+			state.nodes = state.nodes.filter(function(n) { return n.id !== id; });
+			// Also drop any edges that referenced it
+			const droppedEdges = state.edges.filter(function(edge) { return edge.from === id || edge.to === id; });
+			state.edges = state.edges.filter(function(edge) { return edge.from !== id && edge.to !== id; });
+			vscode.postMessage({ type: 'nodeDeleted', nodeId: id });
+			for (const de of droppedEdges) {
+				vscode.postMessage({ type: 'edgeDeleted', edgeId: de.id });
+			}
+			selectedId = null;
+			editingNodeId = null;
+			renderNodes();
+			renderEdges();
+			e.preventDefault();
 		}
 	});
 })();

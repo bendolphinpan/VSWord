@@ -149,6 +149,41 @@ class CanvasEditorManager extends Disposable {
 				}
 				break;
 			}
+			case 'nodeCreated': {
+				const doc = await canvasService.loadCanvas();
+				doc.nodes.push(msg.node);
+				await canvasService.saveCanvas(doc);
+				break;
+			}
+			case 'nodeUpdated': {
+				const doc = await canvasService.loadCanvas();
+				const node = doc.nodes.find((n: CanvasNode) => n.id === msg.node.id);
+				if (node) {
+					Object.assign(node, msg.node);
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
+			case 'nodeDeleted': {
+				const doc = await canvasService.loadCanvas();
+				doc.nodes = doc.nodes.filter((n: CanvasNode) => n.id !== msg.nodeId);
+				// Reparent orphans
+				for (const n of doc.nodes) {
+					if (n.parentId === msg.nodeId) n.parentId = null;
+				}
+				doc.edges = doc.edges.filter((e: any) => e.from !== msg.nodeId && e.to !== msg.nodeId);
+				await canvasService.saveCanvas(doc);
+				break;
+			}
+			case 'nodeParentChanged': {
+				const doc = await canvasService.loadCanvas();
+				const node = doc.nodes.find((n: CanvasNode) => n.id === msg.nodeId);
+				if (node) {
+					node.parentId = msg.parentId;
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
 		}
 	}
 }
