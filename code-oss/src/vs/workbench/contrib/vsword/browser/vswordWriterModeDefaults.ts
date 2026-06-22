@@ -27,7 +27,7 @@ const VSWORD_MARKDOWN_DEFAULTS = {
 	// Disable inline code suggestions / quick suggestions while typing prose.
 	'editor.quickSuggestions': { other: 'off', comments: 'off', strings: 'off' },
 	'editor.suggestOnTriggerCharacters': false,
-	// Wider gutter rendering off — render breadcrumb-free document.
+	// No active-line highlight — keep the page clean.
 	'editor.renderLineHighlight': 'none',
 	// Slightly taller line height for readability.
 	'editor.lineHeight': 1.6,
@@ -51,12 +51,13 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 			overrides: {
 				'[markdown]': VSWORD_MARKDOWN_DEFAULTS,
 				'[plaintext]': VSWORD_PLAINTEXT_DEFAULTS,
-				// Workbench-wide writer affordances. These are mild defaults —
-				// hide breadcrumbs and reduce activity bar visual clutter so a
-				// fresh launch reads as a writing app, not an IDE.
+				// Workbench-wide writer affordances.
 				'breadcrumbs.enabled': false,
-				'workbench.editor.showTabs': 'single',
-				'workbench.editor.tabSizing': 'fit',
+				// Light theme by default (writer-first apps default light).
+				'workbench.colorTheme': 'Default Light Modern',
+				// Auto-reveal the Outline (Markdown headings tree) when the user
+				// opens a doc — Markdown's natural navigator.
+				'outline.collapseItems': 'alwaysExpand',
 			}
 		}
 	]);

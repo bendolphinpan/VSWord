@@ -15,6 +15,7 @@ import { IInstantiationService } from '../../../../platform/instantiation/common
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { registerIcon } from '../../../../platform/theme/common/iconRegistry.js';
 import { IThemeService } from '../../../../platform/theme/common/themeService.js';
@@ -50,7 +51,8 @@ class VswordHomeView extends ViewPane {
 		@IEditorService private readonly editorService: IEditorService,
 		@IHostService private readonly hostService: IHostService,
 		@INotificationService private readonly notificationService: INotificationService,
-		@IWorkspacesService private readonly workspacesService: IWorkspacesService
+		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
+		@ICommandService private readonly commandService: ICommandService
 	) {
 		super(options, keybindingService, contextMenuService, configurationService, contextKeyService, viewDescriptorService, instantiationService, openerService, themeService, hoverService);
 	}
@@ -81,6 +83,10 @@ class VswordHomeView extends ViewPane {
 		actions.style.margin = '16px 0 20px';
 
 		this.renderButton(actions, localize('vswordNewMarkdown', 'New Markdown Document'), () => this.newMarkdownDocument());
+		this.renderButton(actions, localize('vswordOpenFolder', 'Open Folder...'), () => this.commandService.executeCommand('workbench.action.files.openFolder'));
+		this.renderButton(actions, localize('vswordOpenFile', 'Open File...'), () => this.commandService.executeCommand('workbench.action.files.openFile'));
+		this.renderButton(actions, localize('vswordShowExplorer', 'Show File Explorer'), () => this.commandService.executeCommand('workbench.view.explorer'));
+		this.renderButton(actions, localize('vswordShowOutline', 'Show Outline'), () => this.commandService.executeCommand('outline.focus'));
 		this.renderButton(actions, localize('vswordOpenCanvas', 'Open Folder as Canvas'), () => this.notificationService.info(localize('vswordCanvasComingSoon', 'Canvas is coming in T-4.')));
 		this.renderButton(actions, localize('vswordOpenMindMap', 'Open Mind Map'), () => this.notificationService.info(localize('vswordMindMapComingSoon', 'Mind Map is coming in T-5.')));
 		this.renderButton(actions, localize('vswordRefreshRecent', 'Refresh Recent'), () => this.renderHome(container));
