@@ -122,7 +122,35 @@ export function getCanvasHtml(): string {
 		text-align: center;
 	}
 
-	/* Empty state */
+		/* Edge */
+		.edge {
+			stroke: var(--vscode-editor-foreground, #333);
+			stroke-width: 2;
+			fill: none;
+			cursor: pointer;
+			transition: stroke 0.15s, stroke-width 0.15s;
+		}
+		.edge:hover { stroke: var(--vscode-focusBorder, #0078d4); stroke-width: 3; }
+		.edge.selected { stroke: var(--vscode-focusBorder, #0078d4); stroke-width: 3; }
+		.edge.dragging { stroke: var(--vscode-focusBorder, #0078d4); stroke-width: 2; stroke-dasharray: 6 4; }
+		.edge-arrow {
+			fill: var(--vscode-editor-foreground, #333);
+			cursor: pointer;
+		}
+		.edge-arrow:hover, .edge-arrow.selected { fill: var(--vscode-focusBorder, #0078d4); }
+		/* Connection ports on cards */
+		.port {
+			fill: var(--vscode-editorWidget-background, #fff);
+			stroke: var(--vscode-descriptionForeground, #888);
+			stroke-width: 1.5;
+			cursor: crosshair;
+			opacity: 0;
+			transition: opacity 0.2s;
+		}
+		.card:hover .port { opacity: 1; }
+		.port:hover { fill: var(--vscode-focusBorder, #0078d4); stroke: var(--vscode-focusBorder, #0078d4); }
+
+		/* Empty state */
 	#empty-state {
 		position: fixed;
 		top: 50%;
@@ -244,16 +272,124 @@ export function getCanvasHtml(): string {
 			size.setAttribute('x', 12);
 			size.setAttribute('y', 68);
 			size.textContent = '.' + node.extension;
-			g.appendChild(size);
+						g.appendChild(size);
 
-			nodesGroup.appendChild(g);
+						// Connection ports (4 dots on edges)
+						const ports = [
+							{ port: 'top', cx: node.width / 2, cy: 0 },
+							{ port: 'right', cx: node.width, cy: node.height / 2 },
+							{ port: 'bottom', cx: node.width / 2, cy: node.height },
+							{ port: 'left', cx: 0, cy: node.height / 2 }
+						];
+						for (const p of ports) {
+							const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+							circle.setAttribute('class', 'port');
+							circle.setAttribute('cx', p.cx);
+							circle.setAttribute('cy', p.cy);
+							circle.setAttribute('r', 5);
+							circle.dataset.port = p.port;
+							circle.dataset.nodeId = node.id;
+							g.appendChild(circle);
+						}
+
+						nodesGroup.appendChild(g);
 		}
 	}
 
-	function renderEdges() {
-		edgesGroup.innerHTML = '';
-		// Phase 2: edges rendering will go here
-	}
+		function renderEdges() {
+			edgesGroup.innerHTML = '';
+			for (const edge of state.edges) {
+				const fromNode = state.nodes.find(function(n) { return n.id === edge.from; });
+				const toNode = state.nodes.find(function(n) { return n.id === edge.to; });
+				if (!fromNode || !toNode) continue;
+
+				const fromPt = getPortPoint(fromNode, edge.fromPort);
+				const toPt = getPortPoint(toNode, edge.toPort);
+				const d = buildEdgePath(fromPt, toPt, edge.fromPort, edge.toPort);
+
+				const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+				path.setAttribute('class', 'edge' + (selectedId === edge.id ? ' selected' : ''));
+				path.setAttribute('d', d);
+				path.setAttribute('fill', 'none');
+				path.dataset.id = edge.id;
+				path.dataset.edge = 'true';
+				edgesGroup.appendChild(path);
+
+				// Arrowhead
+				const arrow = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+				arrow.setAttribute('class', 'edge-arrow');
+				arrow.setAttribute('points', arrowPoints(toPt, edge.toPort));
+				arrow.dataset.id = edge.id;
+				arrow.dataset.edge = 'true';
+				edgesGroup.appendChild(arrow);
+			}
+
+			// Render in-progress edge (if any)
+			if (dragState && dragState.type === 'edge') {
+				const fromNode = state.nodes.find(function(n) { return n.id === dragState.fromId; });
+				if (fromNode) {
+					const fromPt = getPortPoint(fromNode, dragState.fromPort);
+					const toPt = { x: dragState.curX, y: dragState.curY };
+					const d = buildEdgePath(fromPt, toPt, dragState.fromPort, 'center');
+					const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+					path.setAttribute('class', 'edge dragging');
+					path.setAttribute('d', d);
+					path.setAttribute('fill', 'none');
+					edgesGroup.appendChild(path);
+				}
+			}
+		}
+
+		function getPortPoint(node, port) {
+			const cx = node.x + node.width / 2;
+			const cy = node.y + node.height / 2;
+			switch (port) {
+				case 'top': return { x: cx, y: node.y };
+				case 'right': return { x: node.x + node.width, y: cy };
+				case 'bottom': return { x: cx, y: node.y + node.height };
+				case 'left': return { x: node.x, y: cy };
+				default: return { x: cx, y: cy };
+			}
+		}
+
+		function buildEdgePath(from, to, fromPort, toPort) {
+			// Bezier curve with control points offset from the ports
+			const dx = to.x - from.x;
+			const dy = to.y - from.y;
+			const dist = Math.sqrt(dx * dx + dy * dy);
+			const offset = Math.max(40, dist * 0.4);
+
+			let c1x = from.x, c1y = from.y, c2x = to.x, c2y = to.y;
+			switch (fromPort) {
+				case 'top': c1y = from.y - offset; break;
+				case 'right': c1x = from.x + offset; break;
+				case 'bottom': c1y = from.y + offset; break;
+				case 'left': c1x = from.x - offset; break;
+			}
+			switch (toPort) {
+				case 'top': c2y = to.y - offset; break;
+				case 'right': c2x = to.x + offset; break;
+				case 'bottom': c2y = to.y + offset; break;
+				case 'left': c2x = to.x - offset; break;
+			}
+			return 'M ' + from.x + ' ' + from.y + ' C ' + c1x + ' ' + c1y + ', ' + c2x + ' ' + c2y + ', ' + to.x + ' ' + to.y;
+		}
+
+		function arrowPoints(pt, port) {
+			const size = 8;
+			let dx = 0, dy = 0;
+			switch (port) {
+				case 'top': dy = -1; break;
+				case 'right': dx = 1; break;
+				case 'bottom': dy = 1; break;
+				case 'left': dx = -1; break;
+				default: dx = 1; break;
+			}
+			const tip = pt;
+			const left = { x: pt.x - dy * size - dx * size, y: pt.y + dx * size - dy * size };
+			const right = { x: pt.x + dy * size - dx * size, y: pt.y - dx * size - dy * size };
+			return tip.x + ',' + tip.y + ' ' + left.x + ',' + left.y + ' ' + right.x + ',' + right.y;
+		}
 
 	function render() {
 		renderNodes();
@@ -275,6 +411,30 @@ export function getCanvasHtml(): string {
 	}
 
 	svg.addEventListener('mousedown', function(e) {
+		// Check for edge click first (for selection)
+		const edgeEl = e.target.closest('[data-edge="true"]');
+		if (edgeEl) {
+			selectedId = edgeEl.dataset.id;
+			renderEdges();
+			e.preventDefault();
+			return;
+		}
+
+		// Check for port click (start edge creation)
+		const portEl = e.target.closest('.port');
+		if (portEl) {
+			const canvasPos = screenToCanvas(e.clientX, e.clientY);
+			dragState = {
+				type: 'edge',
+				fromId: portEl.dataset.nodeId,
+				fromPort: portEl.dataset.port,
+				curX: canvasPos.x,
+				curY: canvasPos.y
+			};
+			e.preventDefault();
+			return;
+		}
+
 		const target = e.target.closest('.card');
 		if (target) {
 			// Start card drag
@@ -303,6 +463,7 @@ export function getCanvasHtml(): string {
 			document.getElementById('canvas-container').classList.add('panning');
 			selectedId = null;
 			renderNodes();
+			renderEdges();
 		}
 	});
 
@@ -319,21 +480,54 @@ export function getCanvasHtml(): string {
 				if (el) {
 					el.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
 				}
+				// Also re-render edges connected to this node
+				renderEdges();
 			}
 		} else if (dragState.type === 'pan') {
 			state.viewport.x = dragState.origX + (e.clientX - dragState.startX);
 			state.viewport.y = dragState.origY + (e.clientY - dragState.startY);
 			applyViewport();
+		} else if (dragState.type === 'edge') {
+			const canvasPos = screenToCanvas(e.clientX, e.clientY);
+			dragState.curX = canvasPos.x;
+			dragState.curY = canvasPos.y;
+			renderEdges();
 		}
 	});
 
-	document.addEventListener('mouseup', function() {
+	document.addEventListener('mouseup', function(e) {
 		if (dragState) {
 			if (dragState.type === 'card') {
 				// Send updated positions to host for persistence
 				vscode.postMessage({ type: 'nodesMoved', nodes: state.nodes.map(function(n) { return { id: n.id, x: n.x, y: n.y }; }) });
 			} else if (dragState.type === 'pan') {
 				vscode.postMessage({ type: 'viewportChanged', viewport: state.viewport });
+			} else if (dragState.type === 'edge') {
+				// Check if released on a card or port
+				const targetCard = e.target.closest('.card');
+				const targetPort = e.target.closest('.port');
+				if (targetCard) {
+					const toId = targetCard.dataset.id || (targetPort && targetPort.dataset.nodeId);
+					if (toId && toId !== dragState.fromId) {
+						// Determine target port
+						let toPort = 'center';
+						if (targetPort && targetPort.dataset.port) {
+							toPort = targetPort.dataset.port;
+						}
+						// Create new edge
+						const newEdge = {
+							id: 'edge_' + Date.now() + '_' + Math.floor(Math.random() * 10000),
+							from: dragState.fromId,
+							to: toId,
+							fromPort: dragState.fromPort,
+							toPort: toPort
+						};
+						state.edges.push(newEdge);
+						vscode.postMessage({ type: 'edgeCreated', edge: newEdge });
+						renderEdges();
+					}
+				}
+				renderEdges();
 			}
 			dragState = null;
 			document.getElementById('canvas-container').classList.remove('panning');
@@ -425,6 +619,20 @@ export function getCanvasHtml(): string {
 
 	// Request initial data
 	vscode.postMessage({ type: 'ready' });
+
+	// ---- Keyboard: Delete selected edge ----
+	document.addEventListener('keydown', function(e) {
+		if (e.key === 'Delete' || e.key === 'Backspace') {
+			if (selectedId && selectedId.startsWith('edge_')) {
+				// Remove edge
+				state.edges = state.edges.filter(function(edge) { return edge.id !== selectedId; });
+				vscode.postMessage({ type: 'edgeDeleted', edgeId: selectedId });
+				selectedId = null;
+				renderEdges();
+				e.preventDefault();
+			}
+		}
+	});
 })();
 </script>
 </body>

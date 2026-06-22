@@ -128,6 +128,18 @@ class CanvasEditorManager extends Disposable {
 				}
 				break;
 			}
+			case 'edgeCreated': {
+				const doc = await canvasService.loadCanvas();
+				doc.edges.push(msg.edge);
+				await canvasService.saveCanvas(doc);
+				break;
+			}
+			case 'edgeDeleted': {
+				const doc = await canvasService.loadCanvas();
+				doc.edges = doc.edges.filter((e: any) => e.id !== msg.edgeId);
+				await canvasService.saveCanvas(doc);
+				break;
+			}
 		}
 	}
 }
