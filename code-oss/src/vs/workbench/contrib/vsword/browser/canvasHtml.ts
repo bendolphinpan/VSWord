@@ -150,7 +150,62 @@ export function getCanvasHtml(): string {
 		.card:hover .port { opacity: 1; }
 		.port:hover { fill: var(--vscode-focusBorder, #0078d4); stroke: var(--vscode-focusBorder, #0078d4); }
 
-		/* Empty state */
+		/* Preview (expanded card) */
+	.card-expanded .card-bg {
+		fill: var(--vscode-editor-background, #ffffff);
+	}
+	.preview-btn {
+		cursor: pointer;
+		pointer-events: all;
+	}
+	.preview-btn-bg {
+		fill: var(--vscode-button-secondaryBackground, #e0e0e0);
+		stroke: var(--vscode-button-secondaryBorder, #ccc);
+		stroke-width: 1;
+		rx: 3;
+		ry: 3;
+	}
+	.preview-btn:hover .preview-btn-bg {
+		fill: var(--vscode-list-hoverBackground, #d0d0d0);
+	}
+	.preview-btn-text {
+		font-size: 11px;
+		fill: var(--vscode-button-secondaryForeground, #333);
+		pointer-events: none;
+		user-select: none;
+	}
+	.md-preview {
+		font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
+		font-size: 12px;
+		color: var(--vscode-foreground, #333);
+		overflow: hidden;
+	}
+	.md-preview h1 { font-size: 15px; font-weight: 600; margin: 4px 0 2px; }
+	.md-preview h2 { font-size: 14px; font-weight: 600; margin: 4px 0 2px; }
+	.md-preview h3 { font-size: 13px; font-weight: 600; margin: 3px 0 2px; }
+	.md-preview p { margin: 2px 0; }
+	.md-preview ul { margin: 2px 0 2px 16px; padding: 0; }
+	.md-preview li { margin: 1px 0; }
+	.md-preview code {
+		font-family: var(--vscode-editor-font-family, monospace);
+		font-size: 11px;
+		background: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.12));
+		padding: 1px 3px;
+		border-radius: 3px;
+	}
+	.md-preview pre {
+		font-family: var(--vscode-editor-font-family, monospace);
+		font-size: 11px;
+		background: var(--vscode-textCodeBlock-background, rgba(128,128,128,0.12));
+		padding: 4px 6px;
+		border-radius: 4px;
+		overflow: hidden;
+		margin: 2px 0;
+	}
+	.md-preview strong { font-weight: 600; }
+	.md-preview em { font-style: italic; }
+
+	/* Empty state */
 	#empty-state {
 		position: fixed;
 		top: 50%;
@@ -214,12 +269,99 @@ export function getCanvasHtml(): string {
 	};
 
 	let selectedId = null;
+	let expandedNodes = {}; // nodeId -> true
+	let fileContents = {};  // nodeId -> string
+	let pendingLoad = {};   // nodeId -> true (request sent, waiting)
 
 	// Viewport transform
 	function applyViewport() {
 		const { x, y, zoom } = state.viewport;
 		viewportGroup.setAttribute('transform', 'translate(' + x + ',' + y + ') scale(' + zoom + ')');
 		zoomDisplay.textContent = Math.round(zoom * 100) + '%';
+	}
+
+	// ---- Markdown to HTML (minimal, safe) ----
+	function escapeHtml(s) {
+		return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+	}
+
+	function mdToHtml(md) {
+		const lines = md.split('\\n');
+		let html = '';
+		let inList = false;
+		let inCode = false;
+		for (let i = 0; i < lines.length; i++) {
+			let line = lines[i];
+			// Code fence
+			if (line.trimStart().startsWith('\\x60\\x60\\x60')) {
+				if (inCode) {
+					html += '</code></pre>';
+					inCode = false;
+				} else {
+					html += '<pre><code>';
+					inCode = true;
+				}
+				continue;
+			}
+			if (inCode) {
+				html += escapeHtml(line) + '\\n';
+				continue;
+			}
+			// Headings
+			if (line.startsWith('### ')) { html += '<h3>' + inlineMd(line.slice(4)) + '</h3>'; continue; }
+			if (line.startsWith('## ')) { html += '<h2>' + inlineMd(line.slice(3)) + '</h2>'; continue; }
+			if (line.startsWith('# ')) { html += '<h1>' + inlineMd(line.slice(2)) + '</h1>'; continue; }
+			// List items
+			if (line.match(/^\\s*[-*+]\\s/)) {
+				if (!inList) { html += '<ul>'; inList = true; }
+				html += '<li>' + inlineMd(line.replace(/^\\s*[-*+]\\s/, '')) + '</li>';
+				continue;
+			} else if (inList) {
+				html += '</ul>';
+				inList = false;
+			}
+			// Empty line
+			if (line.trim() === '') { continue; }
+			// Paragraph
+			html += '<p>' + inlineMd(line) + '</p>';
+		}
+		if (inList) html += '</ul>';
+		if (inCode) html += '</code></pre>';
+		return html;
+	}
+
+	function inlineMd(s) {
+		s = escapeHtml(s);
+		// Bold
+		s = s.replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>');
+		// Italic
+		s = s.replace(/\\*(.+?)\\*/g, '<em>$1</em>');
+		// Inline code
+		// Inline code — use \\x60 to avoid backtick in template literal
+		s = s.replace(/\\x60([^\\x60]+)\\x60/g, '<code>$1</code>');
+		// Links
+		s = s.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '<a href="$2">$1</a>');
+		return s;
+	}
+
+	// ---- Expanded card height ----
+	const COLLAPSED_HEIGHT = 80;
+	const PREVIEW_HEADER = 24; // space for the preview button row
+	const PREVIEW_MAX_HEIGHT = 300;
+	const PREVIEW_PADDING = 8;
+
+	function getExpandedHeight(node) {
+		// Estimate based on content length; capped
+		const content = fileContents[node.id] || '';
+		const lineCount = content.split('\\n').length;
+		return Math.min(COLLAPSED_HEIGHT + PREVIEW_HEADER + PREVIEW_MAX_HEIGHT, COLLAPSED_HEIGHT + PREVIEW_HEADER + lineCount * 16 + PREVIEW_PADDING * 2);
+	}
+
+	function getNodeHeight(node) {
+		if (expandedNodes[node.id]) {
+			return getExpandedHeight(node);
+		}
+		return node.height;
 	}
 
 	// Render file cards
@@ -231,14 +373,16 @@ export function getCanvasHtml(): string {
 			if (node.type !== 'file') continue; // Phase 1: only file nodes
 
 			const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-			g.setAttribute('class', 'card' + (selectedId === node.id ? ' selected' : ''));
+			const isExpanded = !!expandedNodes[node.id];
+			const renderHeight = getNodeHeight(node);
+			g.setAttribute('class', 'card' + (selectedId === node.id ? ' selected' : '') + (isExpanded ? ' card-expanded' : ''));
 			g.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
 			g.dataset.id = node.id;
 
 			const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
 			rect.setAttribute('class', 'card-bg');
 			rect.setAttribute('width', node.width);
-			rect.setAttribute('height', node.height);
+			rect.setAttribute('height', renderHeight);
 			g.appendChild(rect);
 
 			// File icon based on extension
@@ -266,33 +410,76 @@ export function getCanvasHtml(): string {
 			path.textContent = node.filePath;
 			g.appendChild(path);
 
+			// Expand/collapse button
+			const btnG = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+			btnG.setAttribute('class', 'preview-btn');
+			btnG.setAttribute('transform', 'translate(' + (node.width - 60) + ', 8)');
+			const btnRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+			btnRect.setAttribute('class', 'preview-btn-bg');
+			btnRect.setAttribute('width', 48);
+			btnRect.setAttribute('height', 18);
+			btnG.appendChild(btnRect);
+			const btnText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+			btnText.setAttribute('class', 'preview-btn-text');
+			btnText.setAttribute('x', 24);
+			btnText.setAttribute('y', 13);
+			btnText.setAttribute('text-anchor', 'middle');
+			btnText.textContent = isExpanded ? '− Collapse' : '+ Preview';
+			btnG.appendChild(btnText);
+			btnG.dataset.previewBtn = node.id;
+			g.appendChild(btnG);
+
 			// Size hint
 			const size = document.createElementNS('http://www.w3.org/2000/svg', 'text');
 			size.setAttribute('class', 'card-path');
 			size.setAttribute('x', 12);
 			size.setAttribute('y', 68);
 			size.textContent = '.' + node.extension;
-						g.appendChild(size);
+			g.appendChild(size);
 
-						// Connection ports (4 dots on edges)
-						const ports = [
-							{ port: 'top', cx: node.width / 2, cy: 0 },
-							{ port: 'right', cx: node.width, cy: node.height / 2 },
-							{ port: 'bottom', cx: node.width / 2, cy: node.height },
-							{ port: 'left', cx: 0, cy: node.height / 2 }
-						];
-						for (const p of ports) {
-							const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-							circle.setAttribute('class', 'port');
-							circle.setAttribute('cx', p.cx);
-							circle.setAttribute('cy', p.cy);
-							circle.setAttribute('r', 5);
-							circle.dataset.port = p.port;
-							circle.dataset.nodeId = node.id;
-							g.appendChild(circle);
-						}
+			// If expanded, render markdown preview via foreignObject
+			if (isExpanded) {
+				const content = fileContents[node.id];
+				if (content !== undefined) {
+					const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+					fo.setAttribute('x', 8);
+					fo.setAttribute('y', COLLAPSED_HEIGHT);
+					fo.setAttribute('width', node.width - 16);
+					fo.setAttribute('height', renderHeight - COLLAPSED_HEIGHT - PREVIEW_PADDING);
+					const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+					div.setAttribute('class', 'md-preview');
+					div.innerHTML = mdToHtml(content);
+					fo.appendChild(div);
+					g.appendChild(fo);
+				} else if (pendingLoad[node.id]) {
+					const loadingText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+					loadingText.setAttribute('class', 'card-path');
+					loadingText.setAttribute('x', 12);
+					loadingText.setAttribute('y', COLLAPSED_HEIGHT + 20);
+					loadingText.textContent = 'Loading...';
+					g.appendChild(loadingText);
+				}
+			}
 
-						nodesGroup.appendChild(g);
+			// Connection ports (4 dots on edges)
+			const ports = [
+				{ port: 'top', cx: node.width / 2, cy: 0 },
+				{ port: 'right', cx: node.width, cy: renderHeight / 2 },
+				{ port: 'bottom', cx: node.width / 2, cy: renderHeight },
+				{ port: 'left', cx: 0, cy: renderHeight / 2 }
+			];
+			for (const p of ports) {
+				const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+				circle.setAttribute('class', 'port');
+				circle.setAttribute('cx', p.cx);
+				circle.setAttribute('cy', p.cy);
+				circle.setAttribute('r', 5);
+				circle.dataset.port = p.port;
+				circle.dataset.nodeId = node.id;
+				g.appendChild(circle);
+			}
+
+			nodesGroup.appendChild(g);
 		}
 	}
 
@@ -411,6 +598,25 @@ export function getCanvasHtml(): string {
 	}
 
 	svg.addEventListener('mousedown', function(e) {
+		// Check for preview button click (expand/collapse)
+		const previewBtn = e.target.closest('[data-preview-btn]');
+		if (previewBtn) {
+			const nodeId = previewBtn.dataset.previewBtn;
+			if (expandedNodes[nodeId]) {
+				delete expandedNodes[nodeId];
+				renderNodes();
+			} else {
+				expandedNodes[nodeId] = true;
+				if (fileContents[nodeId] === undefined && !pendingLoad[nodeId]) {
+					pendingLoad[nodeId] = true;
+					vscode.postMessage({ type: 'loadFileContent', nodeId: nodeId });
+				}
+				renderNodes();
+			}
+			e.preventDefault();
+			return;
+		}
+
 		// Check for edge click first (for selection)
 		const edgeEl = e.target.closest('[data-edge="true"]');
 		if (edgeEl) {
@@ -614,6 +820,10 @@ export function getCanvasHtml(): string {
 		} else if (msg.type === 'refresh') {
 			state = msg.canvas;
 			render();
+		} else if (msg.type === 'fileContent') {
+			fileContents[msg.nodeId] = msg.content;
+			delete pendingLoad[msg.nodeId];
+			renderNodes();
 		}
 	});
 

@@ -140,6 +140,15 @@ class CanvasEditorManager extends Disposable {
 				await canvasService.saveCanvas(doc);
 				break;
 			}
+			case 'loadFileContent': {
+				const doc = await canvasService.loadCanvas();
+				const node = doc.nodes.find((n: CanvasNode) => n.id === msg.nodeId);
+				if (node && node.type === 'file') {
+					const content = await canvasService.readFileContent(node.filePath);
+					webview.postMessage({ type: 'fileContent', nodeId: msg.nodeId, content: content || '' });
+				}
+				break;
+			}
 		}
 	}
 }

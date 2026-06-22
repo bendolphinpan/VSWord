@@ -89,4 +89,18 @@ export class VSWordCanvasService extends Disposable {
 		}
 		return URI.joinPath(root, filePath);
 	}
+
+	/** Reads the text content of a file referenced by a canvas node. */
+	async readFileContent(filePath: string): Promise<string | undefined> {
+		const uri = this.resolveFilePath(filePath);
+		if (!uri) {
+			return undefined;
+		}
+		try {
+			const content = await this.fileService.readFile(uri);
+			return content.value.toString();
+		} catch {
+			return undefined;
+		}
+	}
 }
