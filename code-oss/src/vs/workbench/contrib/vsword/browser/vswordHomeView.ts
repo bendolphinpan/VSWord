@@ -87,7 +87,7 @@ class VswordHomeView extends ViewPane {
 		this.renderButton(actions, localize('vswordOpenFile', 'Open File...'), () => this.commandService.executeCommand('workbench.action.files.openFile'));
 		this.renderButton(actions, localize('vswordShowExplorer', 'Show File Explorer'), () => this.commandService.executeCommand('workbench.view.explorer'));
 		this.renderButton(actions, localize('vswordShowOutline', 'Show Outline'), () => this.commandService.executeCommand('outline.focus'));
-		this.renderButton(actions, localize('vswordOpenCanvas', 'Open Folder as Canvas'), () => this.notificationService.info(localize('vswordCanvasComingSoon', 'Canvas is coming in T-4.')));
+		this.renderButton(actions, localize('vswordOpenCanvas', 'Open Canvas'), () => this.commandService.executeCommand('vsword.actions.openCanvas'));
 		this.renderButton(actions, localize('vswordOpenMindMap', 'Open Mind Map'), () => this.notificationService.info(localize('vswordMindMapComingSoon', 'Mind Map is coming in T-5.')));
 		this.renderButton(actions, localize('vswordRefreshRecent', 'Refresh Recent'), () => this.renderHome(container));
 

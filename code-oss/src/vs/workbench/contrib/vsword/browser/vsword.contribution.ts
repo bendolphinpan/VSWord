@@ -10,6 +10,7 @@ import { VswordWordCountContribution } from './vswordWordCount.js';
 // Effects-only imports. Each sub-module is responsible for its own registration.
 import './vswordHelloAction.js';
 import './vswordActions.js';
+import './vswordCanvasAction.js';
 // Writer-mode defaults: register on import (no DI needed).
 import './vswordWriterModeDefaults.js';
 
