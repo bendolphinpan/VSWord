@@ -16,7 +16,7 @@ export interface CanvasViewport {
 	readonly zoom: number;
 }
 
-export type CanvasNodeType = 'file' | 'text' | 'group' | 'drawing';
+export type CanvasNodeType = 'file' | 'folder' | 'text' | 'group' | 'drawing';
 
 export interface CanvasNodeBase {
 	readonly id: string;
@@ -39,6 +39,14 @@ export interface CanvasFileNode extends CanvasNodeBase {
 	extension: string;
 }
 
+export interface CanvasFolderNode extends CanvasNodeBase {
+	readonly type: 'folder';
+	/** Workspace-relative folder path. */
+	folderPath: string;
+	/** Cached display name (basename). */
+	label: string;
+}
+
 export interface CanvasTextNode extends CanvasNodeBase {
 	readonly type: 'text';
 	text: string;
@@ -55,7 +63,7 @@ export interface CanvasDrawingNode extends CanvasNodeBase {
 	points: number[][];
 }
 
-export type CanvasNode = CanvasFileNode | CanvasTextNode | CanvasGroupNode | CanvasDrawingNode;
+export type CanvasNode = CanvasFileNode | CanvasFolderNode | CanvasTextNode | CanvasGroupNode | CanvasDrawingNode;
 
 export interface CanvasEdge {
 	readonly id: string;

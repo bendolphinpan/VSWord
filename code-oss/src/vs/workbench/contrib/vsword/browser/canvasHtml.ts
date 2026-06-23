@@ -180,6 +180,37 @@ export function getCanvasHtml(): string {
 		color: var(--vscode-foreground, #333);
 		overflow: hidden;
 	}
+	.file-edit {
+		width: 100%;
+		height: 100%;
+		box-sizing: border-box;
+		font-family: var(--vscode-editor-font-family, 'Consolas', monospace);
+		font-size: 12px;
+		line-height: 1.5;
+		padding: 6px 8px;
+		border: 1px solid var(--vscode-focusBorder, #007acc);
+		border-radius: 3px;
+		background: var(--vscode-input-background, #fff);
+		color: var(--vscode-input-foreground, #333);
+		resize: none;
+		outline: none;
+	}
+	.folder-card .card-bg {
+		fill: var(--vscode-editorWidget-background, #faf8f0);
+		stroke: var(--vscode-widget-border, #d4b97e);
+		stroke-width: 1.5;
+	}
+	.folder-card:hover .card-bg, .folder-card.selected .card-bg {
+		stroke: var(--vscode-focusBorder, #c89b3c);
+		stroke-width: 2;
+	}
+	.folder-tab {
+		fill: var(--vscode-widget-border, #d4b97e);
+	}
+	.folder-card .folder-label {
+		font-weight: 600;
+		font-size: 13px;
+	}
 	.md-preview h1 { font-size: 15px; font-weight: 600; margin: 4px 0 2px; }
 	.md-preview h2 { font-size: 14px; font-weight: 600; margin: 4px 0 2px; }
 	.md-preview h3 { font-size: 13px; font-weight: 600; margin: 3px 0 2px; }
@@ -466,9 +497,79 @@ export function getCanvasHtml(): string {
 
 	function renderOneNode(node) {
 		if (node.type === 'file') return renderFileNode(node);
+		if (node.type === 'folder') return renderFolderNode(node);
 		if (node.type === 'text') return renderTextNode(node);
 		if (node.type === 'group') return renderGroupNode(node);
 		if (node.type === 'drawing') return renderDrawingNode(node);
+	}
+
+	function renderFolderNode(node) {
+		const g = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+		g.setAttribute('class', 'card folder-card' + (selectedId === node.id ? ' selected' : ''));
+		g.setAttribute('transform', 'translate(' + node.x + ',' + node.y + ')');
+		g.dataset.id = node.id;
+		g.dataset.nodeType = 'folder';
+
+		const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+		rect.setAttribute('class', 'card-bg folder-bg');
+		rect.setAttribute('width', node.width);
+		rect.setAttribute('height', node.height);
+		g.appendChild(rect);
+
+		// Folder tab (paper-folder shape — small rect on top-left)
+		const tab = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+		tab.setAttribute('class', 'folder-tab');
+		tab.setAttribute('x', 12);
+		tab.setAttribute('y', -6);
+		tab.setAttribute('width', 60);
+		tab.setAttribute('height', 12);
+		tab.setAttribute('rx', 3);
+		g.appendChild(tab);
+
+		const icon = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+		icon.setAttribute('class', 'card-icon');
+		icon.setAttribute('x', node.width / 2);
+		icon.setAttribute('y', node.height / 2 - 6);
+		icon.setAttribute('text-anchor', 'middle');
+		icon.setAttribute('font-size', '36');
+		icon.textContent = '📁';
+		g.appendChild(icon);
+
+		const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+		label.setAttribute('class', 'card-label folder-label');
+		label.setAttribute('x', node.width / 2);
+		label.setAttribute('y', node.height / 2 + 28);
+		label.setAttribute('text-anchor', 'middle');
+		label.textContent = node.label;
+		g.appendChild(label);
+
+		const hint = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+		hint.setAttribute('class', 'card-path');
+		hint.setAttribute('x', node.width / 2);
+		hint.setAttribute('y', node.height - 12);
+		hint.setAttribute('text-anchor', 'middle');
+		hint.textContent = 'Double-click to open';
+		g.appendChild(hint);
+
+		// Ports
+		const ports = [
+			{ port: 'top', cx: node.width / 2, cy: 0 },
+			{ port: 'right', cx: node.width, cy: node.height / 2 },
+			{ port: 'bottom', cx: node.width / 2, cy: node.height },
+			{ port: 'left', cx: 0, cy: node.height / 2 }
+		];
+		for (const p of ports) {
+			const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+			circle.setAttribute('class', 'port');
+			circle.setAttribute('cx', p.cx);
+			circle.setAttribute('cy', p.cy);
+			circle.setAttribute('r', 5);
+			circle.dataset.port = p.port;
+			circle.dataset.nodeId = node.id;
+			g.appendChild(circle);
+		}
+
+		nodesGroup.appendChild(g);
 	}
 
 	function renderTextNode(node) {
@@ -625,20 +726,36 @@ export function getCanvasHtml(): string {
 			size.textContent = '.' + node.extension;
 			g.appendChild(size);
 
-			// If expanded, render markdown preview via foreignObject
+			// If expanded, render markdown preview OR editable textarea via foreignObject
 			if (isExpanded) {
 				const content = fileContents[node.id];
+				const isEditing = editingNodeId === node.id;
 				if (content !== undefined) {
 					const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
 					fo.setAttribute('x', 8);
 					fo.setAttribute('y', COLLAPSED_HEIGHT);
 					fo.setAttribute('width', node.width - 16);
 					fo.setAttribute('height', renderHeight - COLLAPSED_HEIGHT - PREVIEW_PADDING);
-					const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
-					div.setAttribute('class', 'md-preview');
-					div.innerHTML = mdToHtml(content);
-					fo.appendChild(div);
+					if (isEditing) {
+						const ta = document.createElementNS('http://www.w3.org/1999/xhtml', 'textarea');
+						ta.setAttribute('class', 'file-edit');
+						ta.value = content;
+						ta.dataset.editFileFor = node.id;
+						fo.appendChild(ta);
+					} else {
+						const div = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+						div.setAttribute('class', 'md-preview');
+						div.innerHTML = mdToHtml(content);
+						fo.appendChild(div);
+					}
 					g.appendChild(fo);
+				// Auto-focus the editing textarea
+				if (isEditing) {
+					setTimeout(function() {
+						const ta = g.querySelector('textarea.file-edit');
+						if (ta) ta.focus();
+					}, 0);
+				}
 				} else if (pendingLoad[node.id]) {
 					const loadingText = document.createElementNS('http://www.w3.org/2000/svg', 'text');
 					loadingText.setAttribute('class', 'card-path');
@@ -1130,7 +1247,21 @@ export function getCanvasHtml(): string {
 		const node = state.nodes.find(function(n) { return n.id === nodeId; });
 		if (!node) return;
 		if (node.type === 'file') {
-			vscode.postMessage({ type: 'openFile', nodeId: nodeId });
+			// If already expanded, double-click toggles edit mode.
+			if (expandedNodes[node.id]) {
+				editingNodeId = editingNodeId === node.id ? null : node.id;
+				renderNodes();
+			} else {
+				// First double-click: expand for preview. Second one will go to edit.
+				expandedNodes[node.id] = true;
+				if (fileContents[node.id] === undefined && !pendingLoad[node.id]) {
+					pendingLoad[node.id] = true;
+					vscode.postMessage({ type: 'loadFileContent', nodeId: node.id });
+				}
+				renderNodes();
+			}
+		} else if (node.type === 'folder') {
+			vscode.postMessage({ type: 'openSubCanvas', nodeId: node.id });
 		} else if (node.type === 'text') {
 			editingNodeId = nodeId;
 			selectedId = nodeId;
@@ -1157,8 +1288,30 @@ export function getCanvasHtml(): string {
 			}
 			editingNodeId = null;
 			renderNodes();
+		} else if (e.target.tagName === 'TEXTAREA' && e.target.dataset.editFileFor) {
+			const id = e.target.dataset.editFileFor;
+			const newContent = e.target.value;
+			if (fileContents[id] !== newContent) {
+				fileContents[id] = newContent;
+				vscode.postMessage({ type: 'saveFileContent', nodeId: id, content: newContent });
+			}
+			editingNodeId = null;
+			renderNodes();
 		}
 	}, true);
+
+	// Ctrl+S inside a file-edit textarea: save without losing focus
+	document.addEventListener('keydown', function(e) {
+		if (e.target && e.target.tagName === 'TEXTAREA' && e.target.dataset.editFileFor) {
+			if ((e.ctrlKey || e.metaKey) && (e.key === 's' || e.key === 'S')) {
+				const id = e.target.dataset.editFileFor;
+				const newContent = e.target.value;
+				fileContents[id] = newContent;
+				vscode.postMessage({ type: 'saveFileContent', nodeId: id, content: newContent });
+				e.preventDefault();
+			}
+		}
+	});
 
 	// ---- Zoom (wheel) ----
 	svg.addEventListener('wheel', function(e) {
@@ -1250,6 +1403,9 @@ export function getCanvasHtml(): string {
 			fileContents[msg.nodeId] = msg.content;
 			delete pendingLoad[msg.nodeId];
 			renderNodes();
+		} else if (msg.type === 'fileSaved') {
+			// Optional: could surface a toast. For now we just trust the write.
+			console.log('[VSWord] saved:', msg.nodeId, 'ok=', msg.ok);
 		}
 	});
 

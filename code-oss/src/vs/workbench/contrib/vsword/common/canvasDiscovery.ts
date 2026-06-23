@@ -7,91 +7,96 @@ import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
-import { CanvasFileNode, CanvasDocument } from './canvasTypes.js';
+import { CanvasFileNode, CanvasFolderNode, CanvasNode } from './canvasTypes.js';
 
 const SUPPORTED_EXTENSIONS = new Set(['md', 'markdown', 'txt', 'mm', 'json', 'csv']);
 
-export function createEmptyCanvasDocument(): CanvasDocument {
-	return { version: 1, viewport: { x: 0, y: 0, zoom: 1 }, nodes: [], edges: [] };
-}
-
 /**
- * Scan the workspace root for supported files and return CanvasFileNodes
- * laid out in a simple grid (6 columns, 200x80 cards, 40px gap).
+ * Shallow-scan a folder and produce one node per direct child:
+ *  - subfolders → CanvasFolderNode (📁 — double-click to open sub-canvas)
+ *  - files → CanvasFileNode
+ *
+ * Layout: 5-column grid, cards spaced 240×140 with gap 40.
  */
-export async function discoverFileNodes(
+export async function discoverFolderNodes(
 	fileService: IFileService,
 	root: URI,
+	folder: URI,
 	logService: ILogService,
-): Promise<CanvasFileNode[]> {
-	const files: string[] = [];
-	await listFilesRecursive(fileService, root, root, 3, files, logService);
+): Promise<CanvasNode[]> {
+	const nodes: CanvasNode[] = [];
+	let stat;
+	try {
+		stat = await fileService.resolve(folder);
+	} catch (err) {
+		logService.debug(`[VSWord Canvas] resolve failed for ${folder.toString()}: ${err}`);
+		return nodes;
+	}
+	if (!stat.children) {
+		return nodes;
+	}
 
-	const nodes: CanvasFileNode[] = [];
-	const cols = 6;
-	const cardW = 200;
-	const cardH = 80;
-	const gapX = 40;
-	const gapY = 40;
+	// Stable ordering: folders first, then files, both alphabetical.
+	const children = stat.children
+		.filter(c => !c.name.startsWith('.') && c.name !== 'node_modules' && c.name !== 'out' && c.name !== 'dist')
+		.sort((a, b) => {
+			if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+			return a.name.localeCompare(b.name);
+		});
 
-	for (let i = 0; i < files.length; i++) {
-		const filePath = files[i];
+	const cols = 5;
+	const cardW = 240;
+	const cardH = 140;
+	const gap = 40;
+
+	for (let i = 0; i < children.length; i++) {
+		const child = children[i];
 		const col = i % cols;
 		const row = Math.floor(i / cols);
-		const ext = filePath.split('.').pop()?.toLowerCase() ?? '';
-		const label = filePath.split('/').pop() ?? filePath;
+		const x = col * (cardW + gap) + 40;
+		const y = row * (cardH + gap) + 40;
 
-		nodes.push({
-			id: generateUuid(),
-			type: 'file',
-			filePath,
-			label,
-			extension: ext,
-			x: col * (cardW + gapX) + 20,
-			y: row * (cardH + gapY) + 20,
-			width: cardW,
-			height: cardH,
-			parentId: null,
-		});
+		const relPath = relativeToRoot(child.resource, root);
+
+		if (child.isDirectory) {
+			const node: CanvasFolderNode = {
+				id: generateUuid(),
+				type: 'folder',
+				folderPath: relPath,
+				label: child.name,
+				x, y, width: cardW, height: cardH,
+				parentId: null,
+			};
+			nodes.push(node);
+		} else if (child.isFile) {
+			const ext = child.name.split('.').pop()?.toLowerCase() ?? '';
+			if (!SUPPORTED_EXTENSIONS.has(ext)) {
+				continue;
+			}
+			const node: CanvasFileNode = {
+				id: generateUuid(),
+				type: 'file',
+				filePath: relPath,
+				label: child.name,
+				extension: ext,
+				x, y, width: cardW, height: cardH,
+				parentId: null,
+			};
+			nodes.push(node);
+		}
 	}
 
 	return nodes;
 }
 
-async function listFilesRecursive(
-	fileService: IFileService,
-	root: URI,
-	dir: URI,
-	depth: number,
-	results: string[],
-	logService: ILogService,
-): Promise<void> {
-	if (depth < 0) {
-		return;
+function relativeToRoot(child: URI, root: URI): string {
+	const childPath = child.path;
+	const rootPath = root.path.endsWith('/') ? root.path : root.path + '/';
+	if (childPath.startsWith(rootPath)) {
+		return childPath.substring(rootPath.length);
 	}
-
-	try {
-		const stat = await fileService.resolve(dir);
-		if (!stat.children) {
-			return;
-		}
-
-		for (const child of stat.children) {
-			if (child.name.startsWith('.') || child.name === 'node_modules' || child.name === 'out' || child.name === 'dist') {
-				continue;
-			}
-
-			if (child.isDirectory) {
-				await listFilesRecursive(fileService, root, child.resource, depth - 1, results, logService);
-			} else if (child.isFile) {
-				const ext = child.name.split('.').pop()?.toLowerCase() ?? '';
-				if (SUPPORTED_EXTENSIONS.has(ext)) {
-					const relPath = child.resource.path.replace(root.path, '').replace(/^\//, '');
-					results.push(relPath);
-				}
-			}
-		}
-	} catch (err) {
-		logService.debug(`[VSWord Canvas] resolve failed for ${dir.toString()}: ${err}`);
+	if (childPath === root.path) {
+		return '';
 	}
+	return childPath.replace(/^\//, '');
 }

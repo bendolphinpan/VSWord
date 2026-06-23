@@ -12,14 +12,19 @@ import { IWorkspaceContextService } from '../../../../platform/workspace/common/
 import { CanvasDocument } from './canvasTypes.js';
 
 /**
- * Persists canvas state to `.vsword/canvas.json` in the workspace root.
+ * Persists per-folder canvas state.
  *
- * On first open, auto-discovers files and lays them out in a grid so the user
- * sees something immediately rather than an empty canvas.
+ * Each folder gets its own `<folder>/.vsword/canvas.json` so the canvas
+ * naturally maps to "folder as workspace board". On first open of a folder
+ * we shallow-scan it and auto-tile every direct child (files + subfolders)
+ * so the user sees content immediately instead of an empty board.
  */
 export class VSWordCanvasService extends Disposable {
 
 	static readonly ID = 'vsword.canvasService';
+
+	/** The folder this service instance is bound to. */
+	private folderUri: URI | undefined;
 
 	constructor(
 		@IFileService private readonly fileService: IFileService,
@@ -29,22 +34,44 @@ export class VSWordCanvasService extends Disposable {
 		super();
 	}
 
-	private getWorkspaceRoot(): URI | undefined {
+	/** Bind this service to a specific folder. If not called, falls back to the first workspace folder. */
+	setFolder(folderUri: URI): void {
+		this.folderUri = folderUri;
+	}
+
+	getFolderUri(): URI | undefined {
+		if (this.folderUri) {
+			return this.folderUri;
+		}
 		const folders = this.workspaceService.getWorkspace().folders;
 		return folders.length > 0 ? folders[0].uri : undefined;
 	}
 
-	private getCanvasFileUri(): URI | undefined {
-		const root = this.getWorkspaceRoot();
-		if (!root) {
-			return undefined;
+	/** Workspace root (used for computing workspace-relative paths). */
+	private getWorkspaceRoot(): URI | undefined {
+		const folder = this.getFolderUri();
+		if (!folder) return undefined;
+		// Find the workspace folder that contains `folder`.
+		const wsFolders = this.workspaceService.getWorkspace().folders;
+		for (const wf of wsFolders) {
+			if (folder.path === wf.uri.path || folder.path.startsWith(wf.uri.path.endsWith('/') ? wf.uri.path : wf.uri.path + '/')) {
+				return wf.uri;
+			}
 		}
-		return URI.joinPath(root, '.vsword', 'canvas.json');
+		return wsFolders.length > 0 ? wsFolders[0].uri : undefined;
+	}
+
+	private getCanvasFileUri(): URI | undefined {
+		const folder = this.getFolderUri();
+		if (!folder) return undefined;
+		return URI.joinPath(folder, '.vsword', 'canvas.json');
 	}
 
 	async loadCanvas(): Promise<CanvasDocument> {
 		const canvasUri = this.getCanvasFileUri();
-		if (!canvasUri) {
+		const folder = this.getFolderUri();
+		const root = this.getWorkspaceRoot();
+		if (!canvasUri || !folder || !root) {
 			return { version: 1, viewport: { x: 0, y: 0, zoom: 1 }, nodes: [], edges: [] };
 		}
 
@@ -55,21 +82,18 @@ export class VSWordCanvasService extends Disposable {
 				return doc;
 			}
 		} catch {
-			// File doesn\'t exist yet — fine.
+			// File doesn't exist yet — fine, fall through to auto-discover.
 		}
 
-		// Auto-discover files.
-		const { discoverFileNodes } = await import('./canvasDiscovery.js');
+		const { discoverFolderNodes } = await import('./canvasDiscovery.js');
 		const doc: CanvasDocument = { version: 1, viewport: { x: 0, y: 0, zoom: 1 }, nodes: [], edges: [] };
-		doc.nodes = await discoverFileNodes(this.fileService, this.getWorkspaceRoot()!, this.logService);
+		doc.nodes = await discoverFolderNodes(this.fileService, root, folder, this.logService);
 		return doc;
 	}
 
 	async saveCanvas(doc: CanvasDocument): Promise<void> {
 		const canvasUri = this.getCanvasFileUri();
-		if (!canvasUri) {
-			return;
-		}
+		if (!canvasUri) return;
 
 		const dirUri = URI.joinPath(canvasUri, '..');
 		try {
@@ -82,25 +106,34 @@ export class VSWordCanvasService extends Disposable {
 		await this.fileService.writeFile(canvasUri, VSBuffer.fromString(content));
 	}
 
+	/** Resolves a workspace-relative path to an absolute URI. */
 	resolveFilePath(filePath: string): URI | undefined {
 		const root = this.getWorkspaceRoot();
-		if (!root) {
-			return undefined;
-		}
+		if (!root) return undefined;
 		return URI.joinPath(root, filePath);
 	}
 
-	/** Reads the text content of a file referenced by a canvas node. */
 	async readFileContent(filePath: string): Promise<string | undefined> {
 		const uri = this.resolveFilePath(filePath);
-		if (!uri) {
-			return undefined;
-		}
+		if (!uri) return undefined;
 		try {
 			const content = await this.fileService.readFile(uri);
 			return content.value.toString();
 		} catch {
 			return undefined;
+		}
+	}
+
+	/** Writes a string back to a workspace file. Used by in-canvas file editing. */
+	async writeFileContent(filePath: string, content: string): Promise<boolean> {
+		const uri = this.resolveFilePath(filePath);
+		if (!uri) return false;
+		try {
+			await this.fileService.writeFile(uri, VSBuffer.fromString(content));
+			return true;
+		} catch (err) {
+			this.logService.error(`[VSWord Canvas] writeFile failed for ${uri.toString()}: ${err}`);
+			return false;
 		}
 	}
 }
