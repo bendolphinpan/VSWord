@@ -34,6 +34,8 @@ This spike registers a separate entry:
 - File nodes show Markdown/text summaries when preview is enabled.
 - Preview can be toggled without reloading folder data.
 - Minimap opens from a bottom-right circular map button as an overlay popover.
+- Folder data triggers a delayed `fitView({ padding: 0.28 })` after async host data arrives, preventing right-edge clipping from stale initial fit bounds.
+- HTML includes a small critical light-theme loading style before the generated CSS loads to reduce white/dark/white startup flashes.
 - Node drag persists `x/y`.
 - Node edge resize persists `width/height`.
 - Edge connection persists `CanvasEdge`.

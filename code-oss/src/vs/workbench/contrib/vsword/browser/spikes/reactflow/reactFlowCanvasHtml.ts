@@ -18,6 +18,13 @@ export function getReactFlowCanvasHtml(scriptUri: URI, styleUri: URI, reactFlowS
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data: blob:; font-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource}; connect-src ${cspSource} blob: data:; worker-src ${cspSource} blob:;">
 <title>VSWord React Flow Canvas</title>
+<style>
+html, body, #app { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #fff; color: #1f2328; }
+body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.spike-loading { height: 100%; display: flex; align-items: center; justify-content: center; gap: 16px; }
+.spinner { width: 28px; height: 28px; border: 3px solid rgba(128,128,128,.22); border-top-color: #007acc; border-radius: 50%; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
 <link rel="stylesheet" href="${reactFlowStyleSrc}">
 <link rel="stylesheet" href="${styleSrc}">
 </head>

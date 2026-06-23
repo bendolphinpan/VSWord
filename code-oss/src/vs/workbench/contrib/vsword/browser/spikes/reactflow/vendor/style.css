@@ -57,7 +57,7 @@ html, body, #app {
 
 .canvas-toolbar {
 	top: 12px;
-	right: 12px;
+	right: 24px;
 	display: flex;
 	gap: 6px;
 	padding: 5px;
@@ -98,7 +98,7 @@ html, body, #app {
 	flex-direction: column-reverse;
 	align-items: flex-end;
 	gap: 8px;
-	margin: 14px;
+	margin: 22px 28px 22px 22px;
 	pointer-events: none;
 }
 
@@ -300,6 +300,7 @@ html, body, #app {
 	position: absolute;
 	top: 80px;
 	left: 20px;
+	right: 28px;
 	padding: 16px;
 	border-radius: 10px;
 	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 94%, transparent);

@@ -158,6 +158,8 @@ function App() {
   const [error, setError] = useState('');
   const [previewVisible, setPreviewVisible] = useState(true);
   const [minimapVisible, setMinimapVisible] = useState(true);
+  const [reactFlowInstance, setReactFlowInstance] = useState(null);
+  const [fitNonce, setFitNonce] = useState(0);
   const previewVisibleRef = useRef(true);
 
   React.useEffect(() => {
@@ -172,6 +174,7 @@ function App() {
         setFolder({ name: msg.folderName || 'Folder', uri: msg.folderUri || '' });
         setNodes(toRfNodes(msg.canvas || {}, previewVisibleRef.current));
         setEdges(toRfEdges(msg.canvas || {}));
+        setFitNonce((n) => n + 1);
         setError('');
       } else if (msg.type === 'hostError') {
         setError(msg.message || 'Unknown host error');
@@ -181,6 +184,14 @@ function App() {
     vscode.postMessage({ type: 'ready' });
     return () => window.removeEventListener('message', onMessage);
   }, []);
+
+  React.useEffect(() => {
+    if (!reactFlowInstance || nodes.length === 0) return;
+    const handle = window.setTimeout(() => {
+      reactFlowInstance.fitView({ padding: 0.28, includeHiddenNodes: false, duration: 180 });
+    }, 80);
+    return () => window.clearTimeout(handle);
+  }, [reactFlowInstance, fitNonce, nodes.length]);
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -222,7 +233,7 @@ function App() {
     }
   }, []);
 
-  const fitViewOptions = useMemo(() => ({ padding: 0.2 }), []);
+  const fitViewOptions = useMemo(() => ({ padding: 0.28 }), []);
 
   return <div className="canvas-shell">
     <div className="canvas-header"><strong>React Flow Canvas</strong><span>{folder.name}</span><span>MIT spike · SVG untouched</span></div>
@@ -236,6 +247,7 @@ function App() {
       onNodesChange={onNodesChange}
       onNodeDragStop={onNodeDragStop}
       onConnect={onConnect}
+      onInit={setReactFlowInstance}
       onNodeDoubleClick={onNodeDoubleClick}
       fitView
       fitViewOptions={fitViewOptions}
