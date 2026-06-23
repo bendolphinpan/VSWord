@@ -40,6 +40,8 @@ This spike registers a separate entry:
 - Node edge resize persists `width/height`.
 - Edge connection persists `CanvasEdge`.
 - Webview tabs are persisted/restored by a workbench `IWebviewWorkbenchService.registerResolver()` contribution; folder URI is stored in `webview.state` and used to reattach HTML/message handling after reload.
+- Viewport pan/zoom is persisted to `.vsword/canvas.json` and restored with `setViewport`; empty/default boards still use `fitView`.
+- Preview/map toggles are merged into `webview.state` without overwriting the folder URI required for tab restore.
 - Double-click file node opens the file.
 - Double-click folder node opens a sub-folder React Flow canvas.
 

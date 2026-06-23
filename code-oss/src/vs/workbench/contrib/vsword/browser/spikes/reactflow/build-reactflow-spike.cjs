@@ -49,6 +49,14 @@ import {
 import '@xyflow/react/dist/style.css';
 
 const vscode = acquireVsCodeApi();
+const initialWebviewState = (() => {
+  try {
+    const state = vscode.getState?.() || {};
+    return typeof state === 'string' ? JSON.parse(state) : state;
+  } catch {
+    return {};
+  }
+})();
 const MIN_NODE_WIDTH = 220;
 const MIN_NODE_HEIGHT = 118;
 const DEFAULT_NODE_WIDTH = 280;
@@ -156,11 +164,18 @@ function App() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [error, setError] = useState('');
-  const [previewVisible, setPreviewVisible] = useState(true);
-  const [minimapVisible, setMinimapVisible] = useState(true);
+  const [previewVisible, setPreviewVisible] = useState(initialWebviewState.previewVisible !== false);
+  const [minimapVisible, setMinimapVisible] = useState(initialWebviewState.minimapVisible !== false);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
   const [fitNonce, setFitNonce] = useState(0);
-  const previewVisibleRef = useRef(true);
+  const restoredViewportRef = useRef(false);
+  const canvasViewportRef = useRef(null);
+  const restoreStateRef = useRef({
+    kind: initialWebviewState.kind || 'vsword.reactFlowCanvas',
+    version: initialWebviewState.version || 1,
+    folderUri: initialWebviewState.folderUri || '',
+  });
+  const previewVisibleRef = useRef(initialWebviewState.previewVisible !== false);
 
   React.useEffect(() => {
     previewVisibleRef.current = previewVisible;
@@ -168,10 +183,22 @@ function App() {
   }, [previewVisible]);
 
   React.useEffect(() => {
+    try {
+      vscode.setState({ ...restoreStateRef.current, previewVisible, minimapVisible });
+    } catch {
+      // Ignore environments without VS Code state support.
+    }
+  }, [previewVisible, minimapVisible]);
+
+  React.useEffect(() => {
     const onMessage = (event) => {
       const msg = event.data || {};
       if (msg.type === 'folderData') {
         setFolder({ name: msg.folderName || 'Folder', uri: msg.folderUri || '' });
+        restoreStateRef.current = { ...restoreStateRef.current, folderUri: msg.folderUri || restoreStateRef.current.folderUri };
+        try { vscode.setState({ ...restoreStateRef.current, previewVisible: previewVisibleRef.current, minimapVisible }); } catch {}
+        canvasViewportRef.current = msg.canvas?.viewport || null;
+        restoredViewportRef.current = false;
         setNodes(toRfNodes(msg.canvas || {}, previewVisibleRef.current));
         setEdges(toRfEdges(msg.canvas || {}));
         setFitNonce((n) => n + 1);
@@ -186,9 +213,20 @@ function App() {
   }, []);
 
   React.useEffect(() => {
-    if (!reactFlowInstance || nodes.length === 0) return;
+    if (!reactFlowInstance || nodes.length === 0 || restoredViewportRef.current) return;
     const handle = window.setTimeout(() => {
-      reactFlowInstance.fitView({ padding: 0.28, includeHiddenNodes: false, duration: 180 });
+      const viewport = canvasViewportRef.current;
+      const hasSavedViewport = viewport && (Number(viewport.x) !== 0 || Number(viewport.y) !== 0 || Number(viewport.zoom) !== 1);
+      if (hasSavedViewport) {
+        reactFlowInstance.setViewport({
+          x: Number(viewport.x) || 0,
+          y: Number(viewport.y) || 0,
+          zoom: Number(viewport.zoom) || 1,
+        }, { duration: 180 });
+      } else {
+        reactFlowInstance.fitView({ padding: 0.28, includeHiddenNodes: false, duration: 180 });
+      }
+      restoredViewportRef.current = true;
     }, 80);
     return () => window.clearTimeout(handle);
   }, [reactFlowInstance, fitNonce, nodes.length]);
@@ -199,6 +237,17 @@ function App() {
 
   const onNodeDragStop = useCallback((_event, node) => {
     vscode.postMessage({ type: 'nodesMoved', nodes: [{ id: node.id, x: node.position.x, y: node.position.y }] });
+  }, []);
+
+  const onMoveEnd = useCallback((_event, viewport) => {
+    vscode.postMessage({
+      type: 'viewportChanged',
+      viewport: {
+        x: viewport.x,
+        y: viewport.y,
+        zoom: viewport.zoom,
+      },
+    });
   }, []);
 
   const onConnect = useCallback((connection) => {
@@ -247,6 +296,7 @@ function App() {
       onNodesChange={onNodesChange}
       onNodeDragStop={onNodeDragStop}
       onConnect={onConnect}
+      onMoveEnd={onMoveEnd}
       onInit={setReactFlowInstance}
       onNodeDoubleClick={onNodeDoubleClick}
       fitView

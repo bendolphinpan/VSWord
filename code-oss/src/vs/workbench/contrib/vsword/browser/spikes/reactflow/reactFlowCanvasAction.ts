@@ -86,7 +86,7 @@ class ReactFlowFolderCanvasManager {
 		canvasService.setFolder(this.folderUri);
 
 		const webview = input.webview;
-		webview.state = JSON.stringify(createRestoreState(this.folderUri));
+		webview.state = JSON.stringify(mergeRestoreState(webview.state, this.folderUri));
 		webview.setHtml(getReactFlowCanvasHtml(scriptUri, styleUri, reactFlowStyleUri));
 		webview.onMessage(async (e) => {
 			try {
@@ -129,6 +129,19 @@ class ReactFlowFolderCanvasManager {
 				if (node) {
 					node.width = Math.round(Number(msg.node.width));
 					node.height = Math.round(Number(msg.node.height));
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
+			case 'viewportChanged': {
+				const viewport = msg.viewport;
+				if (viewport && Number.isFinite(Number(viewport.x)) && Number.isFinite(Number(viewport.y)) && Number.isFinite(Number(viewport.zoom))) {
+					const doc = await canvasService.loadCanvas();
+					doc.viewport = {
+						x: Math.round(Number(viewport.x)),
+						y: Math.round(Number(viewport.y)),
+						zoom: Math.max(0.1, Math.min(4, Number(viewport.zoom))),
+					};
 					await canvasService.saveCanvas(doc);
 				}
 				break;
@@ -229,8 +242,24 @@ function getFolderName(folderUri: URI): string {
 	return folderUri.path.split('/').filter(Boolean).pop() || 'React Flow Canvas';
 }
 
-function createRestoreState(folderUri: URI): ReactFlowCanvasState {
-	return { kind: 'vsword.reactFlowCanvas', version: 1, folderUri: folderUri.toString() };
+function mergeRestoreState(state: string | undefined, folderUri: URI): ReactFlowCanvasState & Record<string, unknown> {
+	let parsed: Record<string, unknown> = {};
+	if (state) {
+		try {
+			const value = JSON.parse(state);
+			if (value && typeof value === 'object') {
+				parsed = value as Record<string, unknown>;
+			}
+		} catch {
+			// Ignore stale/malformed state and replace it with a valid restore state.
+		}
+	}
+	return {
+		...parsed,
+		kind: 'vsword.reactFlowCanvas',
+		version: 1,
+		folderUri: folderUri.toString(),
+	};
 }
 
 function isReactFlowCanvasWebview(webview: WebviewInput): boolean {
