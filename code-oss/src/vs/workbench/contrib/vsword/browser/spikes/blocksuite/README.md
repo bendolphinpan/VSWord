@@ -44,6 +44,9 @@ It does not register Explorer context menus, does not write `.vsword/canvas.json
 ## Current findings
 
 - The spike bundle was generated locally and `npm run compile` passed with 0 errors.
+- `Open as BlockSuite Canvas` is now registered as an independent Explorer folder context-menu entry. It reuses the existing VSWord folder discovery/service path, sends `folderData` into the BlockSuite webview, and renders folder/file cards as an overlay on top of the BlockSuite edgeless editor.
+- Double-clicking a file card asks the host to open that file; double-clicking a folder card opens another BlockSuite canvas scoped to that sub-folder.
+- This is intentionally an overlay proof-of-concept: the cards are not yet native BlockSuite blocks/shapes, so BlockSuite selection/drag/persistence does not own them yet.
 - `@blocksuite/presets@0.19.5` floats to `@blocksuite/icons@2.2.17`, which currently breaks bundling (`CheckBoxCkeckSolidIcon` import mismatch).
 - The local builder pins `@blocksuite/icons@2.1.75` in `.tmp/blocksuite-spike-builder` only. This is not a source patch and is not written to VSWord package files.
 - The generated browser bundle is large (~19 MB) and gitignored to avoid accidentally distributing an MPL-covered spike artifact as production code.

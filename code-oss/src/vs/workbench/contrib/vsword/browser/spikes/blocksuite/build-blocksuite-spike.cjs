@@ -35,9 +35,19 @@ fs.writeFileSync(entryPath, `import { createEmptyDoc, EdgelessEditor } from '@bl
 import { effects } from '@blocksuite/presets/effects';
 
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
+let overlay;
 
 function report(type, payload = {}) {
   vscode?.postMessage?.({ type, ...payload });
+}
+
+function escapeHtml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function short(value, max = 34) {
+  value = String(value ?? '');
+  return value.length <= max ? value : value.slice(0, max - 1) + '…';
 }
 
 function boot() {
@@ -47,12 +57,17 @@ function boot() {
 
   const badge = document.createElement('div');
   badge.className = 'spike-badge';
-  badge.textContent = 'BlockSuite Edgeless Spike · MPL dev-only · SVG canvas untouched';
+  badge.textContent = 'BlockSuite Folder Canvas Spike · MPL dev-only · overlay cards from real folder';
   root.appendChild(badge);
 
   const mount = document.createElement('div');
   mount.className = 'editor-mount';
   root.appendChild(mount);
+
+  overlay = document.createElement('div');
+  overlay.className = 'vsword-folder-overlay';
+  overlay.innerHTML = '<div class="overlay-empty">Waiting for VSWord folder data…</div>';
+  root.appendChild(overlay);
 
   try {
     effects();
@@ -70,6 +85,50 @@ function boot() {
     report('error', { message: String(err && err.message || err) });
   }
 }
+
+function renderFolderData(data) {
+  if (!overlay) return;
+  const nodes = data?.canvas?.nodes || [];
+  const folderName = data?.folderName || 'Folder';
+  const cards = nodes.map(node => {
+    const x = Number(node.x || 0);
+    const y = Number(node.y || 0);
+    const isFolder = node.type === 'folder';
+    const path = isFolder ? node.folderPath : node.filePath;
+    const summary = isFolder ? 'Double-click to open sub-canvas' : (node.summary || 'No preview content yet');
+    const icon = isFolder ? '📁' : fileIcon(node.extension || node.label);
+    const action = isFolder ? 'openSubCanvas' : 'openFile';
+    return '<button class="folder-card ' + (isFolder ? 'folder' : 'file') + '" style="left:' + x + 'px;top:' + y + 'px" data-action="' + action + '" data-path="' + escapeHtml(path) + '">' +
+      '<div class="card-head"><span class="card-icon">' + icon + '</span><span class="card-title" title="' + escapeHtml(node.label) + '">' + escapeHtml(short(node.label, 28)) + '</span></div>' +
+      '<div class="card-path" title="' + escapeHtml(path) + '">' + escapeHtml(short(path, 44)) + '</div>' +
+      '<pre class="card-summary">' + escapeHtml(summary) + '</pre>' +
+      '</button>';
+  }).join('');
+  overlay.innerHTML = '<div class="folder-title">◇ ' + escapeHtml(folderName) + ' <span>' + nodes.length + ' item(s)</span></div>' +
+    '<div class="cards-layer">' + (cards || '<div class="overlay-empty">No supported files or folders found.</div>') + '</div>';
+}
+
+function fileIcon(ext) {
+  ext = String(ext || '').toLowerCase();
+  if (ext.includes('md') || ext.includes('markdown')) return '◫';
+  if (ext.includes('mm')) return '☷';
+  if (ext.includes('txt')) return '☰';
+  return '□';
+}
+
+document.addEventListener('dblclick', event => {
+  const card = event.target.closest?.('.folder-card');
+  if (!card) return;
+  const path = card.dataset.path;
+  if (card.dataset.action === 'openSubCanvas') report('openSubCanvas', { folderPath: path });
+  if (card.dataset.action === 'openFile') report('openFile', { filePath: path });
+});
+
+window.addEventListener('message', event => {
+  const message = event.data || {};
+  if (message.type === 'folderData') renderFolderData(message);
+  if (message.type === 'hostError' && overlay) overlay.innerHTML = '<pre class="spike-error">' + escapeHtml(message.message) + '</pre>';
+});
 
 boot();
 `, 'utf8');
