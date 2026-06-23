@@ -33,23 +33,54 @@ html, body, #app {
 	position: relative;
 }
 
-.canvas-header {
+.canvas-header,
+.canvas-toolbar {
 	position: absolute;
-	top: 12px;
-	left: 12px;
 	z-index: 10;
-	padding: 6px 10px;
 	border-radius: 7px;
 	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 94%, transparent);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent);
 	box-shadow: 0 2px 8px rgba(0,0,0,.08);
 	font-size: 12px;
-	pointer-events: none;
 	backdrop-filter: blur(6px);
+}
+
+.canvas-header {
+	top: 12px;
+	left: 12px;
+	padding: 6px 10px;
+	pointer-events: none;
 }
 
 .canvas-header strong { font-weight: 650; }
 .canvas-header span { margin-left: 8px; opacity: .62; }
+
+.canvas-toolbar {
+	top: 12px;
+	right: 12px;
+	display: flex;
+	gap: 6px;
+	padding: 5px;
+}
+
+.canvas-toolbar button {
+	border: 1px solid transparent;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--vscode-button-secondaryForeground, var(--vscode-editor-foreground, #222));
+	font: 12px/1 var(--vscode-font-family, 'Segoe UI', sans-serif);
+	padding: 5px 8px;
+	cursor: pointer;
+}
+
+.canvas-toolbar button:hover {
+	background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,.12));
+}
+
+.canvas-toolbar button.active {
+	background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 14%, transparent);
+	border-color: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 35%, transparent);
+}
 
 .react-flow {
 	background: var(--vscode-editor-background, #fff);
@@ -60,6 +91,13 @@ html, body, #app {
 	background: var(--vscode-editor-background, #fff);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 68%, transparent);
 	box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.react-flow__minimap {
+	width: 260px !important;
+	height: 170px !important;
+	border-radius: 8px;
+	overflow: hidden;
 }
 
 .react-flow__node {
@@ -75,7 +113,8 @@ html, body, #app {
 .vsword-card {
 	box-sizing: border-box;
 	width: 100%;
-	min-height: 154px;
+	height: 100%;
+	min-height: 118px;
 	padding: 12px;
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #8c8c8c) 78%, transparent);
 	border-radius: 12px;
@@ -118,7 +157,8 @@ html, body, #app {
 	letter-spacing: .3px;
 }
 
-.vsword-card .icon.doc {
+.vsword-card .icon.doc,
+.vsword-card .icon.note {
 	background: color-mix(in srgb, var(--vscode-textLink-foreground, #6b6bd6) 16%, transparent);
 	color: color-mix(in srgb, var(--vscode-textLink-foreground, #5b5bd6) 78%, var(--vscode-editor-foreground, #222));
 }
@@ -145,19 +185,14 @@ html, body, #app {
 }
 
 .vsword-card .summary {
-	position: relative;
 	margin: 10px 0 0;
 	padding: 0;
 	font: 12px/1.42 var(--vscode-editor-font-family, Consolas, monospace);
 	white-space: pre-wrap;
-	overflow: hidden;
-	max-height: 88px;
-	opacity: .82;
-}
-
-.vsword-card:hover .summary {
 	overflow: auto;
-	max-height: 116px;
+	height: calc(100% - 57px);
+	max-height: none;
+	opacity: .82;
 }
 
 .vsword-card .summary::-webkit-scrollbar {
@@ -199,6 +234,18 @@ html, body, #app {
 
 .react-flow__handle:hover {
 	transform: scale(1.35);
+}
+
+.vsword-resize-line {
+	border-color: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 70%, transparent) !important;
+}
+
+.vsword-resize-handle {
+	width: 8px !important;
+	height: 8px !important;
+	border-radius: 999px !important;
+	background: var(--vscode-focusBorder, #007acc) !important;
+	border: 1.5px solid var(--vscode-editor-background, #fff) !important;
 }
 
 .spike-error {

@@ -104,6 +104,16 @@ class ReactFlowFolderCanvasManager {
 				await canvasService.saveCanvas(doc);
 				break;
 			}
+			case 'nodeResized': {
+				const doc = await canvasService.loadCanvas();
+				const node = doc.nodes.find(n => n.id === msg.node?.id);
+				if (node) {
+					node.width = Math.round(Number(msg.node.width));
+					node.height = Math.round(Number(msg.node.height));
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
 			case 'edgeCreated': {
 				const doc = await canvasService.loadCanvas();
 				const edge: CanvasEdge = {

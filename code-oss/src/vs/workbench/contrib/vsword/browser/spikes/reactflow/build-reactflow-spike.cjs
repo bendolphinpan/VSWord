@@ -31,7 +31,7 @@ function run(command, cwd = builderDir) {
 fs.mkdirSync(srcDir, { recursive: true });
 fs.mkdirSync(vendorDir, { recursive: true });
 
-fs.writeFileSync(entryPath, `import React, { useCallback, useMemo, useState } from 'react';
+fs.writeFileSync(entryPath, `import React, { useCallback, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   ReactFlow,
@@ -41,21 +41,41 @@ import {
   Handle,
   Position,
   MarkerType,
+  NodeResizer,
   applyNodeChanges,
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 
 const vscode = acquireVsCodeApi();
+const MIN_NODE_WIDTH = 220;
+const MIN_NODE_HEIGHT = 118;
+const DEFAULT_NODE_WIDTH = 280;
+const DEFAULT_FILE_HEIGHT = 178;
+const DEFAULT_FOLDER_HEIGHT = 126;
 
-function toRfNodes(canvas) {
-  return (canvas.nodes || []).map((node) => ({
-    id: node.id,
-    type: node.type === 'folder' ? 'folderCard' : node.type === 'file' ? 'fileCard' : 'noteCard',
-    position: { x: Number(node.x) || 0, y: Number(node.y) || 0 },
-    data: { node },
-    style: { width: Math.max(Number(node.width) || 260, 260) },
-  }));
+function coerceNodeSize(node) {
+  const width = Math.max(Number(node.width) || DEFAULT_NODE_WIDTH, MIN_NODE_WIDTH);
+  const fallbackHeight = node.type === 'folder' ? DEFAULT_FOLDER_HEIGHT : DEFAULT_FILE_HEIGHT;
+  const height = Math.max(Number(node.height) || fallbackHeight, MIN_NODE_HEIGHT);
+  return { width, height };
+}
+
+function toRfNodes(canvas, previewVisible) {
+  return (canvas.nodes || []).map((node) => {
+    const size = coerceNodeSize(node);
+    return {
+      id: node.id,
+      type: node.type === 'folder' ? 'folderCard' : node.type === 'file' ? 'fileCard' : 'noteCard',
+      position: { x: Number(node.x) || 0, y: Number(node.y) || 0 },
+      data: { node, previewVisible },
+      style: { width: size.width, height: size.height },
+    };
+  });
+}
+
+function syncPreviewFlag(nodes, previewVisible) {
+  return nodes.map((node) => ({ ...node, data: { ...node.data, previewVisible } }));
 }
 
 function toRfEdges(canvas) {
@@ -69,6 +89,21 @@ function toRfEdges(canvas) {
   }));
 }
 
+function persistResize(nodeId, width, height) {
+  vscode.postMessage({ type: 'nodeResized', node: { id: nodeId, width, height } });
+}
+
+function CardResizer({ node, selected }) {
+  return <NodeResizer
+    isVisible={selected}
+    minWidth={MIN_NODE_WIDTH}
+    minHeight={MIN_NODE_HEIGHT}
+    lineClassName="vsword-resize-line"
+    handleClassName="vsword-resize-handle"
+    onResizeEnd={(_event, params) => persistResize(node.id, params.width, params.height)}
+  />;
+}
+
 function CardHandles() {
   return <>
     <Handle id="top" type="target" position={Position.Top} />
@@ -78,19 +113,22 @@ function CardHandles() {
   </>;
 }
 
-function FileCard({ data }) {
+function FileCard({ data, selected }) {
   const node = data.node;
+  const previewVisible = data.previewVisible !== false;
   return <div className="vsword-card file" title="Double-click to open file">
+    <CardResizer node={node} selected={selected} />
     <CardHandles />
     <div className="head"><span className="icon doc">MD</span><span className="title">{node.label || node.filePath}</span></div>
     <div className="path">{node.filePath}</div>
-    {node.summary ? <pre className="summary">{node.summary}</pre> : <div className="hint">Double-click to open file</div>}
+    {previewVisible && node.summary ? <pre className="summary">{node.summary}</pre> : <div className="hint">{previewVisible ? 'Double-click to open file' : 'Preview hidden'}</div>}
   </div>;
 }
 
-function FolderCard({ data }) {
+function FolderCard({ data, selected }) {
   const node = data.node;
   return <div className="vsword-card folder" title="Double-click to drill into folder">
+    <CardResizer node={node} selected={selected} />
     <CardHandles />
     <div className="head"><span className="icon folder">DIR</span><span className="title">{node.label || node.folderPath}</span></div>
     <div className="path">{node.folderPath}</div>
@@ -98,13 +136,15 @@ function FolderCard({ data }) {
   </div>;
 }
 
-function NoteCard({ data }) {
+function NoteCard({ data, selected }) {
   const node = data.node;
   const title = node.label || node.text || node.id;
+  const previewVisible = data.previewVisible !== false;
   return <div className="vsword-card note">
+    <CardResizer node={node} selected={selected} />
     <CardHandles />
-    <div className="head"><span className="icon">✦</span><span className="title">{title}</span></div>
-    {node.text ? <pre className="summary">{node.text}</pre> : <div className="hint">{node.type}</div>}
+    <div className="head"><span className="icon note">TXT</span><span className="title">{title}</span></div>
+    {previewVisible && node.text ? <pre className="summary">{node.text}</pre> : <div className="hint">{previewVisible ? node.type : 'Preview hidden'}</div>}
   </div>;
 }
 
@@ -115,13 +155,21 @@ function App() {
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
   const [error, setError] = useState('');
+  const [previewVisible, setPreviewVisible] = useState(true);
+  const [minimapVisible, setMinimapVisible] = useState(true);
+  const previewVisibleRef = useRef(true);
+
+  React.useEffect(() => {
+    previewVisibleRef.current = previewVisible;
+    setNodes((nds) => syncPreviewFlag(nds, previewVisible));
+  }, [previewVisible]);
 
   React.useEffect(() => {
     const onMessage = (event) => {
       const msg = event.data || {};
       if (msg.type === 'folderData') {
         setFolder({ name: msg.folderName || 'Folder', uri: msg.folderUri || '' });
-        setNodes(toRfNodes(msg.canvas || {}));
+        setNodes(toRfNodes(msg.canvas || {}, previewVisibleRef.current));
         setEdges(toRfEdges(msg.canvas || {}));
         setError('');
       } else if (msg.type === 'hostError') {
@@ -177,6 +225,10 @@ function App() {
 
   return <div className="canvas-shell">
     <div className="canvas-header"><strong>React Flow Canvas</strong><span>{folder.name}</span><span>MIT spike · SVG untouched</span></div>
+    <div className="canvas-toolbar">
+      <button type="button" className={previewVisible ? 'active' : ''} onClick={() => setPreviewVisible(v => !v)}>{previewVisible ? 'Hide preview' : 'Show preview'}</button>
+      <button type="button" className={minimapVisible ? 'active' : ''} onClick={() => setMinimapVisible(v => !v)}>{minimapVisible ? 'Hide map' : 'Show map'}</button>
+    </div>
     <ReactFlow
       nodes={nodes}
       edges={edges}
@@ -190,7 +242,7 @@ function App() {
     >
       <Background gap={32} size={1} />
       <Controls />
-      <MiniMap pannable zoomable nodeStrokeWidth={3} />
+      {minimapVisible ? <MiniMap pannable zoomable nodeStrokeWidth={3} style={{ width: 260, height: 170 }} /> : null}
     </ReactFlow>
     {error ? <div className="spike-error">{error}</div> : null}
   </div>;

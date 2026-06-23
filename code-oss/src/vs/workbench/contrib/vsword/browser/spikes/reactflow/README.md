@@ -2,45 +2,52 @@
 
 ## Goal
 
-Validate whether `@xyflow/react` (React Flow, MIT) can replace the hand-rolled SVG interaction layer for VSWord Folder-as-Canvas while preserving the self-owned VSWord semantic model.
+Validate whether `@xyflow/react` (React Flow, MIT) can replace the hand-rolled SVG interaction layer for VSWord Folder-as-Canvas while preserving the self-owned VSWord semantic canvas model.
 
-## Safety boundaries
+## Status
 
-- Do not replace `Open as Canvas` / SVG MVP.
-- Do not modify root `package.json` or `package-lock.json`.
-- Install React Flow dependencies only in `.tmp/reactflow-spike-builder`.
-- Generated `vendor/index.js` and `vendor/index.css` are local dev artifacts and gitignored.
-- Keep `.vsword/canvas.json` as the source of truth.
+Dev-only spike. The production SVG canvas remains available as `Open as Canvas`.
 
-## Command
+This spike registers a separate entry:
 
-```text
-Open as React Flow Canvas
-```
+- `Open as React Flow Canvas`
 
-Available from the command palette and Explorer folder context menu.
+## Why React Flow
 
-## Verification
+- MIT license.
+- Native `nodes[]` / `edges[]` model maps cleanly to VSWord `CanvasDocument`.
+- Provides pan, zoom, selection, drag, handles, edges, controls, minimap, and node resize without rebuilding all interactions by hand.
+- Keeps VSWord files/folders as first-class semantic nodes instead of embedding a full third-party app model.
 
-```bash
-cd /d/GIT/VSWord/code-oss
-node src/vs/workbench/contrib/vsword/browser/spikes/reactflow/build-reactflow-spike.cjs
-npm run compile
-```
+## Dependency policy
 
-Then launch Code OSS and right-click a folder:
+- Do not edit root `package.json` / `package-lock.json` for this spike.
+- `build-reactflow-spike.cjs` installs dependencies into `.tmp/reactflow-spike-builder`.
+- Generated `vendor/index.js`, `vendor/index.css`, and legal sidecar files are gitignored local artifacts.
+- `vendor/THIRD_PARTY_LICENSES.md` is committed as a snapshot for review.
 
-```text
-Open as React Flow Canvas
-```
+## Implemented behavior
 
-Expected:
-
-- Direct child files/folders render as React Flow custom nodes.
-- Dragging nodes persists x/y to `.vsword/canvas.json`.
-- Connecting handles persists edges.
+- Host reuses VSWord folder discovery and `.vsword/canvas.json` persistence.
+- Webview receives `folderData`.
+- Folder children render as React Flow cards.
+- File nodes show Markdown/text summaries when preview is enabled.
+- Preview can be toggled without reloading folder data.
+- Minimap can be shown/hidden and is larger than the default React Flow minimap.
+- Node drag persists `x/y`.
+- Node edge resize persists `width/height`.
+- Edge connection persists `CanvasEdge`.
 - Double-click file node opens the file.
 - Double-click folder node opens a sub-folder React Flow canvas.
+
+## Pretext note
+
+`@chenglou/pretext` was checked as a future candidate for text measurement/layout:
+
+- latest checked version: `0.0.8`
+- license: MIT
+
+It is not included in this spike yet. The current problem was layout shift caused by hover-height CSS, so the safer fix is a stable card box, fixed preview area, and explicit node resize. Pretext is more relevant later for automatic text measurement, masonry layout, or non-DOM typographic previews.
 
 ## Current verdict
 
@@ -50,10 +57,13 @@ Evidence:
 
 - `build-reactflow-spike.cjs` generates local `vendor/index.js` and `vendor/index.css` from temporary `.tmp/reactflow-spike-builder` dependencies.
 - Root `package.json` / `package-lock.json` remain unchanged.
-- `npm run compile` finished with 0 errors.
+- Code OSS `npm run compile` completes with 0 errors.
 - Generated bundle artifacts are gitignored; committed files are source, styles, README, and license snapshot only.
+- GUI smoke confirms Code OSS starts with a clean user-data directory; manual click verification is still required for UI details.
 
 Remaining manual check:
 
 - Right-click a folder and click `Open as React Flow Canvas`.
+- Toggle preview and minimap.
+- Resize file/folder cards from selected-node edges.
 - Confirm node drag, edge connect, file double-click, and folder drill-in feel better/worse than the SVG MVP.
