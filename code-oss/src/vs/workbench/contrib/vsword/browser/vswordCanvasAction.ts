@@ -12,7 +12,7 @@ import { IInstantiationService, ServicesAccessor } from '../../../../platform/in
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
-import { IWebviewService, WebviewInitInfo } from '../../webview/browser/webview.js';
+import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
 import { getCanvasHtml } from './canvasHtml.js';
 import { VSWordCanvasService } from '../common/canvasService.js';
@@ -22,16 +22,12 @@ const CANVAS_VIEW_TYPE_PREFIX = 'vsword.canvas';
 
 /**
  * Manages one Canvas webview editor instance bound to a folder URI.
- *
- * A separate manager (and tab) is created per folder, so opening sub-folders
- * via "drill in" or via the Explorer context menu produces distinct canvases.
  */
 class CanvasEditorManager extends Disposable {
 
 	constructor(
 		private readonly folderUri: URI,
 		@IWebviewWorkbenchService private readonly webviewWorkbenchService: IWebviewWorkbenchService,
-		@IWebviewService private readonly webviewService: IWebviewService,
 		@IEditorService private readonly editorService: IEditorService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@ILogService private readonly logService: ILogService,
@@ -41,41 +37,44 @@ class CanvasEditorManager extends Disposable {
 
 	openCanvas(): void {
 		const viewType = CANVAS_VIEW_TYPE_PREFIX + ':' + this.folderUri.toString();
-		const title = '🗺 ' + (this.folderUri.path.split('/').filter(Boolean).pop() || 'Canvas');
+		const folderName = this.folderUri.path.split('/').filter(Boolean).pop() || 'Canvas';
+		const title = '🗺 ' + folderName;
 
 		// Reveal if already open
-		const existing = this.editorService.getEditors(0 /* active group */)
-			.find(e => e.editor.editorId === viewType);
-		if (existing) {
-			this.editorService.openEditor(existing.editor, { pinned: true });
-			return;
+		for (const editor of this.editorService.editors) {
+			if ((editor as any).viewType === viewType) {
+				this.editorService.openEditor(editor, { pinned: true });
+				return;
+			}
 		}
 
 		const canvasService = this.instantiationService.createInstance(VSWordCanvasService);
 		canvasService.setFolder(this.folderUri);
 
-		const initInfo: WebviewInitInfo = {
-			providedViewType: viewType,
-			extension: undefined,
-			origin: 'vsword-canvas',
-			title,
-			options: { enableFindWidget: true, retainContextWhenHidden: true },
-			contentOptions: {
-				allowScripts: true,
-				localResourceRoots: [],
+		// IMPORTANT: openWebview() internally creates the IOverlayWebview AND the editor
+		// tab in one go. Do NOT pre-create a separate webview — that produces an orphan
+		// HTML-loaded overlay while the editor tab gets a blank one.
+		const input = this.webviewWorkbenchService.openWebview(
+			{
+				providedViewType: viewType,
+				extension: undefined,
+				origin: 'vsword-canvas',
+				title,
+				options: { enableFindWidget: true, retainContextWhenHidden: true },
+				contentOptions: {
+					allowScripts: true,
+					localResourceRoots: [],
+				},
 			},
-		};
-
-		const webview = this.webviewService.createWebviewOverlay(initInfo);
-		webview.setHtml(getCanvasHtml());
-
-		this.webviewWorkbenchService.openWebview(
-			initInfo,
 			viewType,
 			title,
 			undefined,
 			{ preserveFocus: false }
 		);
+
+		// Now wire up the live webview returned via the input.
+		const webview = input.webview;
+		webview.setHtml(getCanvasHtml());
 
 		const msgDisposable = webview.onMessage(async (e) => {
 			try {
@@ -124,7 +123,6 @@ class CanvasEditorManager extends Disposable {
 				break;
 			}
 			case 'openSubCanvas': {
-				// Drill into a sub-folder by spawning a new CanvasEditorManager.
 				const doc = await canvasService.loadCanvas();
 				const node = doc.nodes.find((n: CanvasNode) => n.id === msg.nodeId);
 				if (node && node.type === 'folder') {
@@ -230,10 +228,9 @@ export class VswordOpenCanvasAction extends Action2 {
 }
 
 /**
- * "Open Folder as Canvas" — from the Explorer context menu on a folder,
- * or from the inline folder action.
+ * "Open as Canvas" — from the Explorer right-click on a folder.
  *
- * The Explorer passes the clicked resource as the first run() argument.
+ * Registered EXACTLY ONCE in the navigation group so the menu shows it once.
  */
 export class VswordOpenFolderAsCanvasAction extends Action2 {
 	static readonly ID = 'vsword.actions.openFolderAsCanvas';
@@ -244,17 +241,10 @@ export class VswordOpenFolderAsCanvasAction extends Action2 {
 			title: localize2('vswordOpenFolderAsCanvas', 'Open as Canvas'),
 			category: localize2('vsword', 'VSWord'),
 			f1: false,
-			icon: { id: 'symbol-color' },
 			menu: [
 				{
 					id: MenuId.ExplorerContext,
 					group: 'navigation',
-					order: 30,
-					when: ContextKeyExpr.equals('explorerResourceIsFolder', true),
-				},
-				{
-					id: MenuId.ExplorerContext,
-					group: 'inline',
 					order: 30,
 					when: ContextKeyExpr.equals('explorerResourceIsFolder', true),
 				},
@@ -266,11 +256,12 @@ export class VswordOpenFolderAsCanvasAction extends Action2 {
 		const logService = accessor.get(ILogService);
 		const instantiationService = accessor.get(IInstantiationService);
 		const workspaceService = accessor.get(IWorkspaceContextService);
+		const explorerService = accessor.get(IExplorerService);
 
 		// Resource may arrive as URI or { resource: URI }
 		let folderUri: URI | undefined;
 		if (resource) {
-			if (resource instanceof URI) {
+			if (URI.isUri(resource)) {
 				folderUri = resource;
 			} else if (typeof resource === 'object' && 'resource' in resource) {
 				folderUri = (resource as any).resource;
@@ -284,8 +275,16 @@ export class VswordOpenFolderAsCanvasAction extends Action2 {
 			}
 			folderUri = folders[0].uri;
 		}
+
 		const manager = instantiationService.createInstance(CanvasEditorManager, folderUri);
 		manager.openCanvas();
+
+		// Highlight the folder in the explorer (like opening a file does).
+		try {
+			await explorerService.select(folderUri, true);
+		} catch (err) {
+			logService.debug('[VSWord Canvas] explorer select failed: ' + err);
+		}
 	}
 }
 
