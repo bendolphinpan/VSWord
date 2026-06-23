@@ -6,9 +6,10 @@
 import { URI } from '../../../../../../base/common/uri.js';
 import { asWebviewUri, webviewGenericCspSource } from '../../../../webview/common/webview.js';
 
-export function getBlockSuiteSpikeHtml(scriptUri: URI, styleUri: URI): string {
+export function getReactFlowCanvasHtml(scriptUri: URI, styleUri: URI, reactFlowStyleUri: URI): string {
 	const scriptSrc = asWebviewUri(scriptUri).toString(true);
 	const styleSrc = asWebviewUri(styleUri).toString(true);
+	const reactFlowStyleSrc = asWebviewUri(reactFlowStyleUri).toString(true);
 	const cspSource = webviewGenericCspSource;
 	return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -16,7 +17,8 @@ export function getBlockSuiteSpikeHtml(scriptUri: URI, styleUri: URI): string {
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data: blob:; font-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource}; connect-src ${cspSource} blob: data:; worker-src ${cspSource} blob:;">
-<title>VSWord BlockSuite Spike</title>
+<title>VSWord React Flow Canvas</title>
+<link rel="stylesheet" href="${reactFlowStyleSrc}">
 <link rel="stylesheet" href="${styleSrc}">
 </head>
 <body>
@@ -24,8 +26,8 @@ export function getBlockSuiteSpikeHtml(scriptUri: URI, styleUri: URI): string {
 		<div class="spike-loading">
 			<div class="spinner"></div>
 			<div>
-				<h1>Loading BlockSuite Edgeless Spike…</h1>
-				<p>Dev-only experiment. Current SVG canvas is untouched.</p>
+				<h1>Loading React Flow Canvas…</h1>
+				<p>MIT-friendly spike. SVG canvas remains untouched.</p>
 			</div>
 		</div>
 	</div>

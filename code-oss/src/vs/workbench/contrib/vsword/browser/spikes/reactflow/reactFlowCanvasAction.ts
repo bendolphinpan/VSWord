@@ -14,14 +14,14 @@ import { IWorkspaceContextService } from '../../../../../../platform/workspace/c
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../../../webviewPanel/browser/webviewWorkbenchService.js';
-import { CanvasNode } from '../../../common/canvasTypes.js';
+import { CanvasEdge, CanvasNode } from '../../../common/canvasTypes.js';
 import { VSWordCanvasService } from '../../../common/canvasService.js';
-import { getBlockSuiteSpikeHtml } from './blocksuiteSpikeHtml.js';
+import { getReactFlowCanvasHtml } from './reactFlowCanvasHtml.js';
 
-const VIEW_TYPE_PREFIX = 'vsword.dev.blocksuiteCanvas';
-const COMMAND_ID = 'vsword.dev.openBlockSuiteFolderCanvas';
+const VIEW_TYPE_PREFIX = 'vsword.dev.reactFlowCanvas';
+const COMMAND_ID = 'vsword.dev.openReactFlowFolderCanvas';
 
-class BlockSuiteFolderCanvasManager {
+class ReactFlowFolderCanvasManager {
 	constructor(
 		private readonly folderUri: URI,
 		@IWebviewWorkbenchService private readonly webviewWorkbenchService: IWebviewWorkbenchService,
@@ -31,12 +31,13 @@ class BlockSuiteFolderCanvasManager {
 	) { }
 
 	open(): void {
-		const vendorRoot = FileAccess.asFileUri('vs/workbench/contrib/vsword/browser/spikes/blocksuite/vendor');
+		const vendorRoot = FileAccess.asFileUri('vs/workbench/contrib/vsword/browser/spikes/reactflow/vendor');
 		const scriptUri = URI.joinPath(vendorRoot, 'index.js');
 		const styleUri = URI.joinPath(vendorRoot, 'style.css');
-		const folderName = this.folderUri.path.split('/').filter(Boolean).pop() || 'BlockSuite Canvas';
+		const reactFlowStyleUri = URI.joinPath(vendorRoot, 'index.css');
+		const folderName = this.folderUri.path.split('/').filter(Boolean).pop() || 'React Flow Canvas';
 		const viewType = `${VIEW_TYPE_PREFIX}:${this.folderUri.toString()}`;
-		const title = `◇ ${folderName}`;
+		const title = `◎ ${folderName}`;
 
 		for (const editor of this.editorService.editors) {
 			if ((editor as any).viewType === viewType) {
@@ -52,7 +53,7 @@ class BlockSuiteFolderCanvasManager {
 			{
 				providedViewType: viewType,
 				extension: undefined,
-				origin: 'vsword-blocksuite-folder-canvas',
+				origin: 'vsword-react-flow-folder-canvas',
 				title,
 				options: { enableFindWidget: true, retainContextWhenHidden: true },
 				contentOptions: {
@@ -67,12 +68,12 @@ class BlockSuiteFolderCanvasManager {
 		);
 
 		const webview = input.webview;
-		webview.setHtml(getBlockSuiteSpikeHtml(scriptUri, styleUri));
+		webview.setHtml(getReactFlowCanvasHtml(scriptUri, styleUri, reactFlowStyleUri));
 		webview.onMessage(async (e) => {
 			try {
 				await this.handleMessage(e.message, webview, canvasService, folderName);
 			} catch (err) {
-				this.logService.error('[VSWord BlockSuite Spike] message handler failed:', err);
+				this.logService.error('[VSWord React Flow Canvas] message handler failed:', err);
 				webview.postMessage({ type: 'hostError', message: String(err) });
 			}
 		});
@@ -91,6 +92,33 @@ class BlockSuiteFolderCanvasManager {
 				});
 				break;
 			}
+			case 'nodesMoved': {
+				const doc = await canvasService.loadCanvas();
+				for (const moved of msg.nodes ?? []) {
+					const node = doc.nodes.find(n => n.id === moved.id);
+					if (node) {
+						node.x = Math.round(Number(moved.x));
+						node.y = Math.round(Number(moved.y));
+					}
+				}
+				await canvasService.saveCanvas(doc);
+				break;
+			}
+			case 'edgeCreated': {
+				const doc = await canvasService.loadCanvas();
+				const edge: CanvasEdge = {
+					id: String(msg.edge.id),
+					from: String(msg.edge.from),
+					to: String(msg.edge.to),
+					fromPort: msg.edge.fromPort ?? 'right',
+					toPort: msg.edge.toPort ?? 'left',
+				};
+				if (!doc.edges.some(e => e.id === edge.id || (e.from === edge.from && e.to === edge.to && e.fromPort === edge.fromPort && e.toPort === edge.toPort))) {
+					doc.edges.push(edge);
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
 			case 'openFile': {
 				const uri = canvasService.resolveFilePath(msg.filePath);
 				if (uri) {
@@ -101,7 +129,7 @@ class BlockSuiteFolderCanvasManager {
 			case 'openSubCanvas': {
 				const uri = canvasService.resolveFilePath(msg.folderPath);
 				if (uri) {
-					this.instantiationService.createInstance(BlockSuiteFolderCanvasManager, uri).open();
+					this.instantiationService.createInstance(ReactFlowFolderCanvasManager, uri).open();
 				}
 				break;
 			}
@@ -113,7 +141,7 @@ class BlockSuiteFolderCanvasManager {
 		for (const node of nodes) {
 			if (node.type === 'file') {
 				const content = await canvasService.readFileContent(node.filePath);
-				result.push({ ...node, summary: summarizeMarkdownLike(content ?? ''), content: content?.slice(0, 12000) ?? '' });
+				result.push({ ...node, summary: summarizeMarkdownLike(content ?? '') });
 			} else {
 				result.push(node);
 			}
@@ -140,11 +168,11 @@ function summarizeMarkdownLike(content: string): string {
 	return useful.join('\n').slice(0, 320);
 }
 
-class VSWordOpenBlockSuiteFolderCanvasAction extends Action2 {
+class VSWordOpenReactFlowFolderCanvasAction extends Action2 {
 	constructor() {
 		super({
 			id: COMMAND_ID,
-			title: localize2('vswordOpenBlockSuiteFolderCanvas', 'Open as BlockSuite Canvas'),
+			title: localize2('vswordOpenReactFlowFolderCanvas', 'Open as React Flow Canvas'),
 			category: localize2('vsword', 'VSWord'),
 			f1: true,
 			menu: [
@@ -175,19 +203,19 @@ class VSWordOpenBlockSuiteFolderCanvasAction extends Action2 {
 		if (!folderUri) {
 			const folders = workspaceService.getWorkspace().folders;
 			if (folders.length === 0) {
-				logService.warn('[VSWord BlockSuite Spike] no folder URI and no workspace');
+				logService.warn('[VSWord React Flow Canvas] no folder URI and no workspace');
 				return;
 			}
 			folderUri = folders[0].uri;
 		}
 
-		instantiationService.createInstance(BlockSuiteFolderCanvasManager, folderUri).open();
+		instantiationService.createInstance(ReactFlowFolderCanvasManager, folderUri).open();
 		try {
 			await explorerService.select(folderUri, true);
 		} catch (err) {
-			logService.debug('[VSWord BlockSuite Spike] explorer select failed: ' + err);
+			logService.debug('[VSWord React Flow Canvas] explorer select failed: ' + err);
 		}
 	}
 }
 
-registerAction2(VSWordOpenBlockSuiteFolderCanvasAction);
+registerAction2(VSWordOpenReactFlowFolderCanvasAction);
