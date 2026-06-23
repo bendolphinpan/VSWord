@@ -426,6 +426,30 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-4.6 — Canvas 操作反馈与异常状态模块（阶段成果交付）
+
+**前置**：T-4.4/T-4.5 通过；React Flow Canvas 已有文件生命周期和文件节点预览。
+
+**目标**：按 `D:\GIT\VSWord\docs\requirements\FR-05-canvas-operation-feedback.md` 实现 P0：非阻塞操作反馈、空 Canvas 引导、host error toast、文件/文件夹缺失状态、预览异常 fallback。
+
+**修改文件清单上限**：优先限制在：
+- `D:\GIT\VSWord\docs\requirements\FR-05-canvas-operation-feedback.md`
+- `D:\GIT\VSWord\docs\plans\002-development-task-breakdown.md`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\reactFlowCanvasAction.ts`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\build-reactflow-spike.cjs`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\vendor\style.css`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\README.md`
+
+**验收 Gate（阶段成果一次验收）**：
+- [ ] 拖拽/粘贴、Tray Restore/Delete 有操作中和完成/失败反馈。
+- [ ] 空 Canvas 有清晰引导，且不遮挡 toolbar/minimap。
+- [ ] 文件/文件夹被外部删除后，节点显示 Missing 状态，不显示伪正常预览。
+- [ ] hostError 显示为非阻塞 toast；错误不会被吞掉。
+- [ ] React Flow bundle build 通过；`npm run compile` 0 errors；root `package.json/package-lock.json` 无变化。
+- [ ] 完成代码审查：错误语义真实、未扩大 CSP、缺失文件路径处理不越界。
+
+---
+
 ### Phase 5 — Mindmap
 
 #### T-5.1 — `.mm` parser/writer + Gate F fixtures

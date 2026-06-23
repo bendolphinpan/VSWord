@@ -177,23 +177,27 @@ class ReactFlowFolderCanvasManager {
 				break;
 			}
 			case 'restoreStagedItems': {
-				await canvasService.restoreStagedItems((msg.paths ?? []).map((path: unknown) => String(path)), Number(msg.x) || 80, Number(msg.y) || 80);
+				const result = await canvasService.restoreStagedItems((msg.paths ?? []).map((path: unknown) => String(path)), Number(msg.x) || 80, Number(msg.y) || 80);
 				await this.postFolderData(webview, canvasService, folderName);
+				this.postOperationResult(webview, result.failed > 0 ? 'error' : 'success', summarizeOperation('Restored', result.restored, result.failed));
 				break;
 			}
 			case 'deleteWorkspaceItems': {
-				await canvasService.deleteWorkspaceItems((msg.paths ?? []).map((path: unknown) => String(path)));
+				const result = await canvasService.deleteWorkspaceItems((msg.paths ?? []).map((path: unknown) => String(path)));
 				await this.postFolderData(webview, canvasService, folderName);
+				this.postOperationResult(webview, result.failed > 0 ? 'error' : 'success', summarizeOperation('Deleted', result.deleted, result.failed));
 				break;
 			}
 			case 'importFiles': {
-				await canvasService.importFiles(msg.files ?? [], Number(msg.x) || 80, Number(msg.y) || 80);
+				const result = await canvasService.importFiles(msg.files ?? [], Number(msg.x) || 80, Number(msg.y) || 80);
 				await this.postFolderData(webview, canvasService, folderName);
+				this.postOperationResult(webview, result.failed > 0 ? 'error' : 'success', summarizeOperation('Imported', result.imported, result.failed));
 				break;
 			}
 			case 'createTextNode': {
 				await canvasService.createTextNode(String(msg.text ?? ''), Number(msg.x) || 80, Number(msg.y) || 80);
 				await this.postFolderData(webview, canvasService, folderName);
+				this.postOperationResult(webview, 'success', 'Created text node.');
 				break;
 			}
 			case 'openFile': {
@@ -226,17 +230,27 @@ class ReactFlowFolderCanvasManager {
 		});
 	}
 
+	private postOperationResult(webview: any, status: 'success' | 'error', message: string): void {
+		webview.postMessage({ type: 'operationResult', status, message });
+	}
+
 	private async enrichNodes(canvasService: VSWordCanvasService, nodes: CanvasNode[]): Promise<any[]> {
 		const result: any[] = [];
 		for (const node of nodes) {
 			if (node.type === 'file') {
+				const exists = await canvasService.existsPath(node.filePath);
 				const extension = getExtension(node.filePath);
 				const enriched: any = {
 					...node,
 					extension,
-					previewKind: getPreviewKind(node.filePath),
-					typeLabel: getTypeLabel(node.filePath),
+					missing: !exists,
+					previewKind: exists ? getPreviewKind(node.filePath) : 'missing',
+					typeLabel: exists ? getTypeLabel(node.filePath) : 'MISS',
 				};
+				if (!exists) {
+					result.push(enriched);
+					continue;
+				}
 				if (isImagePath(node.filePath)) {
 					const resource = canvasService.resolveFilePath(node.filePath);
 					if (resource) {
@@ -254,6 +268,9 @@ class ReactFlowFolderCanvasManager {
 					}
 				}
 				result.push(enriched);
+			} else if (node.type === 'folder') {
+				const exists = await canvasService.existsPath(node.folderPath);
+				result.push({ ...node, missing: !exists });
 			} else {
 				result.push(node);
 			}
@@ -394,6 +411,15 @@ function getPreviewKind(path: string): 'image' | 'text' | 'fallback' {
 		return 'text';
 	}
 	return 'fallback';
+}
+
+function summarizeOperation(verb: string, ok: number, failed: number): string {
+	const okText = ok === 1 ? '1 item' : `${ok} items`;
+	if (failed > 0) {
+		const failedText = failed === 1 ? '1 failed' : `${failed} failed`;
+		return `${verb} ${okText}; ${failedText}.`;
+	}
+	return `${verb} ${okText}.`;
 }
 
 function getTypeLabel(path: string): string {

@@ -50,6 +50,9 @@ This spike registers a separate entry:
 - Webview tabs are persisted/restored by a workbench `IWebviewWorkbenchService.registerResolver()` contribution; folder URI is stored in `webview.state` and used to reattach HTML/message handling after reload.
 - Viewport pan/zoom is persisted to `.vsword/canvas.json` and restored with `setViewport`; empty/default boards still use `fitView`.
 - Preview/map toggles are merged into `webview.state` without overwriting the folder URI required for tab restore.
+- Missing file/folder references are marked in-card as `Missing`; they do not display stale or normal previews.
+- Drag/drop, paste, Tray restore, and Tray disk delete show non-blocking Canvas toast feedback for pending/success/error states.
+- Empty Canvas shows an onboarding hint with a Tray shortcut instead of a blank workspace.
 - Double-click file node opens the file.
 - Double-click folder node opens a sub-folder React Flow canvas.
 

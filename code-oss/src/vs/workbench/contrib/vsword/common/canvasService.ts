@@ -168,16 +168,18 @@ export class VSWordCanvasService extends Disposable {
 		return items.sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1);
 	}
 
-	async restoreStagedItems(paths: string[], originX: number, originY: number): Promise<CanvasDocument> {
+	async restoreStagedItems(paths: string[], originX: number, originY: number): Promise<{ doc: CanvasDocument; restored: number; failed: number }> {
 		const doc = await this.loadCanvas();
 		const existing = new Set(doc.nodes.map(node => node.type === 'file' ? node.filePath : node.type === 'folder' ? node.folderPath : ''));
 		let added = 0;
+		let failed = 0;
 		for (const path of paths) {
 			if (existing.has(path)) {
 				continue;
 			}
 			const uri = this.resolveFilePath(path);
 			if (!uri) {
+				failed++;
 				continue;
 			}
 			try {
@@ -187,29 +189,35 @@ export class VSWordCanvasService extends Disposable {
 					doc.nodes.push(node);
 					existing.add(path);
 					added++;
+				} else {
+					failed++;
 				}
 			} catch (err) {
+				failed++;
 				this.logService.debug(`[VSWord Canvas] restore staged item failed for ${path}: ${err}`);
 			}
 		}
 		if (added > 0) {
 			await this.saveCanvas(doc);
 		}
-		return doc;
+		return { doc, restored: added, failed };
 	}
 
-	async deleteWorkspaceItems(paths: string[]): Promise<CanvasDocument> {
+	async deleteWorkspaceItems(paths: string[]): Promise<{ doc: CanvasDocument; deleted: number; failed: number }> {
 		const doc = await this.loadCanvas();
 		const deleted = new Set<string>();
+		let failed = 0;
 		for (const path of paths) {
 			const uri = this.resolveFilePath(path);
 			if (!uri) {
+				failed++;
 				continue;
 			}
 			try {
 				await this.fileService.del(uri, { recursive: true, useTrash: true });
 				deleted.add(path);
 			} catch (err) {
+				failed++;
 				this.logService.error(`[VSWord Canvas] delete workspace item failed for ${uri.toString()}: ${err}`);
 			}
 		}
@@ -223,17 +231,18 @@ export class VSWordCanvasService extends Disposable {
 			doc.edges = doc.edges.filter(edge => remaining.has(edge.from) && remaining.has(edge.to));
 			await this.saveCanvas(doc);
 		}
-		return doc;
+		return { doc, deleted: deleted.size, failed };
 	}
 
-	async importFiles(files: CanvasImportFile[], originX: number, originY: number): Promise<CanvasDocument> {
+	async importFiles(files: CanvasImportFile[], originX: number, originY: number): Promise<{ doc: CanvasDocument; imported: number; failed: number }> {
 		const folder = this.getFolderUri();
 		if (!folder) {
-			return this.loadCanvas();
+			return { doc: await this.loadCanvas(), imported: 0, failed: files.length };
 		}
 
 		const doc = await this.loadCanvas();
 		let added = 0;
+		let failed = 0;
 		for (const file of files) {
 			const name = sanitizeFileName(file.name || `pasted-${Date.now()}.bin`);
 			const targetFolder = isImageFileName(name) ? URI.joinPath(folder, 'assets') : folder;
@@ -252,13 +261,14 @@ export class VSWordCanvasService extends Disposable {
 					added++;
 				}
 			} catch (err) {
+				failed++;
 				this.logService.error(`[VSWord Canvas] import file failed for ${name}: ${err}`);
 			}
 		}
 		if (added > 0) {
 			await this.saveCanvas(doc);
 		}
-		return doc;
+		return { doc, imported: added, failed };
 	}
 
 	async createTextNode(text: string, x: number, y: number): Promise<CanvasDocument> {
@@ -297,6 +307,16 @@ export class VSWordCanvasService extends Disposable {
 			return content.value.toString();
 		} catch {
 			return undefined;
+		}
+	}
+
+	async existsPath(filePath: string): Promise<boolean> {
+		const uri = this.resolveFilePath(filePath);
+		if (!uri) return false;
+		try {
+			return await this.fileService.exists(uri);
+		} catch {
+			return false;
 		}
 	}
 

@@ -127,7 +127,21 @@ function fileIconLabel(node) {
 }
 
 function previewText(node) {
+  if (node.missing || node.previewKind === 'missing') return 'This file is missing on disk. It may have been moved, renamed, or deleted outside VSWord.';
   return node.summary || (node.previewKind === 'fallback' ? 'Preview not available for this file type. Double-click to open.' : 'No preview content.');
+}
+
+function setOperationToast(setToast, kind, message) {
+  setToast({ kind, message });
+}
+
+function operationLabel(type, count = 1) {
+  const suffix = count > 1 ? 's' : '';
+  if (type === 'import') return 'Importing file' + suffix + '…';
+  if (type === 'restore') return 'Restoring item' + suffix + '…';
+  if (type === 'delete') return 'Deleting item' + suffix + ' to system trash…';
+  if (type === 'text') return 'Creating text node…';
+  return 'Updating Canvas…';
 }
 
 function CardResizer({ node, selected }) {
@@ -153,28 +167,31 @@ function CardHandles() {
 function FileCard({ data, selected }) {
   const node = data.node;
   const previewVisible = data.previewVisible !== false;
-  const iconClass = node.previewKind === 'image' ? 'image' : node.previewKind === 'fallback' ? 'fallback' : 'doc';
-  return <div className={'vsword-card file ' + (node.previewKind || 'fallback')} title="Double-click to open file">
+  const [imageFailed, setImageFailed] = useState(false);
+  React.useEffect(() => setImageFailed(false), [node.previewImageUri]);
+  const previewKind = node.missing ? 'missing' : (node.previewKind || 'fallback');
+  const iconClass = previewKind === 'image' ? 'image' : previewKind === 'missing' ? 'missing' : previewKind === 'fallback' ? 'fallback' : 'doc';
+  return <div className={'vsword-card file ' + previewKind + (node.missing ? ' missing' : '')} title={node.missing ? 'File is missing on disk' : 'Double-click to open file'}>
     <CardResizer node={node} selected={selected} />
     <CardHandles />
-    <div className="head"><span className={'icon ' + iconClass}>{fileIconLabel(node)}</span><span className="title">{node.label || node.filePath}</span></div>
+    <div className="head"><span className={'icon ' + iconClass}>{fileIconLabel(node)}</span><span className="title">{node.label || node.filePath}</span>{node.missing ? <span className="status-pill missing">Missing</span> : null}</div>
     <div className="path">{node.filePath}</div>
     {previewVisible ? <div className="preview-slot">
-      {node.previewImageUri ? <img className="image-preview" src={node.previewImageUri} alt={node.label || node.filePath} /> : null}
-      {node.previewKind === 'image' && !node.previewImageUri ? <div className="file-fallback">Image preview unavailable</div> : null}
-      {node.previewKind !== 'image' ? <pre className={node.previewKind === 'fallback' ? 'summary fallback-text' : 'summary'}>{previewText(node)}</pre> : null}
+      {previewKind === 'image' && node.previewImageUri && !imageFailed ? <img className="image-preview" src={node.previewImageUri} alt={node.label || node.filePath} onError={() => setImageFailed(true)} /> : null}
+      {previewKind === 'image' && (!node.previewImageUri || imageFailed) ? <div className="file-fallback">Image preview unavailable</div> : null}
+      {previewKind !== 'image' ? <pre className={previewKind === 'fallback' || previewKind === 'missing' ? 'summary fallback-text' : 'summary'}>{previewText(node)}</pre> : null}
     </div> : <div className="hint">Preview hidden</div>}
   </div>;
 }
 
 function FolderCard({ data, selected }) {
   const node = data.node;
-  return <div className="vsword-card folder" title="Double-click to drill into folder">
+  return <div className={'vsword-card folder' + (node.missing ? ' missing' : '')} title={node.missing ? 'Folder is missing on disk' : 'Double-click to drill into folder'}>
     <CardResizer node={node} selected={selected} />
     <CardHandles />
-    <div className="head"><span className="icon folder">DIR</span><span className="title">{node.label || node.folderPath}</span></div>
+    <div className="head"><span className={node.missing ? 'icon missing' : 'icon folder'}>{node.missing ? 'MISS' : 'DIR'}</span><span className="title">{node.label || node.folderPath}</span>{node.missing ? <span className="status-pill missing">Missing</span> : null}</div>
     <div className="path">{node.folderPath}</div>
-    <div className="hint">Double-click to open sub-canvas</div>
+    <div className="hint">{node.missing ? 'Folder is missing on disk. It may have been moved, renamed, or deleted outside VSWord.' : 'Double-click to open sub-canvas'}</div>
   </div>;
 }
 
@@ -200,6 +217,8 @@ function App() {
   const [trayOpen, setTrayOpen] = useState(false);
   const [pendingDelete, setPendingDelete] = useState(null);
   const [error, setError] = useState('');
+  const [toast, setToast] = useState(null);
+  const [loaded, setLoaded] = useState(false);
   const [previewVisible, setPreviewVisible] = useState(initialWebviewState.previewVisible !== false);
   const [minimapVisible, setMinimapVisible] = useState(initialWebviewState.minimapVisible !== false);
   const [reactFlowInstance, setReactFlowInstance] = useState(null);
@@ -238,10 +257,16 @@ function App() {
         setNodes(toRfNodes(msg.canvas || {}, previewVisibleRef.current));
         setEdges(toRfEdges(msg.canvas || {}));
         setStagedItems(Array.isArray(msg.stagedItems) ? msg.stagedItems : []);
+        setLoaded(true);
         setFitNonce((n) => n + 1);
         setError('');
+      } else if (msg.type === 'operationResult') {
+        setError('');
+        setOperationToast(setToast, msg.status === 'error' ? 'error' : 'success', msg.message || 'Canvas updated.');
       } else if (msg.type === 'hostError') {
-        setError(msg.message || 'Unknown host error');
+        const message = msg.message || 'Unknown host error';
+        setError(message);
+        setOperationToast(setToast, 'error', message);
       }
     };
     window.addEventListener('message', onMessage);
@@ -283,17 +308,25 @@ function App() {
   }, [reactFlowInstance]);
 
   React.useEffect(() => {
+    if (!toast) return;
+    const handle = window.setTimeout(() => setToast(null), toast.kind === 'pending' ? 4500 : 3200);
+    return () => window.clearTimeout(handle);
+  }, [toast]);
+
+  React.useEffect(() => {
     const onPaste = async (event) => {
       const files = event.clipboardData?.files;
       const point = defaultInsertPoint();
       if (files && files.length > 0) {
         event.preventDefault();
+        setOperationToast(setToast, 'pending', operationLabel('import', files.length));
         vscode.postMessage({ type: 'importFiles', files: await filesToImportPayload(files), x: point.x, y: point.y });
         return;
       }
       const text = event.clipboardData?.getData('text/plain') || '';
       if (text.trim()) {
         event.preventDefault();
+        setOperationToast(setToast, 'pending', operationLabel('text'));
         vscode.postMessage({ type: 'createTextNode', text, x: point.x, y: point.y });
       }
     };
@@ -361,6 +394,10 @@ function App() {
   const onNodeDoubleClick = useCallback((_event, rfNode) => {
     const node = rfNode.data?.node;
     if (!node) return;
+    if (node.missing) {
+      setOperationToast(setToast, 'error', 'This item is missing on disk. It may have been moved, renamed, or deleted outside VSWord.');
+      return;
+    }
     if (node.type === 'file') {
       vscode.postMessage({ type: 'openFile', filePath: node.filePath });
     } else if (node.type === 'folder') {
@@ -370,12 +407,14 @@ function App() {
 
   const restoreStaged = useCallback((item) => {
     const point = defaultInsertPoint();
+    setOperationToast(setToast, 'pending', operationLabel('restore'));
     vscode.postMessage({ type: 'restoreStagedItems', paths: [item.path], x: point.x, y: point.y });
   }, [defaultInsertPoint]);
 
   const restoreAllStaged = useCallback(() => {
     if (stagedItems.length === 0) return;
     const point = defaultInsertPoint();
+    setOperationToast(setToast, 'pending', operationLabel('restore', stagedItems.length));
     vscode.postMessage({ type: 'restoreStagedItems', paths: stagedItems.map((item) => item.path), x: point.x, y: point.y });
   }, [defaultInsertPoint, stagedItems]);
 
@@ -385,6 +424,7 @@ function App() {
 
   const confirmDeleteStaged = useCallback(() => {
     if (!pendingDelete) return;
+    setOperationToast(setToast, 'pending', operationLabel('delete'));
     vscode.postMessage({ type: 'deleteWorkspaceItems', paths: [pendingDelete.path] });
     setPendingDelete(null);
   }, [pendingDelete]);
@@ -401,6 +441,7 @@ function App() {
     if (!files || files.length === 0) return;
     event.preventDefault();
     const point = toCanvasPoint(event);
+    setOperationToast(setToast, 'pending', operationLabel('import', files.length));
     vscode.postMessage({ type: 'importFiles', files: await filesToImportPayload(files), x: point.x, y: point.y });
   }, [toCanvasPoint]);
 
@@ -436,6 +477,12 @@ function App() {
         {minimapVisible ? <div className="map-popover"><MiniMap pannable zoomable nodeStrokeWidth={3} /></div> : null}
       </Panel>
     </ReactFlow>
+    {loaded && nodes.length === 0 ? <div className="canvas-empty-state">
+      <strong>Canvas is empty</strong>
+      <p>Drop files here, paste images/text, or open Tray to restore files that exist in this folder but are not on the canvas.</p>
+      <div><button type="button" onClick={() => setTrayOpen(true)}>Open Tray ({stagedItems.length})</button></div>
+    </div> : null}
+    {toast ? <div className={'canvas-toast ' + toast.kind}>{toast.message}</div> : null}
     {trayOpen ? <aside className="staged-tray">
       <div className="tray-head">
         <div><strong>Canvas Tray</strong><span>{stagedItems.length} file/folder not on canvas</span></div>
