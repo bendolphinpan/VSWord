@@ -101,14 +101,7 @@ class ReactFlowFolderCanvasManager {
 	private async handleMessage(msg: any, webview: any, canvasService: VSWordCanvasService, folderName: string): Promise<void> {
 		switch (msg.type) {
 			case 'ready': {
-				const doc = await canvasService.loadCanvas();
-				const nodes = await this.enrichNodes(canvasService, doc.nodes);
-				webview.postMessage({
-					type: 'folderData',
-					folderName,
-					folderUri: this.folderUri.toString(),
-					canvas: { ...doc, nodes },
-				});
+				await this.postFolderData(webview, canvasService, folderName);
 				break;
 			}
 			case 'nodesMoved': {
@@ -153,6 +146,7 @@ class ReactFlowFolderCanvasManager {
 					doc.nodes = doc.nodes.filter(node => !ids.has(node.id));
 					doc.edges = doc.edges.filter(edge => !ids.has(edge.from) && !ids.has(edge.to));
 					await canvasService.saveCanvas(doc);
+					await this.postFolderData(webview, canvasService, folderName);
 				}
 				break;
 			}
@@ -180,6 +174,26 @@ class ReactFlowFolderCanvasManager {
 				}
 				break;
 			}
+			case 'restoreStagedItems': {
+				await canvasService.restoreStagedItems((msg.paths ?? []).map((path: unknown) => String(path)), Number(msg.x) || 80, Number(msg.y) || 80);
+				await this.postFolderData(webview, canvasService, folderName);
+				break;
+			}
+			case 'deleteWorkspaceItems': {
+				await canvasService.deleteWorkspaceItems((msg.paths ?? []).map((path: unknown) => String(path)));
+				await this.postFolderData(webview, canvasService, folderName);
+				break;
+			}
+			case 'importFiles': {
+				await canvasService.importFiles(msg.files ?? [], Number(msg.x) || 80, Number(msg.y) || 80);
+				await this.postFolderData(webview, canvasService, folderName);
+				break;
+			}
+			case 'createTextNode': {
+				await canvasService.createTextNode(String(msg.text ?? ''), Number(msg.x) || 80, Number(msg.y) || 80);
+				await this.postFolderData(webview, canvasService, folderName);
+				break;
+			}
 			case 'openFile': {
 				const uri = canvasService.resolveFilePath(msg.filePath);
 				if (uri) {
@@ -195,6 +209,19 @@ class ReactFlowFolderCanvasManager {
 				break;
 			}
 		}
+	}
+
+	private async postFolderData(webview: any, canvasService: VSWordCanvasService, folderName: string): Promise<void> {
+		const doc = await canvasService.loadCanvas();
+		const nodes = await this.enrichNodes(canvasService, doc.nodes);
+		const stagedItems = await canvasService.listStagedItems(doc);
+		webview.postMessage({
+			type: 'folderData',
+			folderName,
+			folderUri: this.folderUri.toString(),
+			canvas: { ...doc, nodes },
+			stagedItems,
+		});
 	}
 
 	private async enrichNodes(canvasService: VSWordCanvasService, nodes: CanvasNode[]): Promise<any[]> {

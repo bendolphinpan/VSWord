@@ -103,6 +103,25 @@ function persistResize(nodeId, width, height) {
   vscode.postMessage({ type: 'nodeResized', node: { id: nodeId, width, height } });
 }
 
+function encodeArrayBufferBase64(buffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunkSize));
+  }
+  return btoa(binary);
+}
+
+async function filesToImportPayload(fileList) {
+  const files = Array.from(fileList || []).filter(Boolean);
+  const payload = [];
+  for (const file of files) {
+    payload.push({ name: file.name || 'pasted-file', mime: file.type || '', dataBase64: encodeArrayBufferBase64(await file.arrayBuffer()) });
+  }
+  return payload;
+}
+
 function CardResizer({ node, selected }) {
   return <NodeResizer
     isVisible={selected}
@@ -164,6 +183,9 @@ function App() {
   const [folder, setFolder] = useState({ name: 'Loading…', uri: '' });
   const [nodes, setNodes] = useState([]);
   const [edges, setEdges] = useState([]);
+  const [stagedItems, setStagedItems] = useState([]);
+  const [trayOpen, setTrayOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [error, setError] = useState('');
   const [previewVisible, setPreviewVisible] = useState(initialWebviewState.previewVisible !== false);
   const [minimapVisible, setMinimapVisible] = useState(initialWebviewState.minimapVisible !== false);
@@ -202,6 +224,7 @@ function App() {
         restoredViewportRef.current = false;
         setNodes(toRfNodes(msg.canvas || {}, previewVisibleRef.current));
         setEdges(toRfEdges(msg.canvas || {}));
+        setStagedItems(Array.isArray(msg.stagedItems) ? msg.stagedItems : []);
         setFitNonce((n) => n + 1);
         setError('');
       } else if (msg.type === 'hostError') {
@@ -231,6 +254,39 @@ function App() {
     }, 80);
     return () => window.clearTimeout(handle);
   }, [reactFlowInstance, fitNonce, nodes.length]);
+
+  const toCanvasPoint = useCallback((event) => {
+    if (reactFlowInstance?.screenToFlowPosition) {
+      return reactFlowInstance.screenToFlowPosition({ x: event.clientX, y: event.clientY });
+    }
+    return { x: 80, y: 80 };
+  }, [reactFlowInstance]);
+
+  const defaultInsertPoint = useCallback(() => {
+    if (reactFlowInstance?.screenToFlowPosition) {
+      return reactFlowInstance.screenToFlowPosition({ x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) });
+    }
+    return { x: 80, y: 80 };
+  }, [reactFlowInstance]);
+
+  React.useEffect(() => {
+    const onPaste = async (event) => {
+      const files = event.clipboardData?.files;
+      const point = defaultInsertPoint();
+      if (files && files.length > 0) {
+        event.preventDefault();
+        vscode.postMessage({ type: 'importFiles', files: await filesToImportPayload(files), x: point.x, y: point.y });
+        return;
+      }
+      const text = event.clipboardData?.getData('text/plain') || '';
+      if (text.trim()) {
+        event.preventDefault();
+        vscode.postMessage({ type: 'createTextNode', text, x: point.x, y: point.y });
+      }
+    };
+    window.addEventListener('paste', onPaste);
+    return () => window.removeEventListener('paste', onPaste);
+  }, [defaultInsertPoint]);
 
   const onNodesChange = useCallback((changes) => {
     setNodes((nds) => applyNodeChanges(changes, nds));
@@ -299,12 +355,49 @@ function App() {
     }
   }, []);
 
+  const restoreStaged = useCallback((item) => {
+    const point = defaultInsertPoint();
+    vscode.postMessage({ type: 'restoreStagedItems', paths: [item.path], x: point.x, y: point.y });
+  }, [defaultInsertPoint]);
+
+  const restoreAllStaged = useCallback(() => {
+    if (stagedItems.length === 0) return;
+    const point = defaultInsertPoint();
+    vscode.postMessage({ type: 'restoreStagedItems', paths: stagedItems.map((item) => item.path), x: point.x, y: point.y });
+  }, [defaultInsertPoint, stagedItems]);
+
+  const requestDeleteStaged = useCallback((item) => {
+    setPendingDelete(item);
+  }, []);
+
+  const confirmDeleteStaged = useCallback(() => {
+    if (!pendingDelete) return;
+    vscode.postMessage({ type: 'deleteWorkspaceItems', paths: [pendingDelete.path] });
+    setPendingDelete(null);
+  }, [pendingDelete]);
+
+  const onDragOver = useCallback((event) => {
+    if (event.dataTransfer?.files?.length) {
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'copy';
+    }
+  }, []);
+
+  const onDrop = useCallback(async (event) => {
+    const files = event.dataTransfer?.files;
+    if (!files || files.length === 0) return;
+    event.preventDefault();
+    const point = toCanvasPoint(event);
+    vscode.postMessage({ type: 'importFiles', files: await filesToImportPayload(files), x: point.x, y: point.y });
+  }, [toCanvasPoint]);
+
   const fitViewOptions = useMemo(() => ({ padding: 0.28 }), []);
 
-  return <div className="canvas-shell">
-    <div className="canvas-header"><strong>React Flow Canvas</strong><span>{folder.name}</span><span>MIT spike · SVG untouched</span></div>
+  return <div className="canvas-shell" onDragOver={onDragOver} onDrop={onDrop}>
+    <div className="canvas-header"><strong>React Flow Canvas</strong><span>{folder.name}</span><span>Drop/paste files · Delete sends to tray</span></div>
     <div className="canvas-toolbar">
       <button type="button" className={previewVisible ? 'active' : ''} onClick={() => setPreviewVisible(v => !v)}>{previewVisible ? 'Hide preview' : 'Show preview'}</button>
+      <button type="button" className={trayOpen ? 'active' : ''} onClick={() => setTrayOpen(v => !v)}>Tray {stagedItems.length}</button>
     </div>
     <ReactFlow
       nodes={nodes}
@@ -330,6 +423,24 @@ function App() {
         {minimapVisible ? <div className="map-popover"><MiniMap pannable zoomable nodeStrokeWidth={3} /></div> : null}
       </Panel>
     </ReactFlow>
+    {trayOpen ? <aside className="staged-tray">
+      <div className="tray-head">
+        <div><strong>Canvas Tray</strong><span>{stagedItems.length} file/folder not on canvas</span></div>
+        <button type="button" onClick={() => setTrayOpen(false)}>×</button>
+      </div>
+      <div className="tray-actions">
+        <button type="button" disabled={stagedItems.length === 0} onClick={restoreAllStaged}>Restore all</button>
+      </div>
+      <div className="tray-list">
+        {stagedItems.length === 0 ? <div className="tray-empty">No hidden files. Delete a canvas card to place it here.</div> : stagedItems.map((item) => <div className="tray-item" key={item.path}>
+          <div className="tray-meta"><span className={item.type === 'folder' ? 'tray-icon folder' : 'tray-icon file'}>{item.type === 'folder' ? 'DIR' : (item.extension || 'FILE').slice(0, 4).toUpperCase()}</span><div><strong>{item.name}</strong><small>{item.path}</small></div></div>
+          <div className="tray-buttons"><button type="button" onClick={() => restoreStaged(item)}>Restore</button><button type="button" className="danger" onClick={() => requestDeleteStaged(item)}>Delete file</button></div>
+        </div>)}
+      </div>
+    </aside> : null}
+    {pendingDelete ? <div className="delete-confirm">
+      <div className="delete-card"><strong>Really delete from disk?</strong><p>{pendingDelete.path}</p><div><button type="button" onClick={() => setPendingDelete(null)}>Cancel</button><button type="button" className="danger" onClick={confirmDeleteStaged}>Delete to system trash</button></div></div>
+    </div> : null}
     {error ? <div className="spike-error">{error}</div> : null}
   </div>;
 }

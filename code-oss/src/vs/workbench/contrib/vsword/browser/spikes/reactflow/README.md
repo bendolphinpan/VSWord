@@ -40,6 +40,11 @@ This spike registers a separate entry:
 - Node edge resize persists `width/height`.
 - Edge connection persists `CanvasEdge`.
 - Selected nodes/edges can be removed with Delete/Backspace; deletion only removes canvas entries and never deletes files/folders from disk.
+- Files/folders that exist in the folder but are not on the canvas appear in the Canvas Tray.
+- Canvas Tray supports restoring one/all staged items back onto the canvas.
+- Canvas Tray supports explicit disk deletion with a confirmation dialog; host uses filesystem trash when available.
+- Dragging files onto the canvas writes them into the current folder and creates file nodes at the drop point.
+- Pasting files/images writes them into the current folder (images into `assets/`) and creates file nodes; pasting plain text creates a text node.
 - Webview tabs are persisted/restored by a workbench `IWebviewWorkbenchService.registerResolver()` contribution; folder URI is stored in `webview.state` and used to reattach HTML/message handling after reload.
 - Viewport pan/zoom is persisted to `.vsword/canvas.json` and restored with `setViewport`; empty/default boards still use `fitView`.
 - Preview/map toggles are merged into `webview.state` without overwriting the folder URI required for tab restore.

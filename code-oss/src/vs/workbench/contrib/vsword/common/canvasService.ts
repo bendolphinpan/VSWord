@@ -3,13 +3,32 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSBuffer } from '../../../../base/common/buffer.js';
+import { decodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { URI } from '../../../../base/common/uri.js';
-import { IFileService } from '../../../../platform/files/common/files.js';
+import { generateUuid } from '../../../../base/common/uuid.js';
+import { IFileService, IFileStat } from '../../../../platform/files/common/files.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
-import { CanvasDocument } from './canvasTypes.js';
+import { CanvasDocument, CanvasFileNode, CanvasFolderNode, CanvasNode, CanvasTextNode } from './canvasTypes.js';
+
+export interface CanvasStagedItem {
+	readonly path: string;
+	readonly name: string;
+	readonly type: 'file' | 'folder';
+	readonly extension?: string;
+}
+
+export interface CanvasImportFile {
+	readonly name: string;
+	readonly dataBase64: string;
+	readonly mime?: string;
+}
+
+const HIDDEN_OR_SYSTEM_NAMES = new Set(['node_modules', 'out', 'dist']);
+const DEFAULT_CARD_WIDTH = 280;
+const DEFAULT_FILE_HEIGHT = 178;
+const DEFAULT_FOLDER_HEIGHT = 126;
 
 /**
  * Persists per-folder canvas state.
@@ -106,6 +125,163 @@ export class VSWordCanvasService extends Disposable {
 		await this.fileService.writeFile(canvasUri, VSBuffer.fromString(content));
 	}
 
+	async listStagedItems(doc?: CanvasDocument): Promise<CanvasStagedItem[]> {
+		const folder = this.getFolderUri();
+		const root = this.getWorkspaceRoot();
+		if (!folder || !root) {
+			return [];
+		}
+
+		const canvas = doc ?? await this.loadCanvas();
+		const referenced = new Set<string>();
+		for (const node of canvas.nodes) {
+			if (node.type === 'file') {
+				referenced.add(node.filePath);
+			} else if (node.type === 'folder') {
+				referenced.add(node.folderPath);
+			}
+		}
+
+		let stat: IFileStat;
+		try {
+			stat = await this.fileService.resolve(folder);
+		} catch (err) {
+			this.logService.debug(`[VSWord Canvas] staged resolve failed for ${folder.toString()}: ${err}`);
+			return [];
+		}
+
+		const items: CanvasStagedItem[] = [];
+		for (const child of stat.children ?? []) {
+			if (isHiddenOrSystemName(child.name)) {
+				continue;
+			}
+			const relPath = this.relativeToRoot(child.resource, root);
+			if (referenced.has(relPath)) {
+				continue;
+			}
+			if (child.isDirectory) {
+				items.push({ path: relPath, name: child.name, type: 'folder' });
+			} else if (child.isFile) {
+				items.push({ path: relPath, name: child.name, type: 'file', extension: getExtension(child.name) });
+			}
+		}
+		return items.sort((a, b) => a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1);
+	}
+
+	async restoreStagedItems(paths: string[], originX: number, originY: number): Promise<CanvasDocument> {
+		const doc = await this.loadCanvas();
+		const existing = new Set(doc.nodes.map(node => node.type === 'file' ? node.filePath : node.type === 'folder' ? node.folderPath : ''));
+		let added = 0;
+		for (const path of paths) {
+			if (existing.has(path)) {
+				continue;
+			}
+			const uri = this.resolveFilePath(path);
+			if (!uri) {
+				continue;
+			}
+			try {
+				const stat = await this.fileService.resolve(uri);
+				const node = this.createNodeForStat(stat, originX + (added % 4) * 40, originY + Math.floor(added / 4) * 40);
+				if (node) {
+					doc.nodes.push(node);
+					existing.add(path);
+					added++;
+				}
+			} catch (err) {
+				this.logService.debug(`[VSWord Canvas] restore staged item failed for ${path}: ${err}`);
+			}
+		}
+		if (added > 0) {
+			await this.saveCanvas(doc);
+		}
+		return doc;
+	}
+
+	async deleteWorkspaceItems(paths: string[]): Promise<CanvasDocument> {
+		const doc = await this.loadCanvas();
+		const deleted = new Set<string>();
+		for (const path of paths) {
+			const uri = this.resolveFilePath(path);
+			if (!uri) {
+				continue;
+			}
+			try {
+				await this.fileService.del(uri, { recursive: true, useTrash: true });
+				deleted.add(path);
+			} catch (err) {
+				this.logService.error(`[VSWord Canvas] delete workspace item failed for ${uri.toString()}: ${err}`);
+			}
+		}
+		if (deleted.size > 0) {
+			doc.nodes = doc.nodes.filter(node => {
+				if (node.type === 'file') return !deleted.has(node.filePath);
+				if (node.type === 'folder') return !deleted.has(node.folderPath);
+				return true;
+			});
+			const remaining = new Set(doc.nodes.map(node => node.id));
+			doc.edges = doc.edges.filter(edge => remaining.has(edge.from) && remaining.has(edge.to));
+			await this.saveCanvas(doc);
+		}
+		return doc;
+	}
+
+	async importFiles(files: CanvasImportFile[], originX: number, originY: number): Promise<CanvasDocument> {
+		const folder = this.getFolderUri();
+		if (!folder) {
+			return this.loadCanvas();
+		}
+
+		const doc = await this.loadCanvas();
+		let added = 0;
+		for (const file of files) {
+			const name = sanitizeFileName(file.name || `pasted-${Date.now()}.bin`);
+			const targetFolder = isImageFileName(name) ? URI.joinPath(folder, 'assets') : folder;
+			try {
+				await this.fileService.createFolder(targetFolder);
+			} catch {
+				// Folder may already exist, or target folder is the bound canvas folder.
+			}
+			const target = await this.getUniqueChildUri(targetFolder, name);
+			try {
+				await this.fileService.createFile(target, decodeBase64(file.dataBase64), { overwrite: false });
+				const stat = await this.fileService.resolve(target);
+				const node = this.createNodeForStat(stat, originX + (added % 4) * 40, originY + Math.floor(added / 4) * 40);
+				if (node?.type === 'file' && !doc.nodes.some(existing => existing.type === 'file' && existing.filePath === node.filePath)) {
+					doc.nodes.push(node);
+					added++;
+				}
+			} catch (err) {
+				this.logService.error(`[VSWord Canvas] import file failed for ${name}: ${err}`);
+			}
+		}
+		if (added > 0) {
+			await this.saveCanvas(doc);
+		}
+		return doc;
+	}
+
+	async createTextNode(text: string, x: number, y: number): Promise<CanvasDocument> {
+		const doc = await this.loadCanvas();
+		const trimmed = text.trim();
+		if (!trimmed) {
+			return doc;
+		}
+		const node: CanvasTextNode = {
+			id: generateUuid(),
+			type: 'text',
+			text: trimmed,
+			x: Math.round(x),
+			y: Math.round(y),
+			width: DEFAULT_CARD_WIDTH,
+			height: DEFAULT_FILE_HEIGHT,
+			parentId: null,
+		};
+		doc.nodes.push(node);
+		await this.saveCanvas(doc);
+		return doc;
+	}
+
 	/** Resolves a workspace-relative path to an absolute URI. */
 	resolveFilePath(filePath: string): URI | undefined {
 		const root = this.getWorkspaceRoot();
@@ -136,4 +312,83 @@ export class VSWordCanvasService extends Disposable {
 			return false;
 		}
 	}
+
+	private createNodeForStat(stat: IFileStat, x: number, y: number): CanvasNode | undefined {
+		const root = this.getWorkspaceRoot();
+		if (!root) {
+			return undefined;
+		}
+		const relPath = this.relativeToRoot(stat.resource, root);
+		if (stat.isDirectory) {
+			const node: CanvasFolderNode = {
+				id: generateUuid(),
+				type: 'folder',
+				folderPath: relPath,
+				label: stat.name,
+				x: Math.round(x),
+				y: Math.round(y),
+				width: DEFAULT_CARD_WIDTH,
+				height: DEFAULT_FOLDER_HEIGHT,
+				parentId: null,
+			};
+			return node;
+		}
+		if (stat.isFile) {
+			const node: CanvasFileNode = {
+				id: generateUuid(),
+				type: 'file',
+				filePath: relPath,
+				label: stat.name,
+				extension: getExtension(stat.name),
+				x: Math.round(x),
+				y: Math.round(y),
+				width: DEFAULT_CARD_WIDTH,
+				height: DEFAULT_FILE_HEIGHT,
+				parentId: null,
+			};
+			return node;
+		}
+		return undefined;
+	}
+
+	private async getUniqueChildUri(folder: URI, rawName: string): Promise<URI> {
+		const dot = rawName.lastIndexOf('.');
+		const base = dot > 0 ? rawName.slice(0, dot) : rawName;
+		const ext = dot > 0 ? rawName.slice(dot) : '';
+		let candidate = URI.joinPath(folder, rawName);
+		let index = 1;
+		while (await this.fileService.exists(candidate)) {
+			candidate = URI.joinPath(folder, `${base}-${index}${ext}`);
+			index++;
+		}
+		return candidate;
+	}
+
+	private relativeToRoot(child: URI, root: URI): string {
+		const childPath = child.path;
+		const rootPath = root.path.endsWith('/') ? root.path : root.path + '/';
+		if (childPath.startsWith(rootPath)) {
+			return childPath.substring(rootPath.length);
+		}
+		if (childPath === root.path) {
+			return '';
+		}
+		return childPath.replace(/^\//, '');
+	}
+}
+
+function isHiddenOrSystemName(name: string): boolean {
+	return name.startsWith('.') || HIDDEN_OR_SYSTEM_NAMES.has(name);
+}
+
+function getExtension(name: string): string {
+	return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : '';
+}
+
+function sanitizeFileName(name: string): string {
+	return name.replace(/[\\/:*?"<>|]/g, '-').replace(/^\.+/, '').trim() || `file-${Date.now()}`;
+}
+
+function isImageFileName(name: string): boolean {
+	return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(getExtension(name));
 }

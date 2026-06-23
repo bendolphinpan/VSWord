@@ -296,7 +296,8 @@ html, body, #app {
 	border: 1.5px solid var(--vscode-editor-background, #fff) !important;
 }
 
-.spike-error {
+.spike-error,
+.delete-confirm {
 	position: absolute;
 	top: 80px;
 	left: 20px;
@@ -308,4 +309,183 @@ html, body, #app {
 	box-shadow: 0 4px 14px rgba(0,0,0,.10);
 	color: var(--vscode-errorForeground, #f14c4c);
 	white-space: pre-wrap;
+}
+
+.staged-tray {
+	position: absolute;
+	top: 58px;
+	right: 24px;
+	bottom: 28px;
+	z-index: 12;
+	width: min(360px, calc(100vw - 48px));
+	display: flex;
+	flex-direction: column;
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 96%, transparent);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 72%, transparent);
+	box-shadow: 0 8px 24px rgba(0,0,0,.16);
+	backdrop-filter: blur(8px);
+	overflow: hidden;
+}
+
+.tray-head,
+.tray-actions,
+.tray-item,
+.delete-card div {
+	display: flex;
+	align-items: center;
+}
+
+.tray-head {
+	justify-content: space-between;
+	gap: 12px;
+	padding: 12px 12px 10px;
+	border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 55%, transparent);
+}
+
+.tray-head strong { display: block; font-size: 13px; }
+.tray-head span { display: block; margin-top: 3px; font-size: 11px; opacity: .62; }
+
+.tray-actions {
+	justify-content: flex-end;
+	padding: 8px 10px;
+	border-bottom: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 45%, transparent);
+}
+
+.tray-list {
+	flex: 1 1 auto;
+	overflow: auto;
+	padding: 8px;
+}
+
+.tray-empty {
+	padding: 18px 10px;
+	font-size: 12px;
+	opacity: .62;
+	text-align: center;
+}
+
+.tray-item {
+	align-items: stretch;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 8px;
+	border-radius: 9px;
+}
+
+.tray-item:hover {
+	background: var(--vscode-toolbar-hoverBackground, rgba(128,128,128,.10));
+}
+
+.tray-meta {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.tray-meta strong,
+.tray-meta small {
+	display: block;
+	max-width: 168px;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+.tray-meta strong { font-size: 12px; }
+.tray-meta small { margin-top: 3px; font-size: 11px; opacity: .55; }
+
+.tray-icon {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 34px;
+	height: 24px;
+	border-radius: 7px;
+	font-size: 10px;
+	font-weight: 700;
+	background: color-mix(in srgb, var(--vscode-textLink-foreground, #6b6bd6) 15%, transparent);
+}
+
+.tray-icon.folder {
+	background: color-mix(in srgb, var(--vscode-focusBorder, #5b8def) 18%, transparent);
+}
+
+.tray-buttons {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	flex: 0 0 auto;
+}
+
+.canvas-toolbar button,
+.tray-head button,
+.tray-actions button,
+.tray-buttons button,
+.delete-card button {
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 58%, transparent);
+	border-radius: 6px;
+	background: transparent;
+	color: var(--vscode-editor-foreground, #222);
+	font: 12px/1 var(--vscode-font-family, 'Segoe UI', sans-serif);
+	padding: 5px 8px;
+	cursor: pointer;
+}
+
+.tray-head button {
+	font-size: 18px;
+	padding: 2px 8px;
+}
+
+.tray-buttons button {
+	font-size: 11px;
+	padding: 4px 6px;
+}
+
+button.danger,
+.tray-buttons button.danger,
+.delete-card button.danger {
+	color: var(--vscode-errorForeground, #f14c4c);
+	border-color: color-mix(in srgb, var(--vscode-errorForeground, #f14c4c) 38%, transparent);
+}
+
+button:disabled {
+	opacity: .45;
+	cursor: default;
+}
+
+.delete-confirm {
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	z-index: 20;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(0,0,0,.22);
+	color: var(--vscode-editor-foreground, #222);
+}
+
+.delete-card {
+	width: min(440px, calc(100vw - 48px));
+	padding: 18px;
+	border-radius: 12px;
+	background: var(--vscode-editor-background, #fff);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 72%, transparent);
+	box-shadow: 0 10px 30px rgba(0,0,0,.22);
+}
+
+.delete-card p {
+	margin: 10px 0 16px;
+	font-size: 12px;
+	opacity: .72;
+	word-break: break-all;
+}
+
+.delete-card div {
+	justify-content: flex-end;
+	gap: 8px;
 }
