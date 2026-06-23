@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { CancellationToken } from '../../../../../../base/common/cancellation.js';
+import { Disposable } from '../../../../../../base/common/lifecycle.js';
 import { FileAccess } from '../../../../../../base/common/network.js';
 import { URI } from '../../../../../../base/common/uri.js';
 import { localize2 } from '../../../../../../nls.js';
@@ -11,15 +13,25 @@ import { ContextKeyExpr } from '../../../../../../platform/contextkey/common/con
 import { IInstantiationService, ServicesAccessor } from '../../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../../platform/log/common/log.js';
 import { IWorkspaceContextService } from '../../../../../../platform/workspace/common/workspace.js';
+import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../../../common/contributions.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../../../files/browser/files.js';
+import { WebviewInput } from '../../../../webviewPanel/browser/webviewEditorInput.js';
 import { IWebviewWorkbenchService } from '../../../../webviewPanel/browser/webviewWorkbenchService.js';
 import { CanvasEdge, CanvasNode } from '../../../common/canvasTypes.js';
 import { VSWordCanvasService } from '../../../common/canvasService.js';
 import { getReactFlowCanvasHtml } from './reactFlowCanvasHtml.js';
 
 const VIEW_TYPE_PREFIX = 'vsword.dev.reactFlowCanvas';
+const VIEW_TYPE_RESTORE_PREFIX = `${VIEW_TYPE_PREFIX}:`;
 const COMMAND_ID = 'vsword.dev.openReactFlowFolderCanvas';
+const RESTORE_CONTRIBUTION_ID = 'workbench.contrib.vsword.reactFlowCanvasRestore';
+
+interface ReactFlowCanvasState {
+	readonly kind: 'vsword.reactFlowCanvas';
+	readonly version: 1;
+	readonly folderUri: string;
+}
 
 class ReactFlowFolderCanvasManager {
 	constructor(
@@ -31,13 +43,10 @@ class ReactFlowFolderCanvasManager {
 	) { }
 
 	open(): void {
-		const vendorRoot = FileAccess.asFileUri('vs/workbench/contrib/vsword/browser/spikes/reactflow/vendor');
-		const scriptUri = URI.joinPath(vendorRoot, 'index.js');
-		const styleUri = URI.joinPath(vendorRoot, 'style.css');
-		const reactFlowStyleUri = URI.joinPath(vendorRoot, 'index.css');
-		const folderName = this.folderUri.path.split('/').filter(Boolean).pop() || 'React Flow Canvas';
-		const viewType = `${VIEW_TYPE_PREFIX}:${this.folderUri.toString()}`;
-		const title = `◎ ${folderName}`;
+		const { vendorRoot, scriptUri, styleUri, reactFlowStyleUri } = getReactFlowWebviewResources();
+		const folderName = getFolderName(this.folderUri);
+		const viewType = getReactFlowViewType(this.folderUri);
+		const title = getReactFlowTitle(folderName);
 
 		for (const editor of this.editorService.editors) {
 			if ((editor as any).viewType === viewType) {
@@ -45,9 +54,6 @@ class ReactFlowFolderCanvasManager {
 				return;
 			}
 		}
-
-		const canvasService = this.instantiationService.createInstance(VSWordCanvasService);
-		canvasService.setFolder(this.folderUri);
 
 		const input = this.webviewWorkbenchService.openWebview(
 			{
@@ -67,7 +73,20 @@ class ReactFlowFolderCanvasManager {
 			{ preserveFocus: false }
 		);
 
+		this.attach(input, scriptUri, styleUri, reactFlowStyleUri, folderName);
+	}
+
+	attachRestored(input: WebviewInput): void {
+		const { scriptUri, styleUri, reactFlowStyleUri } = getReactFlowWebviewResources();
+		this.attach(input, scriptUri, styleUri, reactFlowStyleUri, getFolderName(this.folderUri));
+	}
+
+	private attach(input: WebviewInput, scriptUri: URI, styleUri: URI, reactFlowStyleUri: URI, folderName: string): void {
+		const canvasService = this.instantiationService.createInstance(VSWordCanvasService);
+		canvasService.setFolder(this.folderUri);
+
 		const webview = input.webview;
+		webview.state = JSON.stringify(createRestoreState(this.folderUri));
 		webview.setHtml(getReactFlowCanvasHtml(scriptUri, styleUri, reactFlowStyleUri));
 		webview.onMessage(async (e) => {
 			try {
@@ -160,6 +179,97 @@ class ReactFlowFolderCanvasManager {
 	}
 }
 
+class ReactFlowCanvasRestoreContribution extends Disposable implements IWorkbenchContribution {
+	constructor(
+		@IWebviewWorkbenchService webviewWorkbenchService: IWebviewWorkbenchService,
+		@IInstantiationService private readonly instantiationService: IInstantiationService,
+		@ILogService private readonly logService: ILogService,
+	) {
+		super();
+		this._register(webviewWorkbenchService.registerResolver({
+			canResolve: (webview) => isReactFlowCanvasWebview(webview),
+			resolveWebview: async (webview, token) => this.resolveWebview(webview, token),
+		}));
+	}
+
+	private async resolveWebview(webview: WebviewInput, token: CancellationToken): Promise<void> {
+		if (token.isCancellationRequested) {
+			return;
+		}
+
+		const folderUri = getFolderUriFromWebview(webview);
+		if (!folderUri) {
+			this.logService.warn('[VSWord React Flow Canvas] unable to restore webview without folder URI: ' + webview.viewType);
+			return;
+		}
+
+		this.instantiationService.createInstance(ReactFlowFolderCanvasManager, folderUri).attachRestored(webview);
+	}
+}
+
+function getReactFlowWebviewResources(): { vendorRoot: URI; scriptUri: URI; styleUri: URI; reactFlowStyleUri: URI } {
+	const vendorRoot = FileAccess.asFileUri('vs/workbench/contrib/vsword/browser/spikes/reactflow/vendor');
+	return {
+		vendorRoot,
+		scriptUri: URI.joinPath(vendorRoot, 'index.js'),
+		styleUri: URI.joinPath(vendorRoot, 'style.css'),
+		reactFlowStyleUri: URI.joinPath(vendorRoot, 'index.css'),
+	};
+}
+
+function getReactFlowViewType(folderUri: URI): string {
+	return `${VIEW_TYPE_RESTORE_PREFIX}${folderUri.toString()}`;
+}
+
+function getReactFlowTitle(folderName: string): string {
+	return `◎ ${folderName}`;
+}
+
+function getFolderName(folderUri: URI): string {
+	return folderUri.path.split('/').filter(Boolean).pop() || 'React Flow Canvas';
+}
+
+function createRestoreState(folderUri: URI): ReactFlowCanvasState {
+	return { kind: 'vsword.reactFlowCanvas', version: 1, folderUri: folderUri.toString() };
+}
+
+function isReactFlowCanvasWebview(webview: WebviewInput): boolean {
+	return webview.viewType.startsWith(VIEW_TYPE_RESTORE_PREFIX) || webview.providerId?.startsWith(VIEW_TYPE_RESTORE_PREFIX) === true;
+}
+
+function getFolderUriFromWebview(webview: WebviewInput): URI | undefined {
+	const stateUri = getFolderUriFromState(webview.webview.state);
+	if (stateUri) {
+		return stateUri;
+	}
+
+	const viewType = webview.viewType.startsWith(VIEW_TYPE_RESTORE_PREFIX) ? webview.viewType : webview.providerId;
+	if (!viewType?.startsWith(VIEW_TYPE_RESTORE_PREFIX)) {
+		return undefined;
+	}
+
+	try {
+		return URI.parse(viewType.slice(VIEW_TYPE_RESTORE_PREFIX.length));
+	} catch {
+		return undefined;
+	}
+}
+
+function getFolderUriFromState(state: string | undefined): URI | undefined {
+	if (!state) {
+		return undefined;
+	}
+	try {
+		const parsed = JSON.parse(state) as Partial<ReactFlowCanvasState>;
+		if (parsed.kind === 'vsword.reactFlowCanvas' && typeof parsed.folderUri === 'string') {
+			return URI.parse(parsed.folderUri);
+		}
+	} catch {
+		// Ignore stale or malformed restore state.
+	}
+	return undefined;
+}
+
 function summarizeMarkdownLike(content: string): string {
 	const lines = content
 		.replace(/\r/g, '')
@@ -228,4 +338,5 @@ class VSWordOpenReactFlowFolderCanvasAction extends Action2 {
 	}
 }
 
+registerWorkbenchContribution2(RESTORE_CONTRIBUTION_ID, ReactFlowCanvasRestoreContribution, WorkbenchPhase.BlockStartup);
 registerAction2(VSWordOpenReactFlowFolderCanvasAction);

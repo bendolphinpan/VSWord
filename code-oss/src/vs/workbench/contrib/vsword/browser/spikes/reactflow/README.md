@@ -39,6 +39,7 @@ This spike registers a separate entry:
 - Node drag persists `x/y`.
 - Node edge resize persists `width/height`.
 - Edge connection persists `CanvasEdge`.
+- Webview tabs are persisted/restored by a workbench `IWebviewWorkbenchService.registerResolver()` contribution; folder URI is stored in `webview.state` and used to reattach HTML/message handling after reload.
 - Double-click file node opens the file.
 - Double-click folder node opens a sub-folder React Flow canvas.
 
