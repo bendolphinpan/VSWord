@@ -402,6 +402,30 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-4.5 — Canvas 文件节点体验模块（阶段成果交付）
+
+**前置**：T-4.4 通过；React Flow Canvas 已具备安全删除、暂存盘、恢复、真实删除、拖拽/粘贴写入能力。
+
+**目标**：按 `D:\GIT\VSWord\docs\requirements\FR-04-canvas-file-node-experience.md` 实现 P0：图片预览、Markdown/文本摘要、未知文件 fallback、文件夹视觉区分、预览开关一致性、稳定卡片尺寸。
+
+**修改文件清单上限**：优先限制在：
+- `D:\GIT\VSWord\docs\requirements\FR-04-canvas-file-node-experience.md`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\reactFlowCanvasAction.ts`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\build-reactflow-spike.cjs`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\vendor\style.css`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\README.md`
+
+**验收 Gate（阶段成果一次验收）**：
+- [ ] 图片文件节点显示缩略图，拖入/粘贴后也立即显示。
+- [ ] Markdown/文本文件显示摘要；未知文件不读二进制，显示 fallback。
+- [ ] `Show/Hide preview` 对图片、Markdown、文本、fallback 一致。
+- [ ] 节点 hover、图片加载、resize 不造成扩高/重排。
+- [ ] Delete → Tray → Restore 后预览仍正常。
+- [ ] React Flow bundle build 通过；`npm run compile` 0 errors；root `package.json/package-lock.json` 无变化。
+- [ ] 完成代码审查：CSP 不放开远程脚本，图片 URI 只来自 workspace/folder resource，二进制不误读。
+
+---
+
 ### Phase 5 — Mindmap
 
 #### T-5.1 — `.mm` parser/writer + Gate F fixtures

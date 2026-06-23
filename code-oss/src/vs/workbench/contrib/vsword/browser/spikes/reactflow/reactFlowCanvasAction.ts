@@ -16,6 +16,7 @@ import { IWorkspaceContextService } from '../../../../../../platform/workspace/c
 import { IWorkbenchContribution, WorkbenchPhase, registerWorkbenchContribution2 } from '../../../../../common/contributions.js';
 import { IEditorService } from '../../../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../../../files/browser/files.js';
+import { asWebviewUri } from '../../../../webview/common/webview.js';
 import { WebviewInput } from '../../../../webviewPanel/browser/webviewEditorInput.js';
 import { IWebviewWorkbenchService } from '../../../../webviewPanel/browser/webviewWorkbenchService.js';
 import { CanvasEdge, CanvasNode } from '../../../common/canvasTypes.js';
@@ -64,7 +65,7 @@ class ReactFlowFolderCanvasManager {
 				options: { enableFindWidget: true, retainContextWhenHidden: true },
 				contentOptions: {
 					allowScripts: true,
-					localResourceRoots: [vendorRoot],
+					localResourceRoots: [vendorRoot, this.folderUri],
 				},
 			},
 			viewType,
@@ -73,19 +74,20 @@ class ReactFlowFolderCanvasManager {
 			{ preserveFocus: false }
 		);
 
-		this.attach(input, scriptUri, styleUri, reactFlowStyleUri, folderName);
+		this.attach(input, scriptUri, styleUri, reactFlowStyleUri, folderName, vendorRoot);
 	}
 
 	attachRestored(input: WebviewInput): void {
-		const { scriptUri, styleUri, reactFlowStyleUri } = getReactFlowWebviewResources();
-		this.attach(input, scriptUri, styleUri, reactFlowStyleUri, getFolderName(this.folderUri));
+		const { vendorRoot, scriptUri, styleUri, reactFlowStyleUri } = getReactFlowWebviewResources();
+		this.attach(input, scriptUri, styleUri, reactFlowStyleUri, getFolderName(this.folderUri), vendorRoot);
 	}
 
-	private attach(input: WebviewInput, scriptUri: URI, styleUri: URI, reactFlowStyleUri: URI, folderName: string): void {
+	private attach(input: WebviewInput, scriptUri: URI, styleUri: URI, reactFlowStyleUri: URI, folderName: string, vendorRoot: URI): void {
 		const canvasService = this.instantiationService.createInstance(VSWordCanvasService);
 		canvasService.setFolder(this.folderUri);
 
 		const webview = input.webview;
+		webview.contentOptions = { ...webview.contentOptions, localResourceRoots: [vendorRoot, this.folderUri] };
 		webview.state = JSON.stringify(mergeRestoreState(webview.state, this.folderUri));
 		webview.setHtml(getReactFlowCanvasHtml(scriptUri, styleUri, reactFlowStyleUri));
 		webview.onMessage(async (e) => {
@@ -228,8 +230,30 @@ class ReactFlowFolderCanvasManager {
 		const result: any[] = [];
 		for (const node of nodes) {
 			if (node.type === 'file') {
-				const content = await canvasService.readFileContent(node.filePath);
-				result.push({ ...node, summary: summarizeMarkdownLike(content ?? '') });
+				const extension = getExtension(node.filePath);
+				const enriched: any = {
+					...node,
+					extension,
+					previewKind: getPreviewKind(node.filePath),
+					typeLabel: getTypeLabel(node.filePath),
+				};
+				if (isImagePath(node.filePath)) {
+					const resource = canvasService.resolveFilePath(node.filePath);
+					if (resource) {
+						enriched.previewImageUri = asWebviewUri(resource).toString(true);
+					}
+				} else if (isTextPreviewPath(node.filePath)) {
+					const content = await canvasService.readFileContent(node.filePath);
+					enriched.summary = summarizeMarkdownLike(content ?? '');
+					const firstImage = content && isMarkdownPath(node.filePath) ? findFirstLocalMarkdownImage(content) : undefined;
+					if (firstImage) {
+						const resource = canvasService.resolveFilePath(resolveRelativePath(node.filePath, firstImage));
+						if (resource) {
+							enriched.previewImageUri = asWebviewUri(resource).toString(true);
+						}
+					}
+				}
+				result.push(enriched);
 			} else {
 				result.push(node);
 			}
@@ -343,6 +367,69 @@ function getFolderUriFromState(state: string | undefined): URI | undefined {
 		// Ignore stale or malformed restore state.
 	}
 	return undefined;
+}
+
+function getExtension(path: string): string {
+	const name = path.split('/').pop() ?? path;
+	return name.includes('.') ? name.split('.').pop()?.toLowerCase() ?? '' : '';
+}
+
+function isImagePath(path: string): boolean {
+	return ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'].includes(getExtension(path));
+}
+
+function isMarkdownPath(path: string): boolean {
+	return ['md', 'markdown'].includes(getExtension(path));
+}
+
+function isTextPreviewPath(path: string): boolean {
+	return ['md', 'markdown', 'txt', 'json', 'yaml', 'yml', 'toml', 'csv', 'log'].includes(getExtension(path));
+}
+
+function getPreviewKind(path: string): 'image' | 'text' | 'fallback' {
+	if (isImagePath(path)) {
+		return 'image';
+	}
+	if (isTextPreviewPath(path)) {
+		return 'text';
+	}
+	return 'fallback';
+}
+
+function getTypeLabel(path: string): string {
+	const extension = getExtension(path);
+	if (!extension) {
+		return 'FILE';
+	}
+	return extension.slice(0, 4).toUpperCase();
+}
+
+function findFirstLocalMarkdownImage(content: string): string | undefined {
+	const match = content.match(/!\[[^\]]*\]\(([^)\s]+)(?:\s+"[^"]*")?\)/);
+	const target = match?.[1]?.trim();
+	if (!target || /^[a-z][a-z0-9+.-]*:/i.test(target) || target.startsWith('#')) {
+		return undefined;
+	}
+	return target.replace(/^\.\//, '');
+}
+
+function resolveRelativePath(filePath: string, relative: string): string {
+	if (relative.startsWith('/')) {
+		return relative.replace(/^\/+/, '');
+	}
+	const parts = filePath.split('/');
+	parts.pop();
+	for (const part of relative.split('/')) {
+		if (!part || part === '.') {
+			continue;
+		}
+		if (part === '..') {
+			parts.pop();
+		} else {
+			parts.push(part);
+		}
+	}
+	return parts.join('/');
 }
 
 function summarizeMarkdownLike(content: string): string {

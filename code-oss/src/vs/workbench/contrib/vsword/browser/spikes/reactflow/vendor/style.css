@@ -211,6 +211,16 @@ html, body, #app {
 	color: color-mix(in srgb, var(--vscode-textLink-foreground, #5b5bd6) 78%, var(--vscode-editor-foreground, #222));
 }
 
+.vsword-card .icon.image {
+	background: color-mix(in srgb, #2da44e 18%, transparent);
+	color: color-mix(in srgb, #2da44e 86%, var(--vscode-editor-foreground, #222));
+}
+
+.vsword-card .icon.fallback {
+	background: color-mix(in srgb, var(--vscode-descriptionForeground, #6e7781) 18%, transparent);
+	color: color-mix(in srgb, var(--vscode-descriptionForeground, #6e7781) 86%, var(--vscode-editor-foreground, #222));
+}
+
 .vsword-card .icon.folder {
 	background: color-mix(in srgb, var(--vscode-focusBorder, #5b8def) 16%, transparent);
 	color: color-mix(in srgb, var(--vscode-focusBorder, #3f74d8) 86%, var(--vscode-editor-foreground, #222));
@@ -232,15 +242,50 @@ html, body, #app {
 	text-overflow: ellipsis;
 }
 
+.vsword-card .preview-slot {
+	flex: 1 1 auto;
+	min-height: 0;
+	margin-top: 10px;
+	border-radius: 9px;
+	background: color-mix(in srgb, var(--vscode-editor-foreground, #222) 4%, transparent);
+	overflow: hidden;
+	display: flex;
+}
+
+.vsword-card.image .preview-slot {
+	align-items: center;
+	justify-content: center;
+	background: color-mix(in srgb, #2da44e 6%, var(--vscode-editor-background, #fff));
+}
+
+.vsword-card .image-preview {
+	width: 100%;
+	height: 100%;
+	max-width: 100%;
+	max-height: 100%;
+	object-fit: cover;
+	display: block;
+}
+
 .vsword-card .summary {
 	flex: 1 1 auto;
 	min-height: 0;
-	margin: 10px 0 0;
-	padding: 0 2px 2px 0;
+	margin: 0;
+	padding: 10px;
 	font: 12px/1.42 var(--vscode-editor-font-family, Consolas, monospace);
 	white-space: pre-wrap;
 	overflow: auto;
 	opacity: .82;
+}
+
+.vsword-card .fallback-text,
+.vsword-card .file-fallback {
+	align-self: stretch;
+	width: 100%;
+	box-sizing: border-box;
+	padding: 10px;
+	font: 12px/1.42 var(--vscode-font-family, 'Segoe UI', sans-serif);
+	color: var(--vscode-descriptionForeground, #6e7781);
 }
 
 .vsword-card .summary::-webkit-scrollbar {

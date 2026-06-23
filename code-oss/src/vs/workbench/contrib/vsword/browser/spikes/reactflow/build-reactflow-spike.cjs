@@ -122,6 +122,14 @@ async function filesToImportPayload(fileList) {
   return payload;
 }
 
+function fileIconLabel(node) {
+  return (node.typeLabel || node.extension || 'FILE').toString().slice(0, 4).toUpperCase();
+}
+
+function previewText(node) {
+  return node.summary || (node.previewKind === 'fallback' ? 'Preview not available for this file type. Double-click to open.' : 'No preview content.');
+}
+
 function CardResizer({ node, selected }) {
   return <NodeResizer
     isVisible={selected}
@@ -145,12 +153,17 @@ function CardHandles() {
 function FileCard({ data, selected }) {
   const node = data.node;
   const previewVisible = data.previewVisible !== false;
-  return <div className="vsword-card file" title="Double-click to open file">
+  const iconClass = node.previewKind === 'image' ? 'image' : node.previewKind === 'fallback' ? 'fallback' : 'doc';
+  return <div className={'vsword-card file ' + (node.previewKind || 'fallback')} title="Double-click to open file">
     <CardResizer node={node} selected={selected} />
     <CardHandles />
-    <div className="head"><span className="icon doc">MD</span><span className="title">{node.label || node.filePath}</span></div>
+    <div className="head"><span className={'icon ' + iconClass}>{fileIconLabel(node)}</span><span className="title">{node.label || node.filePath}</span></div>
     <div className="path">{node.filePath}</div>
-    {previewVisible && node.summary ? <pre className="summary">{node.summary}</pre> : <div className="hint">{previewVisible ? 'Double-click to open file' : 'Preview hidden'}</div>}
+    {previewVisible ? <div className="preview-slot">
+      {node.previewImageUri ? <img className="image-preview" src={node.previewImageUri} alt={node.label || node.filePath} /> : null}
+      {node.previewKind === 'image' && !node.previewImageUri ? <div className="file-fallback">Image preview unavailable</div> : null}
+      {node.previewKind !== 'image' ? <pre className={node.previewKind === 'fallback' ? 'summary fallback-text' : 'summary'}>{previewText(node)}</pre> : null}
+    </div> : <div className="hint">Preview hidden</div>}
   </div>;
 }
 

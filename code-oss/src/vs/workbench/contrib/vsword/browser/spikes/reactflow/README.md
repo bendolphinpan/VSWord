@@ -31,7 +31,9 @@ This spike registers a separate entry:
 - Host reuses VSWord folder discovery and `.vsword/canvas.json` persistence.
 - Webview receives `folderData`.
 - Folder children render as React Flow cards.
-- File nodes show Markdown/text summaries when preview is enabled.
+- File nodes show Markdown/text summaries when preview is enabled; binary-like/unsupported files show a typed fallback instead of reading content.
+- Image file nodes (`png/jpg/jpeg/gif/webp/svg`) show stable in-card thumbnails from local workspace resources when preview is enabled.
+- Markdown nodes can show a local first-image thumbnail while still keeping the card size stable.
 - Preview can be toggled without reloading folder data.
 - Minimap opens from a bottom-right circular map button as an overlay popover.
 - Folder data triggers a delayed `fitView({ padding: 0.28 })` after async host data arrives, preventing right-edge clipping from stale initial fit bounds.
