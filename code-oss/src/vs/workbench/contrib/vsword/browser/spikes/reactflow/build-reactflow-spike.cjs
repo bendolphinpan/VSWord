@@ -54,7 +54,7 @@ function toRfNodes(canvas) {
     type: node.type === 'folder' ? 'folderCard' : node.type === 'file' ? 'fileCard' : 'noteCard',
     position: { x: Number(node.x) || 0, y: Number(node.y) || 0 },
     data: { node },
-    style: { width: Number(node.width) || 240 },
+    style: { width: Math.max(Number(node.width) || 260, 260) },
   }));
 }
 
@@ -82,7 +82,7 @@ function FileCard({ data }) {
   const node = data.node;
   return <div className="vsword-card file" title="Double-click to open file">
     <CardHandles />
-    <div className="head"><span className="icon">📄</span><span className="title">{node.label || node.filePath}</span></div>
+    <div className="head"><span className="icon doc">MD</span><span className="title">{node.label || node.filePath}</span></div>
     <div className="path">{node.filePath}</div>
     {node.summary ? <pre className="summary">{node.summary}</pre> : <div className="hint">Double-click to open file</div>}
   </div>;
@@ -92,7 +92,7 @@ function FolderCard({ data }) {
   const node = data.node;
   return <div className="vsword-card folder" title="Double-click to drill into folder">
     <CardHandles />
-    <div className="head"><span className="icon">📁</span><span className="title">{node.label || node.folderPath}</span></div>
+    <div className="head"><span className="icon folder">DIR</span><span className="title">{node.label || node.folderPath}</span></div>
     <div className="path">{node.folderPath}</div>
     <div className="hint">Double-click to open sub-canvas</div>
   </div>;

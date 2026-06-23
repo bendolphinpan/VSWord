@@ -19,7 +19,7 @@ html, body, #app {
 .spinner {
 	width: 28px;
 	height: 28px;
-	border: 3px solid rgba(128,128,128,0.25);
+	border: 3px solid rgba(128,128,128,0.22);
 	border-top-color: var(--vscode-focusBorder, #007acc);
 	border-radius: 50%;
 	animation: spin 1s linear infinite;
@@ -38,17 +38,18 @@ html, body, #app {
 	top: 12px;
 	left: 12px;
 	z-index: 10;
-	padding: 7px 10px;
-	border-radius: 8px;
-	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 88%, transparent);
-	border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
-	box-shadow: 0 8px 24px rgba(0,0,0,.12);
+	padding: 6px 10px;
+	border-radius: 7px;
+	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 94%, transparent);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent);
+	box-shadow: 0 2px 8px rgba(0,0,0,.08);
 	font-size: 12px;
 	pointer-events: none;
+	backdrop-filter: blur(6px);
 }
 
-.canvas-header strong { font-weight: 700; }
-.canvas-header span { margin-left: 8px; opacity: .65; }
+.canvas-header strong { font-weight: 650; }
+.canvas-header span { margin-left: 8px; opacity: .62; }
 
 .react-flow {
 	background: var(--vscode-editor-background, #fff);
@@ -57,70 +58,147 @@ html, body, #app {
 .react-flow__controls,
 .react-flow__minimap {
 	background: var(--vscode-editor-background, #fff);
-	border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
-	box-shadow: 0 8px 24px rgba(0,0,0,.12);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 68%, transparent);
+	box-shadow: 0 2px 8px rgba(0,0,0,.08);
+}
+
+.react-flow__node {
+	border-radius: 12px;
+}
+
+.react-flow__node.selected .vsword-card,
+.react-flow__node:focus .vsword-card {
+	border-color: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 78%, transparent);
+	box-shadow: 0 0 0 1px color-mix(in srgb, var(--vscode-focusBorder, #007acc) 45%, transparent), 0 6px 16px rgba(0,0,0,.10);
 }
 
 .vsword-card {
-	width: 240px;
-	min-height: 130px;
+	box-sizing: border-box;
+	width: 100%;
+	min-height: 154px;
 	padding: 12px;
-	border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.28));
-	border-radius: 14px;
-	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 94%, transparent);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #8c8c8c) 78%, transparent);
+	border-radius: 12px;
+	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 97%, #f7f9fc 3%);
 	color: var(--vscode-editor-foreground, #222);
-	box-shadow: 0 10px 28px rgba(0,0,0,.14);
+	box-shadow: 0 3px 10px rgba(0,0,0,.075);
 	overflow: hidden;
+	transition: box-shadow .14s ease, border-color .14s ease, transform .14s ease;
+}
+
+.vsword-card:hover {
+	box-shadow: 0 6px 16px rgba(0,0,0,.10);
 }
 
 .vsword-card.folder {
-	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 86%, #7aa2ff 14%);
+	background: linear-gradient(180deg,
+		color-mix(in srgb, var(--vscode-editor-background, #fff) 94%, #5b8def 6%),
+		color-mix(in srgb, var(--vscode-editor-background, #fff) 98%, #5b8def 2%));
+	border-color: color-mix(in srgb, var(--vscode-focusBorder, #5b8def) 26%, var(--vscode-panel-border, #ddd));
 }
 
 .vsword-card .head {
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	font-weight: 700;
+	font-weight: 650;
 	min-width: 0;
 }
 
-.vsword-card .icon { font-size: 20px; }
+.vsword-card .icon {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 20px;
+	border-radius: 6px;
+	font: 10px/1 var(--vscode-font-family, 'Segoe UI', sans-serif);
+	font-weight: 700;
+	letter-spacing: .3px;
+}
+
+.vsword-card .icon.doc {
+	background: color-mix(in srgb, var(--vscode-textLink-foreground, #6b6bd6) 16%, transparent);
+	color: color-mix(in srgb, var(--vscode-textLink-foreground, #5b5bd6) 78%, var(--vscode-editor-foreground, #222));
+}
+
+.vsword-card .icon.folder {
+	background: color-mix(in srgb, var(--vscode-focusBorder, #5b8def) 16%, transparent);
+	color: color-mix(in srgb, var(--vscode-focusBorder, #3f74d8) 86%, var(--vscode-editor-foreground, #222));
+}
+
 .vsword-card .title {
+	min-width: 0;
 	overflow: hidden;
 	white-space: nowrap;
 	text-overflow: ellipsis;
 }
 
 .vsword-card .path {
-	margin-top: 6px;
+	margin-top: 7px;
 	font-size: 11px;
-	opacity: .58;
+	opacity: .56;
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 
 .vsword-card .summary {
-	margin: 8px 0 0;
-	font: 12px/1.35 var(--vscode-editor-font-family, Consolas, monospace);
+	position: relative;
+	margin: 10px 0 0;
+	padding: 0;
+	font: 12px/1.42 var(--vscode-editor-font-family, Consolas, monospace);
 	white-space: pre-wrap;
 	overflow: hidden;
-	max-height: 54px;
-	opacity: .78;
+	max-height: 88px;
+	opacity: .82;
+}
+
+.vsword-card:hover .summary {
+	overflow: auto;
+	max-height: 116px;
+}
+
+.vsword-card .summary::-webkit-scrollbar {
+	width: 6px;
+}
+
+.vsword-card .summary::-webkit-scrollbar-thumb {
+	background: color-mix(in srgb, var(--vscode-scrollbarSlider-background, #888) 70%, transparent);
+	border-radius: 999px;
 }
 
 .vsword-card .hint {
-	margin-top: 8px;
+	margin-top: 10px;
 	font-size: 11px;
-	opacity: .55;
+	opacity: .50;
 }
 
-.vsword-card .react-flow__handle {
-	width: 8px;
-	height: 8px;
+.react-flow__handle {
+	width: 7px;
+	height: 7px;
 	background: var(--vscode-focusBorder, #007acc);
-	border-color: var(--vscode-editor-background, #fff);
+	border: 1.5px solid var(--vscode-editor-background, #fff);
+	opacity: 0;
+	transition: opacity .12s ease, transform .12s ease;
+	pointer-events: none;
+}
+
+.react-flow__node:hover .react-flow__handle,
+.react-flow__node.selected .react-flow__handle,
+.react-flow__node.connecting .react-flow__handle {
+	opacity: .95;
+	pointer-events: all;
+}
+
+.react-flow__handle-top { top: -4px; }
+.react-flow__handle-right { right: -4px; }
+.react-flow__handle-bottom { bottom: -4px; }
+.react-flow__handle-left { left: -4px; }
+
+.react-flow__handle:hover {
+	transform: scale(1.35);
 }
 
 .spike-error {
@@ -129,9 +207,9 @@ html, body, #app {
 	left: 20px;
 	padding: 16px;
 	border-radius: 10px;
-	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 90%, transparent);
-	border: 1px solid var(--vscode-panel-border, rgba(128,128,128,.25));
-	box-shadow: 0 8px 24px rgba(0,0,0,.12);
+	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 94%, transparent);
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 70%, transparent);
+	box-shadow: 0 4px 14px rgba(0,0,0,.10);
 	color: var(--vscode-errorForeground, #f14c4c);
 	white-space: pre-wrap;
 }
