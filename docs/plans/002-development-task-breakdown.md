@@ -60,6 +60,8 @@ T-4.1 Canvas spike (tldraw vs ReactFlow) (Gate D + license)
        T-4.2 Canvas service + storage
               ↓
        T-4.3 Canvas MVP (FR-03)
+              ↓
+       T-4.4 Canvas 文件生命周期闭环（暂存盘/恢复/真实删除/拖拽粘贴）
 T-5.1 .mm parser/writer + Gate F fixtures
               ↓
        T-5.2 Mindmap MVP (FR-02)
@@ -344,6 +346,59 @@ code-oss/src/vs/workbench/contrib/vsword/
 **目标**：按 `FR-03-canvas-miro-parity.md` 实现 P0 全部能力。
 
 **验收**：FR-03 §6 全部勾选
+
+---
+
+#### T-4.4 — Canvas 文件生命周期闭环（阶段成果交付）
+
+**前置**：React Flow Canvas 已具备打开文件夹、自动发现直接子项、节点拖拽/缩放/连线、tab 恢复、viewport 恢复、安全删除节点。
+
+**目标**：一次性交付完整文件生命周期闭环，避免用户反复验收零散小功能：
+
+1. **安全删除闭环**
+   - Delete/Backspace 仍只从 Canvas 移除 file/folder 节点，不删除磁盘文件。
+   - 被移除但仍存在于当前文件夹的 file/folder 自动进入暂存盘列表。
+   - 删除节点时清理相关边。
+
+2. **暂存盘 / 未上画布面板**
+   - UI 显示 `暂存盘 (N)`。
+   - N = 当前文件夹直接子项中未被 canvas.json 引用的 file/folder 数。
+   - 面板支持刷新、单项放回、全部放回。
+   - 放回后创建 file/folder 节点，默认放到当前视口中心或网格排布位置。
+
+3. **真实删除文件/文件夹**
+   - 暂存盘条目支持 `真实删除…`。
+   - 必须二次确认，明确显示目标名称。
+   - 优先走系统回收站/Trash；若当前平台/API 只能永久删除，确认文案必须写明"永久删除"。
+   - 删除后刷新暂存盘与 Canvas 状态。
+
+4. **拖拽加入 Canvas + 文件夹**
+   - OS / Explorer 文件拖入 Canvas 时，保证文件存在于当前 Canvas 文件夹内。
+   - 当前文件夹内文件：只建/恢复节点，不复制。
+   - 当前文件夹外文件：复制到当前文件夹或 `assets/` 后创建节点。
+   - 同名冲突自动追加后缀，不覆盖已有文件。
+
+5. **粘贴加入 Canvas + 文件夹**
+   - 粘贴文件列表：复制到当前 Canvas 文件夹并创建节点。
+   - 粘贴图片数据：写入 `assets/pasted-*.png` 并创建节点。
+   - 粘贴 URL/文本：创建 URL 或 Note 节点（P0 可先 Note）。
+
+**修改文件清单上限**：优先限制在 VSWord Canvas 相关文件内：
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\common\canvasTypes.ts`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\common\canvasService.ts`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\reactFlowCanvasAction.ts`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\build-reactflow-spike.cjs`
+- `D:\GIT\VSWord\code-oss\src\vs\workbench\contrib\vsword\browser\spikes\reactflow\README.md`
+
+**验收 Gate（阶段成果一次验收）**：
+- [ ] 删除 Canvas 上的文件节点后，磁盘文件仍存在，暂存盘数量 +1。
+- [ ] 从暂存盘放回该文件，Canvas 节点恢复，reload 后仍存在。
+- [ ] 从暂存盘真实删除文件，有二次确认；确认后磁盘文件消失，暂存盘刷新。
+- [ ] 子文件夹删除/放回/真实删除遵循同样语义。
+- [ ] 从外部拖入文件后，文件出现在当前 Canvas 文件夹内，Canvas 出现节点。
+- [ ] 粘贴图片后，`assets/` 下出现图片文件，Canvas 出现节点。
+- [ ] 同名文件拖入/粘贴不会覆盖原文件。
+- [ ] `npm run compile` 0 errors；root `package.json/package-lock.json` 无变化。
 
 ---
 
