@@ -177,8 +177,22 @@ export function getCanvasHtml(): string {
 	.md-preview {
 		font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
 		font-size: 12px;
+		line-height: 1.45;
 		color: var(--vscode-foreground, #333);
+		overflow: auto;
+		width: 100%;
+		height: 100%;
+		padding: 6px 8px;
+	}
+	.card-summary {
+		font-family: var(--vscode-font-family, 'Segoe UI', sans-serif);
+		font-size: 11px;
+		line-height: 1.35;
+		color: var(--vscode-descriptionForeground, #777);
 		overflow: hidden;
+		width: 100%;
+		height: 100%;
+		padding: 0 2px;
 	}
 	.file-edit {
 		width: 100%;
@@ -463,6 +477,31 @@ export function getCanvasHtml(): string {
 		return s;
 	}
 
+	function truncateText(s, max) {
+		if (!s) return '';
+		return s.length > max ? s.slice(0, Math.max(0, max - 1)) + '…' : s;
+	}
+
+	function plainMdLine(line) {
+		return line
+			.replace(/^\\s{0,3}#{1,6}\\s+/, '')
+			.replace(/^\\s*[-*+]\\s+/, '• ')
+			.replace(/\\*\\*(.+?)\\*\\*/g, '$1')
+			.replace(/\\*(.+?)\\*/g, '$1')
+			.replace(/\\x60([^\\x60]+)\\x60/g, '$1')
+			.replace(/\\[([^\\]]+)\\]\\(([^)]+)\\)/g, '$1')
+			.trim();
+	}
+
+	function mdSummary(md, maxLines) {
+		if (!md) return 'No preview content yet';
+		const lines = md.split('\\n')
+			.map(plainMdLine)
+			.filter(function(line) { return !!line && !line.startsWith('---'); });
+		if (lines.length === 0) return 'No preview content yet';
+		return lines.slice(0, maxLines).map(function(line) { return truncateText(line, 72); }).join('\\n');
+	}
+
 	// ---- Expanded card height ----
 	const COLLAPSED_HEIGHT = 80;
 	const PREVIEW_HEADER = 24; // space for the preview button row
@@ -470,10 +509,12 @@ export function getCanvasHtml(): string {
 	const PREVIEW_PADDING = 8;
 
 	function getExpandedHeight(node) {
-		// Estimate based on content length; capped
+		// Expanded preview should be useful even for short docs: give it enough room
+		// to show real content, then cap so a huge file does not cover the whole canvas.
 		const content = fileContents[node.id] || '';
 		const lineCount = content.split('\\n').length;
-		return Math.min(COLLAPSED_HEIGHT + PREVIEW_HEADER + PREVIEW_MAX_HEIGHT, COLLAPSED_HEIGHT + PREVIEW_HEADER + lineCount * 16 + PREVIEW_PADDING * 2);
+		const natural = COLLAPSED_HEIGHT + PREVIEW_HEADER + lineCount * 18 + PREVIEW_PADDING * 2;
+		return Math.max(260, Math.min(COLLAPSED_HEIGHT + PREVIEW_HEADER + PREVIEW_MAX_HEIGHT, natural));
 	}
 
 	function getNodeHeight(node) {
@@ -540,7 +581,7 @@ export function getCanvasHtml(): string {
 		label.setAttribute('x', node.width / 2);
 		label.setAttribute('y', node.height / 2 + 28);
 		label.setAttribute('text-anchor', 'middle');
-		label.textContent = node.label;
+		label.textContent = truncateText(node.label, 24);
 		g.appendChild(label);
 
 		const hint = document.createElementNS('http://www.w3.org/2000/svg', 'text');
@@ -688,7 +729,7 @@ export function getCanvasHtml(): string {
 			label.setAttribute('class', 'card-label');
 			label.setAttribute('x', 40);
 			label.setAttribute('y', 28);
-			label.textContent = node.label;
+			label.textContent = truncateText(node.label, 24);
 			g.appendChild(label);
 
 			// Path (subtle)
@@ -696,7 +737,7 @@ export function getCanvasHtml(): string {
 			path.setAttribute('class', 'card-path');
 			path.setAttribute('x', 40);
 			path.setAttribute('y', 48);
-			path.textContent = node.filePath;
+			path.textContent = truncateText(node.filePath, 30);
 			g.appendChild(path);
 
 			// Expand/collapse button
@@ -725,6 +766,25 @@ export function getCanvasHtml(): string {
 			size.setAttribute('y', 68);
 			size.textContent = '.' + node.extension;
 			g.appendChild(size);
+
+			// Collapsed card: show a brief outline/summary, and lazy-load content
+			// automatically so the board is informative without requiring Preview.
+			if (!isExpanded) {
+				if (fileContents[node.id] === undefined && !pendingLoad[node.id]) {
+					pendingLoad[node.id] = true;
+					vscode.postMessage({ type: 'loadFileContent', nodeId: node.id });
+				}
+				const fo = document.createElementNS('http://www.w3.org/2000/svg', 'foreignObject');
+				fo.setAttribute('x', 10);
+				fo.setAttribute('y', 76);
+				fo.setAttribute('width', node.width - 20);
+				fo.setAttribute('height', Math.max(0, node.height - 84));
+				const summary = document.createElementNS('http://www.w3.org/1999/xhtml', 'div');
+				summary.setAttribute('class', 'card-summary');
+				summary.textContent = fileContents[node.id] !== undefined ? mdSummary(fileContents[node.id], 3) : 'Loading preview…';
+				fo.appendChild(summary);
+				g.appendChild(fo);
+			}
 
 			// If expanded, render markdown preview OR editable textarea via foreignObject
 			if (isExpanded) {
@@ -993,12 +1053,22 @@ export function getCanvasHtml(): string {
 			return;
 		}
 
-		// Any node-like target (file card / text / group / drawing)
+		// Any node-like target (file card / folder / text / group / drawing)
 		const target = e.target.closest('[data-id]');
 		if (target) {
 			const nodeId = target.dataset.id;
 			const node = state.nodes.find(function(n) { return n.id === nodeId; });
 			if (!node) return;
+
+			// Robust double-click handling: SVG dblclick can be swallowed by drag/re-render.
+			// MouseEvent.detail is available on the second mousedown before drag starts.
+			if (e.detail >= 2) {
+				handleNodeDoubleClick(node);
+				dragState = null;
+				e.preventDefault();
+				return;
+			}
+
 			const canvasPos = screenToCanvas(e.clientX, e.clientY);
 			dragState = {
 				type: 'card',
@@ -1239,12 +1309,7 @@ export function getCanvasHtml(): string {
 		return best;
 	}
 
-	// ---- Double-click ----
-	svg.addEventListener('dblclick', function(e) {
-		const target = e.target.closest('[data-id]');
-		if (!target) return;
-		const nodeId = target.dataset.id;
-		const node = state.nodes.find(function(n) { return n.id === nodeId; });
+	function handleNodeDoubleClick(node) {
 		if (!node) return;
 		if (node.type === 'file') {
 			// If already expanded, double-click toggles edit mode.
@@ -1252,7 +1317,7 @@ export function getCanvasHtml(): string {
 				editingNodeId = editingNodeId === node.id ? null : node.id;
 				renderNodes();
 			} else {
-				// First double-click: expand for preview. Second one will go to edit.
+				// First double-click: expand for full preview. Second one enters edit mode.
 				expandedNodes[node.id] = true;
 				if (fileContents[node.id] === undefined && !pendingLoad[node.id]) {
 					pendingLoad[node.id] = true;
@@ -1263,8 +1328,8 @@ export function getCanvasHtml(): string {
 		} else if (node.type === 'folder') {
 			vscode.postMessage({ type: 'openSubCanvas', nodeId: node.id });
 		} else if (node.type === 'text') {
-			editingNodeId = nodeId;
-			selectedId = nodeId;
+			editingNodeId = node.id;
+			selectedId = node.id;
 			renderNodes();
 		} else if (node.type === 'group') {
 			// Inline label rename via prompt — simple but works
@@ -1275,6 +1340,15 @@ export function getCanvasHtml(): string {
 				renderNodes();
 			}
 		}
+	}
+
+	// ---- Double-click ----
+	svg.addEventListener('dblclick', function(e) {
+		const target = e.target.closest('[data-id]');
+		if (!target) return;
+		const nodeId = target.dataset.id;
+		const node = state.nodes.find(function(n) { return n.id === nodeId; });
+		handleNodeDoubleClick(node);
 	});
 
 	// Commit text edits on textarea blur or Esc
