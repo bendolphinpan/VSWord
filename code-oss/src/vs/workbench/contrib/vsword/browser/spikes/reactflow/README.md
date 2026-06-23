@@ -33,7 +33,7 @@ This spike registers a separate entry:
 - Folder children render as React Flow cards.
 - File nodes show Markdown/text summaries when preview is enabled.
 - Preview can be toggled without reloading folder data.
-- Minimap can be shown/hidden and is larger than the default React Flow minimap.
+- Minimap opens from a bottom-right circular map button as an overlay popover.
 - Node drag persists `x/y`.
 - Node edge resize persists `width/height`.
 - Edge connection persists `CanvasEdge`.

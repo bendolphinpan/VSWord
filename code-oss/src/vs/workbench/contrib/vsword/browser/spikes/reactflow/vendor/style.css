@@ -87,16 +87,62 @@ html, body, #app {
 }
 
 .react-flow__controls,
-.react-flow__minimap {
+.map-popover {
 	background: var(--vscode-editor-background, #fff);
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 68%, transparent);
 	box-shadow: 0 2px 8px rgba(0,0,0,.08);
 }
 
+.map-panel {
+	display: flex;
+	flex-direction: column-reverse;
+	align-items: flex-end;
+	gap: 8px;
+	margin: 14px;
+	pointer-events: none;
+}
+
+.map-toggle {
+	width: 36px;
+	height: 36px;
+	border-radius: 999px;
+	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #888) 72%, transparent);
+	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 96%, transparent);
+	color: var(--vscode-editor-foreground, #222);
+	box-shadow: 0 3px 10px rgba(0,0,0,.12);
+	font: 18px/1 var(--vscode-font-family, 'Segoe UI', sans-serif);
+	cursor: pointer;
+	pointer-events: auto;
+}
+
+.map-toggle:hover,
+.map-toggle.active {
+	background: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 14%, var(--vscode-editor-background, #fff));
+	border-color: color-mix(in srgb, var(--vscode-focusBorder, #007acc) 42%, transparent);
+}
+
+.map-popover {
+	width: 280px;
+	height: 188px;
+	padding: 6px;
+	border-radius: 10px;
+	overflow: hidden;
+	pointer-events: auto;
+}
+
+.map-popover .react-flow__minimap {
+	position: relative !important;
+	right: auto !important;
+	bottom: auto !important;
+	width: 100% !important;
+	height: 100% !important;
+	margin: 0 !important;
+	border: 0;
+	box-shadow: none;
+}
+
 .react-flow__minimap {
-	width: 260px !important;
-	height: 170px !important;
-	border-radius: 8px;
+	border-radius: 7px;
 	overflow: hidden;
 }
 
@@ -115,7 +161,9 @@ html, body, #app {
 	width: 100%;
 	height: 100%;
 	min-height: 118px;
-	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	padding: 12px 12px 10px;
 	border: 1px solid color-mix(in srgb, var(--vscode-panel-border, #8c8c8c) 78%, transparent);
 	border-radius: 12px;
 	background: color-mix(in srgb, var(--vscode-editor-background, #fff) 97%, #f7f9fc 3%);
@@ -185,13 +233,13 @@ html, body, #app {
 }
 
 .vsword-card .summary {
+	flex: 1 1 auto;
+	min-height: 0;
 	margin: 10px 0 0;
-	padding: 0;
+	padding: 0 2px 2px 0;
 	font: 12px/1.42 var(--vscode-editor-font-family, Consolas, monospace);
 	white-space: pre-wrap;
 	overflow: auto;
-	height: calc(100% - 57px);
-	max-height: none;
 	opacity: .82;
 }
 

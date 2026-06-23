@@ -38,6 +38,7 @@ import {
   Background,
   Controls,
   MiniMap,
+  Panel,
   Handle,
   Position,
   MarkerType,
@@ -227,7 +228,6 @@ function App() {
     <div className="canvas-header"><strong>React Flow Canvas</strong><span>{folder.name}</span><span>MIT spike · SVG untouched</span></div>
     <div className="canvas-toolbar">
       <button type="button" className={previewVisible ? 'active' : ''} onClick={() => setPreviewVisible(v => !v)}>{previewVisible ? 'Hide preview' : 'Show preview'}</button>
-      <button type="button" className={minimapVisible ? 'active' : ''} onClick={() => setMinimapVisible(v => !v)}>{minimapVisible ? 'Hide map' : 'Show map'}</button>
     </div>
     <ReactFlow
       nodes={nodes}
@@ -242,7 +242,10 @@ function App() {
     >
       <Background gap={32} size={1} />
       <Controls />
-      {minimapVisible ? <MiniMap pannable zoomable nodeStrokeWidth={3} style={{ width: 260, height: 170 }} /> : null}
+      <Panel position="bottom-right" className="map-panel">
+        <button type="button" className={minimapVisible ? 'map-toggle active' : 'map-toggle'} title={minimapVisible ? 'Hide map' : 'Show map'} onClick={() => setMinimapVisible(v => !v)}>⌖</button>
+        {minimapVisible ? <div className="map-popover"><MiniMap pannable zoomable nodeStrokeWidth={3} /></div> : null}
+      </Panel>
     </ReactFlow>
     {error ? <div className="spike-error">{error}</div> : null}
   </div>;
