@@ -1,0 +1,16 @@
+VSWord BlockSuite Spike Vendor Notes
+=====================================
+
+This directory is for a dev-only feasibility spike. It must not be treated as a production dependency approval.
+
+Generated bundle input:
+- @blocksuite/presets@0.19.5 — MPL-2.0
+- @blocksuite/blocks@0.19.5 (transitive) — MPL-2.0
+
+Policy for this spike:
+- Do not copy or modify upstream BlockSuite source files in VSWord.
+- Do not vendor patched MPL files.
+- If production ever uses MPL BlockSuite packages, preserve license notices and provide source availability as required by MPL-2.0.
+- Preferred production track is MIT-only @blocksuite/affine@0.22.x if a direct edgeless editor assembly can be validated.
+
+This file is a marker; generated index.js is a throwaway spike artifact.

@@ -11,6 +11,7 @@ import { VswordWordCountContribution } from './vswordWordCount.js';
 import './vswordHelloAction.js';
 import './vswordActions.js';
 import './vswordCanvasAction.js';
+import './spikes/blocksuite/blocksuiteSpikeAction.js';
 // Writer-mode defaults: register on import (no DI needed).
 import './vswordWriterModeDefaults.js';
 
