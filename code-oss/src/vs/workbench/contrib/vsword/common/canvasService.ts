@@ -5,6 +5,7 @@
 
 import { decodeBase64, VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
+import { isEqualOrParent } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
 import { generateUuid } from '../../../../base/common/uuid.js';
 import { IFileService, IFileStat } from '../../../../platform/files/common/files.js';
@@ -177,7 +178,7 @@ export class VSWordCanvasService extends Disposable {
 			if (existing.has(path)) {
 				continue;
 			}
-			const uri = this.resolveFilePath(path);
+			const uri = this.resolveFolderPath(path);
 			if (!uri) {
 				failed++;
 				continue;
@@ -208,7 +209,7 @@ export class VSWordCanvasService extends Disposable {
 		const deleted = new Set<string>();
 		let failed = 0;
 		for (const path of paths) {
-			const uri = this.resolveFilePath(path);
+			const uri = this.resolveFolderPath(path);
 			if (!uri) {
 				failed++;
 				continue;
@@ -292,15 +293,24 @@ export class VSWordCanvasService extends Disposable {
 		return doc;
 	}
 
-	/** Resolves a workspace-relative path to an absolute URI. */
+	/** Resolves a workspace-relative path to an absolute URI after rejecting traversal/absolute input. */
 	resolveFilePath(filePath: string): URI | undefined {
 		const root = this.getWorkspaceRoot();
-		if (!root) return undefined;
-		return URI.joinPath(root, filePath);
+		if (!root || !isSafeRelativePath(filePath)) return undefined;
+		const resolved = URI.joinPath(root, ...filePath.split('/').filter(Boolean));
+		return isEqualOrParent(resolved, root) ? resolved : undefined;
+	}
+
+	/** Resolves a path that must remain inside the currently bound canvas folder. */
+	resolveFolderPath(filePath: string): URI | undefined {
+		const folder = this.getFolderUri();
+		const resolved = this.resolveFilePath(filePath);
+		if (!folder || !resolved) return undefined;
+		return isEqualOrParent(resolved, folder) ? resolved : undefined;
 	}
 
 	async readFileContent(filePath: string): Promise<string | undefined> {
-		const uri = this.resolveFilePath(filePath);
+		const uri = this.resolveFolderPath(filePath);
 		if (!uri) return undefined;
 		try {
 			const content = await this.fileService.readFile(uri);
@@ -311,7 +321,7 @@ export class VSWordCanvasService extends Disposable {
 	}
 
 	async existsPath(filePath: string): Promise<boolean> {
-		const uri = this.resolveFilePath(filePath);
+		const uri = this.resolveFolderPath(filePath);
 		if (!uri) return false;
 		try {
 			return await this.fileService.exists(uri);
@@ -322,7 +332,7 @@ export class VSWordCanvasService extends Disposable {
 
 	/** Writes a string back to a workspace file. Used by in-canvas file editing. */
 	async writeFileContent(filePath: string, content: string): Promise<boolean> {
-		const uri = this.resolveFilePath(filePath);
+		const uri = this.resolveFolderPath(filePath);
 		if (!uri) return false;
 		try {
 			await this.fileService.writeFile(uri, VSBuffer.fromString(content));
@@ -395,6 +405,14 @@ export class VSWordCanvasService extends Disposable {
 		}
 		return childPath.replace(/^\//, '');
 	}
+}
+
+function isSafeRelativePath(filePath: string): boolean {
+	if (!filePath || filePath.includes('\0')) return false;
+	if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(filePath)) return false;
+	if (filePath.startsWith('/') || filePath.startsWith('\\\\') || filePath.includes('\\')) return false;
+	const parts = filePath.split('/');
+	return parts.every(part => Boolean(part) && part !== '.' && part !== '..');
 }
 
 function isHiddenOrSystemName(name: string): boolean {

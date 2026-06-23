@@ -189,9 +189,11 @@ class ReactFlowFolderCanvasManager {
 				break;
 			}
 			case 'importFiles': {
+				const readFailed = Math.max(0, Number(msg.readFailed) || 0);
 				const result = await canvasService.importFiles(msg.files ?? [], Number(msg.x) || 80, Number(msg.y) || 80);
+				const failed = result.failed + readFailed;
 				await this.postFolderData(webview, canvasService, folderName);
-				this.postOperationResult(webview, result.failed > 0 ? 'error' : 'success', summarizeOperation('Imported', result.imported, result.failed));
+				this.postOperationResult(webview, failed > 0 ? 'error' : 'success', summarizeOperation('Imported', result.imported, failed));
 				break;
 			}
 			case 'createTextNode': {
@@ -201,14 +203,14 @@ class ReactFlowFolderCanvasManager {
 				break;
 			}
 			case 'openFile': {
-				const uri = canvasService.resolveFilePath(msg.filePath);
+				const uri = canvasService.resolveFolderPath(msg.filePath);
 				if (uri) {
 					await this.editorService.openEditor({ resource: uri, options: { pinned: true } });
 				}
 				break;
 			}
 			case 'openSubCanvas': {
-				const uri = canvasService.resolveFilePath(msg.folderPath);
+				const uri = canvasService.resolveFolderPath(msg.folderPath);
 				if (uri) {
 					this.instantiationService.createInstance(ReactFlowFolderCanvasManager, uri).open();
 				}
@@ -252,7 +254,7 @@ class ReactFlowFolderCanvasManager {
 					continue;
 				}
 				if (isImagePath(node.filePath)) {
-					const resource = canvasService.resolveFilePath(node.filePath);
+					const resource = canvasService.resolveFolderPath(node.filePath);
 					if (resource) {
 						enriched.previewImageUri = asWebviewUri(resource).toString(true);
 					}
@@ -261,7 +263,7 @@ class ReactFlowFolderCanvasManager {
 					enriched.summary = summarizeMarkdownLike(content ?? '');
 					const firstImage = content && isMarkdownPath(node.filePath) ? findFirstLocalMarkdownImage(content) : undefined;
 					if (firstImage) {
-						const resource = canvasService.resolveFilePath(resolveRelativePath(node.filePath, firstImage));
+						const resource = canvasService.resolveFolderPath(resolveRelativePath(node.filePath, firstImage));
 						if (resource) {
 							enriched.previewImageUri = asWebviewUri(resource).toString(true);
 						}

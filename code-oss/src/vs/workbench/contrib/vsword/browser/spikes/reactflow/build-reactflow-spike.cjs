@@ -116,10 +116,15 @@ function encodeArrayBufferBase64(buffer) {
 async function filesToImportPayload(fileList) {
   const files = Array.from(fileList || []).filter(Boolean);
   const payload = [];
+  let failed = 0;
   for (const file of files) {
-    payload.push({ name: file.name || 'pasted-file', mime: file.type || '', dataBase64: encodeArrayBufferBase64(await file.arrayBuffer()) });
+    try {
+      payload.push({ name: file.name || 'pasted-file', mime: file.type || '', dataBase64: encodeArrayBufferBase64(await file.arrayBuffer()) });
+    } catch {
+      failed++;
+    }
   }
-  return payload;
+  return { payload, failed };
 }
 
 function fileIconLabel(node) {
@@ -320,7 +325,13 @@ function App() {
       if (files && files.length > 0) {
         event.preventDefault();
         setOperationToast(setToast, 'pending', operationLabel('import', files.length));
-        vscode.postMessage({ type: 'importFiles', files: await filesToImportPayload(files), x: point.x, y: point.y });
+        const { payload, failed } = await filesToImportPayload(files);
+        if (failed > 0) {
+          setOperationToast(setToast, 'error', 'Failed to read ' + failed + ' file' + (failed > 1 ? 's' : '') + ' before import.');
+        }
+        if (payload.length > 0) {
+          vscode.postMessage({ type: 'importFiles', files: payload, readFailed: failed, x: point.x, y: point.y });
+        }
         return;
       }
       const text = event.clipboardData?.getData('text/plain') || '';
@@ -442,7 +453,13 @@ function App() {
     event.preventDefault();
     const point = toCanvasPoint(event);
     setOperationToast(setToast, 'pending', operationLabel('import', files.length));
-    vscode.postMessage({ type: 'importFiles', files: await filesToImportPayload(files), x: point.x, y: point.y });
+    const { payload, failed } = await filesToImportPayload(files);
+    if (failed > 0) {
+      setOperationToast(setToast, 'error', 'Failed to read ' + failed + ' file' + (failed > 1 ? 's' : '') + ' before import.');
+    }
+    if (payload.length > 0) {
+      vscode.postMessage({ type: 'importFiles', files: payload, readFailed: failed, x: point.x, y: point.y });
+    }
   }, [toCanvasPoint]);
 
   const fitViewOptions = useMemo(() => ({ padding: 0.28 }), []);
