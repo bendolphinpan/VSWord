@@ -146,6 +146,25 @@ class ReactFlowFolderCanvasManager {
 				}
 				break;
 			}
+			case 'nodesDeleted': {
+				const ids = new Set((msg.ids ?? []).map((id: unknown) => String(id)));
+				if (ids.size > 0) {
+					const doc = await canvasService.loadCanvas();
+					doc.nodes = doc.nodes.filter(node => !ids.has(node.id));
+					doc.edges = doc.edges.filter(edge => !ids.has(edge.from) && !ids.has(edge.to));
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
+			case 'edgesDeleted': {
+				const ids = new Set((msg.ids ?? []).map((id: unknown) => String(id)));
+				if (ids.size > 0) {
+					const doc = await canvasService.loadCanvas();
+					doc.edges = doc.edges.filter(edge => !ids.has(edge.id));
+					await canvasService.saveCanvas(doc);
+				}
+				break;
+			}
 			case 'edgeCreated': {
 				const doc = await canvasService.loadCanvas();
 				const edge: CanvasEdge = {

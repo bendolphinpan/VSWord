@@ -44,6 +44,7 @@ import {
   MarkerType,
   NodeResizer,
   applyNodeChanges,
+  applyEdgeChanges,
   addEdge,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
@@ -235,6 +236,22 @@ function App() {
     setNodes((nds) => applyNodeChanges(changes, nds));
   }, []);
 
+  const onEdgesChange = useCallback((changes) => {
+    setEdges((eds) => applyEdgeChanges(changes, eds));
+  }, []);
+
+  const onNodesDelete = useCallback((deletedNodes) => {
+    const ids = deletedNodes.map((node) => node.id).filter(Boolean);
+    if (ids.length === 0) return;
+    vscode.postMessage({ type: 'nodesDeleted', ids });
+  }, []);
+
+  const onEdgesDelete = useCallback((deletedEdges) => {
+    const ids = deletedEdges.map((edge) => edge.id).filter(Boolean);
+    if (ids.length === 0) return;
+    vscode.postMessage({ type: 'edgesDeleted', ids });
+  }, []);
+
   const onNodeDragStop = useCallback((_event, node) => {
     vscode.postMessage({ type: 'nodesMoved', nodes: [{ id: node.id, x: node.position.x, y: node.position.y }] });
   }, []);
@@ -294,6 +311,9 @@ function App() {
       edges={edges}
       nodeTypes={nodeTypes}
       onNodesChange={onNodesChange}
+      onEdgesChange={onEdgesChange}
+      onNodesDelete={onNodesDelete}
+      onEdgesDelete={onEdgesDelete}
       onNodeDragStop={onNodeDragStop}
       onConnect={onConnect}
       onMoveEnd={onMoveEnd}
@@ -301,6 +321,7 @@ function App() {
       onNodeDoubleClick={onNodeDoubleClick}
       fitView
       fitViewOptions={fitViewOptions}
+      deleteKeyCode={['Backspace', 'Delete']}
     >
       <Background gap={32} size={1} />
       <Controls />
