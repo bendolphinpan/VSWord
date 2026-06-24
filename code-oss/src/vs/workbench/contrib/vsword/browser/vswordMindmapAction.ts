@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, MindmapFontPatch, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, MindmapEdgePatch, MindmapFontPatch, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -119,6 +119,9 @@ class MindmapEditorManager extends Disposable {
 				return;
 			case 'setFont':
 				await this.handleSetFont(msg, webview);
+				return;
+			case 'setEdge':
+				await this.handleSetEdge(msg, webview);
 				return;
 		}
 	}
@@ -260,6 +263,44 @@ class MindmapEditorManager extends Disposable {
 		}
 		await this.mutateAndRender(webview, requestId, oldXml => ({
 			xml: setMindmapNodeFont(oldXml, nodeId, patch),
+			newId: nodeId,
+		}));
+	}
+
+	private async handleSetEdge(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		if (!nodeId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const EDGE_STYLE_ALLOWED = new Set(['linear', 'bezier', 'sharp_linear', 'sharp_bezier', 'hide_edge']);
+		const EDGE_WIDTH_NAMED = new Set(['thin']);
+		const patch: MindmapEdgePatch = {};
+		if (msg && typeof msg === 'object') {
+			if ('color' in msg) {
+				const color = parseNullableColor(msg.color);
+				if (color !== undefined) { (patch as any).color = color; }
+			}
+			if ('width' in msg) {
+				if (msg.width === null) {
+					(patch as any).width = null;
+				} else if (typeof msg.width === 'number' && Number.isFinite(msg.width)) {
+					(patch as any).width = String(Math.max(1, Math.min(8, Math.round(msg.width))));
+				} else if (typeof msg.width === 'string' && EDGE_WIDTH_NAMED.has(msg.width)) {
+					(patch as any).width = msg.width;
+				}
+			}
+			if ('style' in msg) {
+				if (msg.style === null) {
+					(patch as any).style = null;
+				} else if (typeof msg.style === 'string' && EDGE_STYLE_ALLOWED.has(msg.style)) {
+					(patch as any).style = msg.style;
+				}
+			}
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: setMindmapNodeEdge(oldXml, nodeId, patch),
 			newId: nodeId,
 		}));
 	}

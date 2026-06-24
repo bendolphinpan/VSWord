@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -287,5 +287,72 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(a?.font?.size, 18);
 		assert.strictEqual(a?.font?.bold, true);
 		assert.strictEqual(a?.font?.italic, true);
+	});
+
+	test('setMindmapNodeEdge inserts a new <edge/> child after the open tag', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"></node></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { color: '#ff0000', width: 3, style: 'bezier' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#ff0000" WIDTH="3" STYLE="bezier"/></node></node></map>');
+	});
+
+	test('setMindmapNodeEdge expands self-closing nodes when inserting <edge/>', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" /></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { color: '#00aa00' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#00aa00"/></node></node></map>');
+	});
+
+	test('setMindmapNodeEdge merges patch with existing <edge/> attributes', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#000000" WIDTH="2"/></node></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { style: 'sharp_linear' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#000000" WIDTH="2" STYLE="sharp_linear"/></node></node></map>');
+	});
+
+	test('setMindmapNodeEdge with color:null clears COLOR but keeps other attrs', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#ff0000" WIDTH="2" STYLE="bezier"/></node></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { color: null });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge WIDTH="2" STYLE="bezier"/></node></node></map>');
+	});
+
+	test('setMindmapNodeEdge removes the whole <edge/> tag when the patch empties it', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#ff0000"/></node></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { color: null });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"></node></node></map>');
+	});
+
+	test('setMindmapNodeEdge rejects style values outside the FreeMind whitelist', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"></node></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { style: 'wobbly' });
+
+		assert.strictEqual(updated, xml);
+	});
+
+	test('setMindmapNodeEdge does not confuse nested-node <edge/> with the target', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"><edge COLOR="#111111"/></node></node></node></map>';
+
+		const updated = setMindmapNodeEdge(xml, 'a', { color: '#222222' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#222222"/><node ID="a1" TEXT="A1"><edge COLOR="#111111"/></node></node></node></map>');
+	});
+
+	test('parseMindmapXml exposes <edge/> attributes on the parent node', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><edge COLOR="#abcdef" WIDTH="thin" STYLE="bezier"/></node></node></map>';
+
+		const doc = parseMindmapXml(xml);
+		const a = doc.root?.children[0];
+
+		assert.strictEqual(a?.edge?.color, '#abcdef');
+		assert.strictEqual(a?.edge?.width, 'thin');
+		assert.strictEqual(a?.edge?.style, 'bezier');
 	});
 });

@@ -378,11 +378,35 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		const p = findPlaced(parent);
 		const c = findPlaced(child);
 		if (!p || !c) { return; }
+		const edge = child && child.edge ? child.edge : null;
+		if (edge && edge.style === 'hide_edge') { return; }
 		const pEdge = c.side === 'left' ? p.x - p.w / 2 : p.x + p.w / 2;
 		const cEdge = c.side === 'left' ? c.x + c.w / 2 : c.x - c.w / 2;
 		const mid = (pEdge + cEdge) / 2;
-		const d = 'M ' + pEdge + ' ' + p.y + ' C ' + mid + ' ' + p.y + ', ' + mid + ' ' + c.y + ', ' + cEdge + ' ' + c.y;
-		linksGroup.appendChild(makeSvg('path', { class: 'link', d: d }));
+		const style = edge && edge.style ? edge.style : 'bezier';
+		let d;
+		if (style === 'linear') {
+			d = 'M ' + pEdge + ' ' + p.y + ' L ' + cEdge + ' ' + c.y;
+		} else if (style === 'sharp_linear') {
+			d = 'M ' + pEdge + ' ' + p.y + ' L ' + mid + ' ' + p.y + ' L ' + mid + ' ' + c.y + ' L ' + cEdge + ' ' + c.y;
+		} else if (style === 'sharp_bezier') {
+			d = 'M ' + pEdge + ' ' + p.y + ' Q ' + mid + ' ' + p.y + ', ' + mid + ' ' + ((p.y + c.y) / 2) + ' Q ' + mid + ' ' + c.y + ', ' + cEdge + ' ' + c.y;
+		} else {
+			d = 'M ' + pEdge + ' ' + p.y + ' C ' + mid + ' ' + p.y + ', ' + mid + ' ' + c.y + ', ' + cEdge + ' ' + c.y;
+		}
+		const attrs = { class: 'link', d: d };
+		if (edge) {
+			if (edge.color) { attrs.stroke = edge.color; }
+			if (edge.width) {
+				if (edge.width === 'thin') {
+					attrs['stroke-width'] = '1';
+				} else {
+					const n = parseInt(String(edge.width), 10);
+					if (Number.isFinite(n) && n > 0) { attrs['stroke-width'] = String(Math.max(1, Math.min(8, n))); }
+				}
+			}
+		}
+		linksGroup.appendChild(makeSvg('path', attrs));
 	}
 	function renderTopic(item, index) {
 		const node = item.node;
@@ -548,6 +572,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	}
 	const TEXT_COLOR_SWATCHES = ['#000000', '#1f2937', '#ef4444', '#f59e0b', '#10b981', '#2563eb', '#7c3aed', '#db2777'];
 	const BG_COLOR_SWATCHES = ['#ffffff', '#fde68a', '#fecaca', '#bbf7d0', '#bfdbfe', '#ddd6fe', '#fbcfe8', '#e5e7eb'];
+	const EDGE_COLOR_SWATCHES = ['#94a3b8', '#1f2937', '#ef4444', '#f59e0b', '#10b981', '#2563eb', '#7c3aed', '#db2777'];
 	let stylePanelEl = null;
 	function closeStylePanel() {
 		if (stylePanelEl) {
@@ -690,6 +715,70 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		fontRow.appendChild(resetBtn);
 		fontSec.appendChild(fontRow);
 		panel.appendChild(fontSec);
+
+		const edgeSec = document.createElement('div');
+		edgeSec.className = 'style-panel-section';
+		const edgeLabel = document.createElement('div');
+		edgeLabel.className = 'style-panel-label';
+		edgeLabel.textContent = 'Edge (line to parent)';
+		edgeSec.appendChild(edgeLabel);
+		if (entry.item && entry.item.depth === 0) {
+			const edgeHint = document.createElement('div');
+			edgeHint.className = 'style-panel-label';
+			edgeHint.style.opacity = '0.6';
+			edgeHint.textContent = 'Root node has no parent edge';
+			edgeSec.appendChild(edgeHint);
+		} else {
+			const curEdge = entry.node.edge || {};
+			edgeSec.appendChild(buildSwatchRow(EDGE_COLOR_SWATCHES, curEdge.color || null, function (color) {
+				dispatchStructure({ type: 'setEdge', nodeId: entry.node.id, color: color }, true);
+				closeStylePanel();
+			}));
+			const widthRow = document.createElement('div');
+			widthRow.className = 'style-row';
+			const widthOpts = [{ k: null, label: 'auto' }, { k: 'thin', label: 'thin' }, { k: 1, label: '1' }, { k: 2, label: '2' }, { k: 4, label: '4' }, { k: 6, label: '6' }];
+			widthOpts.forEach(function (opt) {
+				const btn = document.createElement('button');
+				const isActive = (opt.k === null && !curEdge.width) || (curEdge.width != null && String(curEdge.width) === String(opt.k));
+				btn.className = 'style-btn' + (isActive ? ' active' : '');
+				btn.textContent = opt.label;
+				btn.title = 'Width: ' + opt.label;
+				btn.addEventListener('click', function (event) {
+					event.preventDefault();
+					event.stopPropagation();
+					dispatchStructure({ type: 'setEdge', nodeId: entry.node.id, width: opt.k }, true);
+					closeStylePanel();
+				});
+				widthRow.appendChild(btn);
+			});
+			edgeSec.appendChild(widthRow);
+			const styleRow = document.createElement('div');
+			styleRow.className = 'style-row';
+			const styleOpts = [
+				{ k: null, label: 'auto' },
+				{ k: 'bezier', label: 'curve' },
+				{ k: 'linear', label: 'line' },
+				{ k: 'sharp_linear', label: 'L-shape' },
+				{ k: 'sharp_bezier', label: 'rounded' },
+				{ k: 'hide_edge', label: 'hide' }
+			];
+			styleOpts.forEach(function (opt) {
+				const btn = document.createElement('button');
+				const isActive = (opt.k === null && !curEdge.style) || (curEdge.style === opt.k);
+				btn.className = 'style-btn' + (isActive ? ' active' : '');
+				btn.textContent = opt.label;
+				btn.title = 'Style: ' + opt.label;
+				btn.addEventListener('click', function (event) {
+					event.preventDefault();
+					event.stopPropagation();
+					dispatchStructure({ type: 'setEdge', nodeId: entry.node.id, style: opt.k }, true);
+					closeStylePanel();
+				});
+				styleRow.appendChild(btn);
+			});
+			edgeSec.appendChild(styleRow);
+		}
+		panel.appendChild(edgeSec);
 
 		const hint = document.createElement('div');
 		hint.className = 'style-panel-label';

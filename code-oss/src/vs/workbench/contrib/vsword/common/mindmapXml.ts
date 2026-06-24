@@ -10,6 +10,12 @@ export interface VSWordMindmapFont {
 	readonly italic: boolean;
 }
 
+export interface VSWordMindmapEdge {
+	readonly color?: string;
+	readonly width?: string;
+	readonly style?: string;
+}
+
 export interface VSWordMindmapNode {
 	readonly id?: string;
 	readonly text: string;
@@ -19,6 +25,7 @@ export interface VSWordMindmapNode {
 	readonly color?: string;
 	readonly backgroundColor?: string;
 	readonly font?: VSWordMindmapFont;
+	readonly edge?: VSWordMindmapEdge;
 	readonly icons: readonly string[];
 	readonly children: readonly VSWordMindmapNode[];
 }
@@ -37,6 +44,7 @@ interface MutableMindmapNode {
 	color?: string;
 	backgroundColor?: string;
 	font?: VSWordMindmapFont;
+	edge?: VSWordMindmapEdge;
 	icons: string[];
 	children: MutableMindmapNode[];
 }
@@ -103,6 +111,17 @@ export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
 					size: sizeNum !== undefined && Number.isFinite(sizeNum) ? sizeNum : undefined,
 					bold: getAttr(tag.attributes, 'BOLD')?.toLowerCase() === 'true',
 					italic: getAttr(tag.attributes, 'ITALIC')?.toLowerCase() === 'true'
+				};
+			}
+		}
+
+		if (tag.name === 'edge') {
+			const current = stack[stack.length - 1];
+			if (current) {
+				current.edge = {
+					color: getAttr(tag.attributes, 'COLOR'),
+					width: getAttr(tag.attributes, 'WIDTH'),
+					style: getAttr(tag.attributes, 'STYLE')
 				};
 			}
 		}
@@ -540,6 +559,153 @@ export function setMindmapNodeFont(xml: string, nodeId: string, patch: MindmapFo
 		return xml.slice(0, tag.end) + insertion + xml.slice(tag.end);
 	}
 	return xml;
+}
+
+export interface MindmapEdgePatch {
+	readonly color?: string | null;
+	readonly width?: string | number | null;
+	readonly style?: string | null;
+}
+
+const EDGE_STYLE_WHITELIST: ReadonlySet<string> = new Set([
+	'linear', 'bezier', 'sharp_linear', 'sharp_bezier', 'hide_edge'
+]);
+
+/**
+ * Update the `<edge ... />` child of the `<node ID="...">` with the given id.
+ *
+ * - Patch entries map to FreeMind attrs `COLOR` / `WIDTH` / `STYLE`.
+ *   * `string` / `number` → set the attribute.
+ *   * `null` → clear that specific attribute (other edge attrs are kept).
+ *   * `undefined` (or missing key) → leave that attribute alone.
+ * - If the node has no `<edge>` child and the patch has any non-null/undefined value, a new
+ *   `<edge ... />` is inserted directly after the node's open tag (self-closing nodes are
+ *   expanded). If every patch value is `null`/`undefined`, the source is returned unchanged.
+ * - If the patch leaves the `<edge>` tag with no attributes, the tag is removed entirely.
+ * - Style values outside the FreeMind whitelist (linear/bezier/sharp_linear/sharp_bezier/hide_edge)
+ *   are rejected silently (returns xml unchanged for that field) — callers should validate first.
+ * - All other children (icons / hooks / fonts / nested nodes / unknown XML) are preserved byte-for-byte.
+ */
+export function setMindmapNodeEdge(xml: string, nodeId: string, patch: MindmapEdgePatch): string {
+	const hasAnyDefined = ['color', 'width', 'style'].some(key => (patch as any)[key] !== undefined);
+	if (!hasAnyDefined) {
+		return xml;
+	}
+	if (patch.style !== undefined && patch.style !== null && !EDGE_STYLE_WHITELIST.has(patch.style)) {
+		return xml;
+	}
+
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+
+		const existingEdgeIndex = findDirectChildEdge(tags, i);
+		if (existingEdgeIndex !== -1) {
+			const edgeTag = tags[existingEdgeIndex];
+			const updated = applyEdgePatchToTag(xml, edgeTag, patch);
+			if (updated === null) {
+				return xml.slice(0, edgeTag.start) + xml.slice(edgeTag.end);
+			}
+			return xml.slice(0, edgeTag.start) + updated + xml.slice(edgeTag.end);
+		}
+
+		// No existing <edge>: build one from the patch.
+		const attrs = renderEdgeAttrsFromPatch(patch);
+		if (!attrs) {
+			return xml;
+		}
+		const insertion = `<edge ${attrs}/>`;
+		if (tag.selfClosing) {
+			const openOnly = renderOpenTagFromSelfClosing(xml, tag);
+			const closeOnly = `</${tag.name}>`;
+			return xml.slice(0, tag.start) + openOnly + insertion + closeOnly + xml.slice(tag.end);
+		}
+		return xml.slice(0, tag.end) + insertion + xml.slice(tag.end);
+	}
+	return xml;
+}
+
+function findDirectChildEdge(tags: XmlTag[], openIndex: number): number {
+	const open = tags[openIndex];
+	if (open.selfClosing) {
+		return -1;
+	}
+	const closeIndex = findMatchingCloseIndex(tags, openIndex);
+	if (closeIndex === -1) {
+		return -1;
+	}
+	let depth = 0;
+	for (let j = openIndex + 1; j < closeIndex; j++) {
+		const child = tags[j];
+		if (child.name === 'node') {
+			if (child.closing) {
+				depth = Math.max(0, depth - 1);
+			} else if (!child.selfClosing) {
+				depth++;
+			}
+			continue;
+		}
+		if (depth !== 0) {
+			continue;
+		}
+		if (child.name === 'edge' && !child.closing) {
+			return j;
+		}
+	}
+	return -1;
+}
+
+function applyEdgePatchToTag(xml: string, edgeTag: XmlTag, patch: MindmapEdgePatch): string | null {
+	const current: Record<string, string> = {};
+	for (const attribute of edgeTag.attributes) {
+		current[attribute.name] = attribute.value;
+	}
+	mergeEdgePatch(current, patch);
+	const attrString = renderEdgeAttrsFromMap(current);
+	if (!attrString) {
+		return null;
+	}
+	return `<edge ${attrString}/>`;
+}
+
+function renderEdgeAttrsFromPatch(patch: MindmapEdgePatch): string | null {
+	const map: Record<string, string> = {};
+	mergeEdgePatch(map, patch);
+	return renderEdgeAttrsFromMap(map);
+}
+
+function renderEdgeAttrsFromMap(map: Record<string, string>): string | null {
+	const order = ['COLOR', 'WIDTH', 'STYLE'];
+	const parts: string[] = [];
+	for (const key of order) {
+		const value = map[key];
+		if (value === undefined) {
+			continue;
+		}
+		parts.push(`${key}="${escapeXmlAttribute(value)}"`);
+	}
+	if (parts.length === 0) {
+		return null;
+	}
+	return parts.join(' ');
+}
+
+function mergeEdgePatch(map: Record<string, string>, patch: MindmapEdgePatch): void {
+	if (patch.color !== undefined) {
+		if (patch.color === null) { delete map['COLOR']; } else { map['COLOR'] = patch.color; }
+	}
+	if (patch.width !== undefined) {
+		if (patch.width === null) { delete map['WIDTH']; } else { map['WIDTH'] = String(patch.width); }
+	}
+	if (patch.style !== undefined) {
+		if (patch.style === null) { delete map['STYLE']; } else { map['STYLE'] = patch.style; }
+	}
 }
 
 function findDirectChildFont(tags: XmlTag[], openIndex: number): number {
