@@ -502,7 +502,10 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 **前置**：T-5.1 通过。
 
-**目标**：按 `FR-02-mindmap-xmind-parity.md` 实现 P0 全部能力。
+**目标**：以 `.mm` 为唯一权威格式，按 FR-02 的 XMind 对齐路线分阶段交付：
+- T-5.2 先交付用户可打开的只读 Mindmap MVP：Explorer 右键 `.mm` → XMind 风格 SVG 视图、左右布局、折叠态/图标/颜色基础还原、pan/zoom/fit
+- 保持 T-5.1 的 preservation-first 策略：本阶段不写 `.mm`，因此不会破坏 XMind / FreeMind / Freeplane 兼容信息
+- 后续 T-5.3+ 再逐步补齐 FR-02 P0 编辑闭环（节点编辑、增删、拖拽、折叠写回、关系线、Markdown 互转、IME / 性能矩阵）
 
 **子任务建议**：
 1. Custom editor 注册 + 视图切换（思维导图 / 树形 / 组织结构 / 逻辑图）

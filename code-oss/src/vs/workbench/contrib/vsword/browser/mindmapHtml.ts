@@ -1,0 +1,300 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { webviewGenericCspSource } from '../../webview/common/webview.js';
+import { VSWordMindmapNode } from '../common/mindmapXml.js';
+
+export interface VSWordMindmapWebviewModel {
+	readonly fileName: string;
+	readonly root?: VSWordMindmapNode;
+	readonly nodeCount: number;
+	readonly sourceKind: 'mm';
+}
+
+export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
+	const cspSource = webviewGenericCspSource;
+	const data = escapeScriptJson(model);
+	return /* html */ `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} data:; font-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src 'nonce-vsword-mindmap';">
+<title>VSWord Mindmap</title>
+<style>
+	* { box-sizing: border-box; }
+	html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
+	body {
+		font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+		background: radial-gradient(circle at 50% 50%, rgba(120, 120, 120, 0.08), transparent 0 28px), var(--vscode-editor-background, #ffffff);
+		background-size: 32px 32px;
+		color: var(--vscode-foreground, #1f2328);
+	}
+	#app { width: 100vw; height: 100vh; position: relative; }
+	#toolbar {
+		position: fixed;
+		top: 12px;
+		left: 12px;
+		right: 12px;
+		z-index: 10;
+		display: flex;
+		align-items: center;
+		gap: 10px;
+		padding: 8px 10px;
+		border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,.35));
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--vscode-editorWidget-background, #f7f7f7) 92%, transparent);
+		box-shadow: 0 8px 28px rgba(0,0,0,.10);
+		backdrop-filter: blur(10px);
+	}
+	.title { font-weight: 650; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+	.badge {
+		font-size: 12px;
+		padding: 3px 8px;
+		border-radius: 999px;
+		background: var(--vscode-badge-background, #007acc);
+		color: var(--vscode-badge-foreground, #fff);
+	}
+	.spacer { flex: 1; }
+	.hint { color: var(--vscode-descriptionForeground, #666); font-size: 12px; white-space: nowrap; }
+	button {
+		border: 1px solid var(--vscode-button-border, transparent);
+		border-radius: 6px;
+		padding: 4px 9px;
+		background: var(--vscode-button-secondaryBackground, #e5e5e5);
+		color: var(--vscode-button-secondaryForeground, #222);
+		cursor: pointer;
+	}
+	button:hover { background: var(--vscode-button-secondaryHoverBackground, #d5d5d5); }
+	#mindmap-svg { width: 100%; height: 100%; display: block; cursor: grab; }
+	#mindmap-svg.panning { cursor: grabbing; }
+	.link {
+		fill: none;
+		stroke: var(--vscode-charts-blue, #4f8cc9);
+		stroke-width: 2.1;
+		stroke-linecap: round;
+		opacity: .72;
+	}
+	.topic rect {
+		fill: var(--vscode-editorWidget-background, #fff);
+		stroke: var(--vscode-editorWidget-border, #b8c2cc);
+		stroke-width: 1.3;
+		rx: 12;
+		ry: 12;
+		filter: drop-shadow(0 4px 10px rgba(0,0,0,.12));
+	}
+	.topic.root rect {
+		fill: var(--vscode-button-background, #0e70c0);
+		stroke: var(--vscode-button-background, #0e70c0);
+	}
+	.topic.root text { fill: var(--vscode-button-foreground, #fff); font-weight: 700; }
+	.topic text {
+		font-size: 13px;
+		font-weight: 560;
+		fill: var(--vscode-foreground, #1f2328);
+		user-select: none;
+		pointer-events: none;
+	}
+	.topic .meta {
+		font-size: 11px;
+		fill: var(--vscode-descriptionForeground, #6a737d);
+		font-weight: 400;
+	}
+	.topic.root .meta { fill: rgba(255,255,255,.82); }
+	.empty {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 24px;
+		text-align: center;
+		color: var(--vscode-descriptionForeground, #666);
+	}
+</style>
+</head>
+<body>
+<div id="app">
+	<div id="toolbar">
+		<span class="title">🧠 <span id="file-name"></span></span>
+		<span class="badge">.mm</span>
+		<span class="badge" id="node-count"></span>
+		<span class="spacer"></span>
+		<span class="hint">Read-only MVP · pan/zoom · XMind-style layout</span>
+		<button id="fit">Fit</button>
+	</div>
+	<svg id="mindmap-svg" aria-label="VSWord Mindmap"><g id="viewport"><g id="links"></g><g id="topics"></g></g></svg>
+	<div id="empty" class="empty" hidden>No mindmap root node found in this .mm file.</div>
+</div>
+<script nonce="vsword-mindmap">
+(function () {
+	'use strict';
+	const model = ${data};
+	const svg = document.getElementById('mindmap-svg');
+	const viewport = document.getElementById('viewport');
+	const linksGroup = document.getElementById('links');
+	const topicsGroup = document.getElementById('topics');
+	const empty = document.getElementById('empty');
+	document.getElementById('file-name').textContent = model.fileName;
+	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
+
+	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
+	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
+	const placed = [];
+
+	if (!model.root) {
+		empty.hidden = false;
+		return;
+	}
+
+	function textWidth(text) { return Math.min(layout.maxTopicWidth, Math.max(layout.minTopicWidth, 32 + String(text || '').length * 7)); }
+	function topicHeight(node) { return node.icons && node.icons.length ? 58 : 42; }
+	function sideOf(child, index) {
+		if (child.side === 'left' || child.side === 'right') { return child.side; }
+		return index % 2 === 0 ? 'right' : 'left';
+	}
+	function measure(node) {
+		const children = Array.isArray(node.children) ? node.children : [];
+		if (!children.length || node.folded) { return topicHeight(node) + layout.topicGapY; }
+		let total = 0;
+		for (const child of children) { total += measure(child); }
+		return Math.max(topicHeight(node) + layout.topicGapY, total);
+	}
+	function placeSubtree(node, x, top, side, depth) {
+		const children = Array.isArray(node.children) && !node.folded ? node.children : [];
+		const ownW = textWidth(node.text);
+		const ownH = topicHeight(node);
+		const subtreeH = measure(node);
+		const y = top + subtreeH / 2;
+		placed.push({ node: node, x: x, y: y, w: ownW, h: ownH, side: side, depth: depth });
+		let cursor = top;
+		for (const child of children) {
+			const childH = measure(child);
+			placeSubtree(child, x + (side === 'left' ? -layout.topicGapX : layout.topicGapX), cursor, side, depth + 1);
+			cursor += childH;
+		}
+	}
+	function layoutTree(root) {
+		const rootW = textWidth(root.text) + 34;
+		const rootH = topicHeight(root) + 12;
+		placed.push({ node: root, x: 0, y: 0, w: rootW, h: rootH, side: 'root', depth: 0 });
+		const children = Array.isArray(root.children) && !root.folded ? root.children : [];
+		const left = [];
+		const right = [];
+		children.forEach(function (child, index) { (sideOf(child, index) === 'left' ? left : right).push(child); });
+		function placeSide(items, side) {
+			let total = 0;
+			items.forEach(function (child) { total += measure(child); });
+			let cursor = -total / 2;
+			items.forEach(function (child) {
+				const h = measure(child);
+				placeSubtree(child, side === 'left' ? -layout.topicGapX : layout.topicGapX, cursor, side, 1);
+				cursor += h;
+			});
+		}
+		placeSide(left, 'left');
+		placeSide(right, 'right');
+	}
+	function nodeKey(node, index) { return node.id || ('node-' + index); }
+	function findPlaced(node) { return placed.find(function (item) { return item.node === node; }); }
+	function makeSvg(tag, attrs) {
+		const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+		Object.keys(attrs || {}).forEach(function (key) { el.setAttribute(key, String(attrs[key])); });
+		return el;
+	}
+	function truncate(text, max) {
+		text = String(text || 'Untitled');
+		return text.length > max ? text.slice(0, max - 1) + '…' : text;
+	}
+	function renderLink(parent, child) {
+		const p = findPlaced(parent);
+		const c = findPlaced(child);
+		if (!p || !c) { return; }
+		const pEdge = c.side === 'left' ? p.x - p.w / 2 : p.x + p.w / 2;
+		const cEdge = c.side === 'left' ? c.x + c.w / 2 : c.x - c.w / 2;
+		const mid = (pEdge + cEdge) / 2;
+		const d = 'M ' + pEdge + ' ' + p.y + ' C ' + mid + ' ' + p.y + ', ' + mid + ' ' + c.y + ', ' + cEdge + ' ' + c.y;
+		linksGroup.appendChild(makeSvg('path', { class: 'link', d: d }));
+	}
+	function renderTopic(item, index) {
+		const node = item.node;
+		const group = makeSvg('g', { class: 'topic' + (item.depth === 0 ? ' root' : ''), transform: 'translate(' + (item.x - item.w / 2) + ',' + (item.y - item.h / 2) + ')', 'data-id': nodeKey(node, index) });
+		const rect = makeSvg('rect', { width: item.w, height: item.h });
+		if (node.backgroundColor) { rect.setAttribute('fill', node.backgroundColor); }
+		if (node.color) { rect.setAttribute('stroke', node.color); }
+		group.appendChild(rect);
+		const text = makeSvg('text', { x: layout.padX, y: item.h / 2 - (node.icons && node.icons.length ? 2 : -5) });
+		text.textContent = (node.folded ? '⊕ ' : '') + truncate(node.text, Math.floor((item.w - 28) / 7));
+		group.appendChild(text);
+		if (node.icons && node.icons.length) {
+			const meta = makeSvg('text', { class: 'meta', x: layout.padX, y: item.h - 12 });
+			meta.textContent = '🏷 ' + node.icons.slice(0, 4).join(' · ');
+			group.appendChild(meta);
+		}
+		topicsGroup.appendChild(group);
+	}
+	function traverse(node, fn) {
+		const children = Array.isArray(node.children) && !node.folded ? node.children : [];
+		children.forEach(function (child) {
+			fn(node, child);
+			traverse(child, fn);
+		});
+	}
+	function updateTransform() { viewport.setAttribute('transform', 'translate(' + state.x + ',' + state.y + ') scale(' + state.zoom + ')'); }
+	function fit() {
+		const box = viewport.getBBox();
+		const width = Math.max(1, svg.clientWidth);
+		const height = Math.max(1, svg.clientHeight);
+		const scale = Math.max(0.18, Math.min(1.4, Math.min((width - 120) / Math.max(1, box.width), (height - 120) / Math.max(1, box.height))));
+		state.zoom = scale;
+		state.x = width / 2 - (box.x + box.width / 2) * scale;
+		state.y = height / 2 - (box.y + box.height / 2) * scale + 20;
+		updateTransform();
+	}
+	layoutTree(model.root);
+	traverse(model.root, renderLink);
+	placed.forEach(renderTopic);
+	fit();
+	document.getElementById('fit').addEventListener('click', fit);
+	svg.addEventListener('wheel', function (event) {
+		event.preventDefault();
+		const rect = svg.getBoundingClientRect();
+		const mouseX = event.clientX - rect.left;
+		const mouseY = event.clientY - rect.top;
+		const oldZoom = state.zoom;
+		const delta = event.deltaY < 0 ? 1.12 : 0.88;
+		state.zoom = Math.max(0.12, Math.min(3.5, state.zoom * delta));
+		const factor = state.zoom / oldZoom;
+		state.x = mouseX - (mouseX - state.x) * factor;
+		state.y = mouseY - (mouseY - state.y) * factor;
+		updateTransform();
+	}, { passive: false });
+	svg.addEventListener('mousedown', function (event) {
+		state.panning = true;
+		state.lastX = event.clientX;
+		state.lastY = event.clientY;
+		svg.classList.add('panning');
+	});
+	window.addEventListener('mousemove', function (event) {
+		if (!state.panning) { return; }
+		state.x += event.clientX - state.lastX;
+		state.y += event.clientY - state.lastY;
+		state.lastX = event.clientX;
+		state.lastY = event.clientY;
+		updateTransform();
+	});
+	window.addEventListener('mouseup', function () {
+		state.panning = false;
+		svg.classList.remove('panning');
+	});
+})();
+</script>
+</body>
+</html>`;
+}
+
+function escapeScriptJson(value: VSWordMindmapWebviewModel): string {
+	return JSON.stringify(value).replace(/</g, '\\u003c').replace(/>/g, '\\u003e').replace(/&/g, '\\u0026');
+}
