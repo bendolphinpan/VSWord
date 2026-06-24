@@ -172,7 +172,77 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		background: var(--vscode-list-activeSelectionBackground, #094771);
 	}
 	.icon-picker-cell:hover {
-		border-color: var(--vscode-focusBorder, #007fd4);
+		background: rgba(255, 255, 255, 0.18);
+	}
+	.style-panel {
+		position: absolute;
+		z-index: 30;
+		background: rgba(20, 20, 24, 0.96);
+		color: #f2f2f2;
+		border: 1px solid #444;
+		border-radius: 6px;
+		padding: 10px 12px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		min-width: 240px;
+		max-width: 320px;
+		box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+		font-size: 12px;
+	}
+	.style-panel-section {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+	}
+	.style-panel-label {
+		opacity: 0.7;
+		font-size: 11px;
+	}
+	.style-swatches {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 6px;
+	}
+	.style-swatch {
+		width: 18px;
+		height: 18px;
+		border-radius: 3px;
+		border: 1px solid rgba(255, 255, 255, 0.25);
+		cursor: pointer;
+		box-sizing: border-box;
+	}
+	.style-swatch.clear {
+		background: transparent;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 12px;
+		color: #ccc;
+	}
+	.style-swatch.active {
+		outline: 2px solid #f2f2f2;
+	}
+	.style-row {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+	}
+	.style-btn {
+		background: rgba(255, 255, 255, 0.06);
+		color: #f2f2f2;
+		border: 1px solid #444;
+		border-radius: 4px;
+		padding: 2px 8px;
+		cursor: pointer;
+		font-size: 12px;
+	}
+	.style-btn:hover {
+		background: rgba(255, 255, 255, 0.14);
+	}
+	.style-btn.active {
+		background: #2563eb;
+		border-color: #2563eb;
 	}
 	.edit-box {
 		position: fixed;
@@ -234,7 +304,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const empty = document.getElementById('empty');
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · i=icon · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
+	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · i=icon · s=style · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
 
 	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
 	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
@@ -324,6 +394,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		group.appendChild(rect);
 		const text = makeSvg('text', { x: layout.padX, y: item.h / 2 - (node.icons && node.icons.length ? 2 : -5) });
 		text.textContent = (node.folded ? '⊕ ' : '') + truncate(node.text, Math.floor((item.w - 28) / 7));
+		if (node.color) { text.setAttribute('fill', node.color); }
+		if (node.font) {
+			if (node.font.size) { text.setAttribute('font-size', String(node.font.size)); }
+			if (node.font.bold) { text.setAttribute('font-weight', 'bold'); }
+			if (node.font.italic) { text.setAttribute('font-style', 'italic'); }
+			if (node.font.name) { text.setAttribute('font-family', String(node.font.name)); }
+		}
 		group.appendChild(text);
 		if (node.icons && node.icons.length) {
 			const meta = makeSvg('text', { class: 'meta', x: layout.padX, y: item.h - 12 });
@@ -469,6 +546,159 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			iconPickerEl = null;
 		}
 	}
+	const TEXT_COLOR_SWATCHES = ['#000000', '#1f2937', '#ef4444', '#f59e0b', '#10b981', '#2563eb', '#7c3aed', '#db2777'];
+	const BG_COLOR_SWATCHES = ['#ffffff', '#fde68a', '#fecaca', '#bbf7d0', '#bfdbfe', '#ddd6fe', '#fbcfe8', '#e5e7eb'];
+	let stylePanelEl = null;
+	function closeStylePanel() {
+		if (stylePanelEl) {
+			stylePanelEl.remove();
+			stylePanelEl = null;
+		}
+	}
+	function buildSwatchRow(palette, current, onPick) {
+		const wrap = document.createElement('div');
+		wrap.className = 'style-swatches';
+		const clearCell = document.createElement('div');
+		clearCell.className = 'style-swatch clear' + (current ? '' : ' active');
+		clearCell.title = 'Clear';
+		clearCell.textContent = '✕';
+		clearCell.addEventListener('mousedown', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			onPick(null);
+		});
+		wrap.appendChild(clearCell);
+		palette.forEach(function (color) {
+			const cell = document.createElement('div');
+			cell.className = 'style-swatch' + (current && current.toLowerCase() === color.toLowerCase() ? ' active' : '');
+			cell.style.background = color;
+			cell.title = color;
+			cell.addEventListener('mousedown', function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				onPick(color);
+			});
+			wrap.appendChild(cell);
+		});
+		return wrap;
+	}
+	function openStylePanel() {
+		closeStylePanel();
+		closeIconPicker();
+		const entry = getSelectedEntry();
+		if (!entry || !entry.node.id) { return; }
+		const rect = entry.group.getBoundingClientRect();
+		const panel = document.createElement('div');
+		panel.className = 'style-panel';
+		panel.style.left = Math.max(8, rect.left) + 'px';
+		panel.style.top = (rect.bottom + 6) + 'px';
+		panel.addEventListener('mousedown', function (event) { event.stopPropagation(); });
+
+		const colorSec = document.createElement('div');
+		colorSec.className = 'style-panel-section';
+		const colorLabel = document.createElement('div');
+		colorLabel.className = 'style-panel-label';
+		colorLabel.textContent = 'Text color';
+		colorSec.appendChild(colorLabel);
+		colorSec.appendChild(buildSwatchRow(TEXT_COLOR_SWATCHES, entry.node.color || null, function (color) {
+			dispatchStructure({ type: 'setColor', nodeId: entry.node.id, color: color }, true);
+			closeStylePanel();
+		}));
+		panel.appendChild(colorSec);
+
+		const bgSec = document.createElement('div');
+		bgSec.className = 'style-panel-section';
+		const bgLabel = document.createElement('div');
+		bgLabel.className = 'style-panel-label';
+		bgLabel.textContent = 'Background';
+		bgSec.appendChild(bgLabel);
+		bgSec.appendChild(buildSwatchRow(BG_COLOR_SWATCHES, entry.node.backgroundColor || null, function (color) {
+			dispatchStructure({ type: 'setBackgroundColor', nodeId: entry.node.id, color: color }, true);
+			closeStylePanel();
+		}));
+		panel.appendChild(bgSec);
+
+		const fontSec = document.createElement('div');
+		fontSec.className = 'style-panel-section';
+		const fontLabel = document.createElement('div');
+		fontLabel.className = 'style-panel-label';
+		const currentSize = entry.node.font && entry.node.font.size ? entry.node.font.size : 12;
+		const currentBold = !!(entry.node.font && entry.node.font.bold);
+		const currentItalic = !!(entry.node.font && entry.node.font.italic);
+		fontLabel.textContent = 'Font · size ' + currentSize;
+		fontSec.appendChild(fontLabel);
+		const fontRow = document.createElement('div');
+		fontRow.className = 'style-row';
+		const minus = document.createElement('button');
+		minus.className = 'style-btn';
+		minus.textContent = 'A−';
+		minus.title = 'Smaller (-1)';
+		minus.addEventListener('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			const next = Math.max(6, currentSize - 1);
+			dispatchStructure({ type: 'setFont', nodeId: entry.node.id, size: next }, true);
+			closeStylePanel();
+		});
+		const plus = document.createElement('button');
+		plus.className = 'style-btn';
+		plus.textContent = 'A+';
+		plus.title = 'Larger (+1)';
+		plus.addEventListener('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			const next = Math.min(96, currentSize + 1);
+			dispatchStructure({ type: 'setFont', nodeId: entry.node.id, size: next }, true);
+			closeStylePanel();
+		});
+		const boldBtn = document.createElement('button');
+		boldBtn.className = 'style-btn' + (currentBold ? ' active' : '');
+		boldBtn.textContent = 'B';
+		boldBtn.style.fontWeight = 'bold';
+		boldBtn.title = 'Toggle bold';
+		boldBtn.addEventListener('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			dispatchStructure({ type: 'setFont', nodeId: entry.node.id, bold: !currentBold }, true);
+			closeStylePanel();
+		});
+		const italicBtn = document.createElement('button');
+		italicBtn.className = 'style-btn' + (currentItalic ? ' active' : '');
+		italicBtn.textContent = 'I';
+		italicBtn.style.fontStyle = 'italic';
+		italicBtn.title = 'Toggle italic';
+		italicBtn.addEventListener('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			dispatchStructure({ type: 'setFont', nodeId: entry.node.id, italic: !currentItalic }, true);
+			closeStylePanel();
+		});
+		const resetBtn = document.createElement('button');
+		resetBtn.className = 'style-btn';
+		resetBtn.textContent = 'Reset';
+		resetBtn.title = 'Remove font overrides';
+		resetBtn.addEventListener('click', function (event) {
+			event.preventDefault();
+			event.stopPropagation();
+			dispatchStructure({ type: 'setFont', nodeId: entry.node.id, size: null, bold: null, italic: null, name: null }, true);
+			closeStylePanel();
+		});
+		fontRow.appendChild(minus);
+		fontRow.appendChild(plus);
+		fontRow.appendChild(boldBtn);
+		fontRow.appendChild(italicBtn);
+		fontRow.appendChild(resetBtn);
+		fontSec.appendChild(fontRow);
+		panel.appendChild(fontSec);
+
+		const hint = document.createElement('div');
+		hint.className = 'style-panel-label';
+		hint.textContent = 'Esc to close';
+		panel.appendChild(hint);
+
+		document.body.appendChild(panel);
+		stylePanelEl = panel;
+	}
 	function openIconPicker() {
 		closeIconPicker();
 		const entry = getSelectedEntry();
@@ -611,8 +841,14 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 				openIconPicker();
 				return;
 			}
+			if (event.key === 's' || event.key === 'S') {
+				event.preventDefault();
+				openStylePanel();
+				return;
+			}
 			if (event.key === 'Escape') {
 				closeIconPicker();
+				closeStylePanel();
 				return;
 			}
 		});

@@ -576,6 +576,43 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-5.6 — Mindmap node icon toggle (.mm BUILTIN icons)
+
+**目标**：在 `.mm` `<node>` 体内增删 `<icon BUILTIN="..."/>` 子节点，保留所有原生未知属性 / hook / cloud / richcontent / 嵌套同名 icon 子节点：
+- `addMindmapNodeIcon(xml, id, builtin)` 在 open tag 之后插入 self-closing `<icon BUILTIN=...>`；目标节点为 self-closing 时自动展开为 open/close 对
+- 已存在同 BUILTIN 即 no-op；嵌套子 node 的同名 icon 不会被误命中
+- `removeMindmapNodeIcon(xml, id, builtin)` 删除一项，保留 hook / 其它 icon / 周围空白；不存在则 no-op
+- webview 接入 icon picker：选中节点后按 `i` 弹出 16 个 BUILTIN 候选（idea/help/attention/flag/button_ok/button_cancel/full-1..5/stop-sign/clock/calendar/wizard/family），点击 → postMessage `toggleIcon{id,icon,add}` → host `mutateAndRender` 写盘；Esc 关闭
+- 查看区在节点 rect 内额外渲染 `🏷 icon · icon · ...` 元信息（最多 4 个）
+- host 端 `vswordMindmapAction` 新增 `toggleIcon` case，复用 `mutateAndRender` 保留 selectedId 重渲染
+
+**验收**：
+- 24/24 单测通过（新增 6 用例：add 在 open tag 后插入、self-closing 展开、重复 add no-op、嵌套同名 icon 不误命中、remove 保留周围 hook / 嵌套、no-op when absent）
+- compile 0 errors
+- 手动 smoke：选中节点 → `i` → 选 icon → 节点 rect 显示新 icon meta、`.mm` 文件出现 `<icon BUILTIN="..."/>`；再次 `i` 同 icon → 节点 meta 消失、文件中 icon 节点被移除
+- secret/CSP 静态扫描通过（无 eval / innerHTML / outerHTML / document.write / unsafe-* CSP 指令）
+
+---
+
+#### T-5.7 — Mindmap node color & font styling (.mm COLOR / BACKGROUND_COLOR / `<font>`)
+
+**目标**：在 `.mm` `<node>` 上覆盖 XMind 风格的节点样式核心子集——前景色、背景色、字体（name/size/bold/italic），全程 byte-for-byte 保留未知属性 / hook / cloud / richcontent / 嵌套同名子节点：
+- `setMindmapNodeColor(xml, id, color | null)`：upsert/remove 节点 `COLOR` 属性；null 同时清除其前导空白；非 null 写 `#rrggbb`
+- `setMindmapNodeBackgroundColor(xml, id, color | null)`：同上，作用于 `BACKGROUND_COLOR`
+- `setMindmapNodeFont(xml, id, patch)`：在节点首个直接子节点位置 upsert self-closing `<font NAME SIZE BOLD ITALIC/>`；patch 字段 `name|size|bold|italic` 三态（`string|number|boolean` = 写入；`null` = 清此 attr；`undefined` = 不动）；patch 把 tag 清空时整条 `<font/>` 删除；目标节点为 self-closing 时自动展开
+- parser 同步暴露 `node.color` / `node.backgroundColor` / `node.font {name?, size?, bold, italic}`，BOLD/ITALIC 规范化为 boolean
+- webview 接入样式面板：选中节点 → `s` 弹 `style-panel`（前景 swatch×8 + 背景 swatch×8，含 ✕ 清除；字号 A− / A+ clamp 6..96；B/I 切换；Reset 一键清空 font）→ postMessage `setColor` / `setBackgroundColor` / `setFont` → host `mutateAndRender` 写盘；Esc 关闭，与 icon picker 互斥
+- 渲染层在 SVG 节点 rect 上应用 `fill=backgroundColor` / `stroke=color`，文本上应用 `fill=color` + `font-size` / `font-weight` / `font-style` / `font-family`
+- host `vswordMindmapAction` 新增 `setColor` / `setBackgroundColor` / `setFont` case，复用 `mutateAndRender` 保留 selectedId 重渲染；`MindmapFontPatch` 在 host 端做数值 clamp + 类型校验
+
+**验收**：
+- 35/35 单测通过（在 24 个 T-5.6 基础上 +11 个 T-5.7 用例：color 三态 / background_color clear no-op / font 插入 / self-closing 展开 / font merge / bold:false 清单 attr / 整 tag 删除 / 嵌套不误命中 / parser 暴露 font 属性）
+- compile 0 errors（log: `docs/phase0/logs/t57-mindmap-style-compile-20260624-184509.log`）
+- 手动 smoke：选中节点 → `s` → 选前景色 → rect 描边/文本 fill 变色；选背景色 → rect fill 变色；A+/A− → 文本字号变化、`.mm` 出现 `<font SIZE="N"/>`；B → 文本加粗 + `<font BOLD="true"/>`；Reset → `<font/>` 整条移除
+- secret/CSP 静态扫描通过（CSP `script-src 'nonce-vsword-mindmap'` 维持，DOM 全走 createElement+textContent，无 innerHTML / outerHTML / eval / document.write）
+
+---
+
 ## 3. 主代理验收流程
 
 每个任务完成后，fullstack-developer 提交报告。主代理执行：

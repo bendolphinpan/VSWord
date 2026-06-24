@@ -3,6 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export interface VSWordMindmapFont {
+	readonly name?: string;
+	readonly size?: number;
+	readonly bold: boolean;
+	readonly italic: boolean;
+}
+
 export interface VSWordMindmapNode {
 	readonly id?: string;
 	readonly text: string;
@@ -11,6 +18,7 @@ export interface VSWordMindmapNode {
 	readonly link?: string;
 	readonly color?: string;
 	readonly backgroundColor?: string;
+	readonly font?: VSWordMindmapFont;
 	readonly icons: readonly string[];
 	readonly children: readonly VSWordMindmapNode[];
 }
@@ -28,6 +36,7 @@ interface MutableMindmapNode {
 	link?: string;
 	color?: string;
 	backgroundColor?: string;
+	font?: VSWordMindmapFont;
 	icons: string[];
 	children: MutableMindmapNode[];
 }
@@ -81,6 +90,20 @@ export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
 			const icon = getAttr(tag.attributes, 'BUILTIN');
 			if (current && icon) {
 				current.icons.push(icon);
+			}
+		}
+
+		if (tag.name === 'font') {
+			const current = stack[stack.length - 1];
+			if (current) {
+				const sizeRaw = getAttr(tag.attributes, 'SIZE');
+				const sizeNum = sizeRaw === undefined ? undefined : Number.parseInt(sizeRaw, 10);
+				current.font = {
+					name: getAttr(tag.attributes, 'NAME'),
+					size: sizeNum !== undefined && Number.isFinite(sizeNum) ? sizeNum : undefined,
+					bold: getAttr(tag.attributes, 'BOLD')?.toLowerCase() === 'true',
+					italic: getAttr(tag.attributes, 'ITALIC')?.toLowerCase() === 'true'
+				};
 			}
 		}
 	}
@@ -386,6 +409,217 @@ function nodeAlreadyHasIcon(tags: XmlTag[], openIndex: number, icon: string): bo
 		}
 	}
 	return false;
+}
+
+/**
+ * Set or clear a single string attribute (e.g. `COLOR`, `BACKGROUND_COLOR`) on the `<node ID="...">`
+ * with the given id. Preserves every other byte of the source.
+ *
+ * - `value === null` removes the attribute entirely (including leading whitespace).
+ * - `value === undefined` is treated as a no-op.
+ * - When the attribute already exists, only the quoted value range is replaced.
+ * - When the attribute is missing and `value` is non-null, it is inserted directly after the
+ *   last existing attribute (or right after `<node` if the tag had no attributes), without
+ *   doubling whitespace.
+ */
+export function setMindmapNodeAttribute(xml: string, nodeId: string, attributeName: string, value: string | null | undefined): string {
+	if (value === undefined) {
+		return xml;
+	}
+	for (const tag of scanTags(xml)) {
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+		const existing = tag.attributes.find(attribute => attribute.name === attributeName);
+		if (value === null) {
+			if (!existing) {
+				return xml;
+			}
+			const nameStart = xml.lastIndexOf(attributeName, existing.valueStart);
+			if (nameStart < 0) {
+				return xml;
+			}
+			let removeStart = nameStart;
+			while (removeStart > 0 && /\s/.test(xml.charAt(removeStart - 1))) {
+				removeStart--;
+			}
+			const removeEnd = existing.valueEnd + 1; // include closing quote
+			return xml.slice(0, removeStart) + xml.slice(removeEnd);
+		}
+		const encoded = escapeXmlAttribute(value);
+		if (existing) {
+			return xml.slice(0, existing.valueStart) + encoded + xml.slice(existing.valueEnd);
+		}
+		let insertAt: number;
+		if (tag.attributes.length > 0) {
+			const last = tag.attributes[tag.attributes.length - 1];
+			insertAt = last.valueEnd + 1;
+		} else {
+			insertAt = tag.start + 1 + tag.name.length;
+		}
+		return xml.slice(0, insertAt) + ` ${attributeName}="${encoded}"` + xml.slice(insertAt);
+	}
+	return xml;
+}
+
+/**
+ * Convenience wrapper: set the foreground `COLOR` attribute on a node. Pass `null` to clear.
+ */
+export function setMindmapNodeColor(xml: string, nodeId: string, color: string | null): string {
+	return setMindmapNodeAttribute(xml, nodeId, 'COLOR', color);
+}
+
+/**
+ * Convenience wrapper: set the `BACKGROUND_COLOR` attribute on a node. Pass `null` to clear.
+ */
+export function setMindmapNodeBackgroundColor(xml: string, nodeId: string, color: string | null): string {
+	return setMindmapNodeAttribute(xml, nodeId, 'BACKGROUND_COLOR', color);
+}
+
+export interface MindmapFontPatch {
+	readonly name?: string | null;
+	readonly size?: number | null;
+	readonly bold?: boolean | null;
+	readonly italic?: boolean | null;
+}
+
+/**
+ * Update the `<font ... />` child of the `<node ID="...">` with the given id.
+ *
+ * - Patch entries map to FreeMind attrs `NAME` / `SIZE` / `BOLD` / `ITALIC`.
+ *   * `string`/`number`/`true`/`false` → set the attribute.
+ *   * `null` → clear that specific attribute (other font attrs are kept).
+ *   * `undefined` (or missing key) → leave that attribute alone.
+ * - If the node has no `<font>` child and the patch has any non-null/undefined value, a new
+ *   `<font ... />` is inserted directly after the node's open tag (self-closing nodes are
+ *   expanded). If every patch value is `null`/`undefined`, the source is returned unchanged.
+ * - If the patch leaves the `<font>` tag with no attributes, the tag is removed entirely.
+ * - All other children (icons / hooks / nested nodes / unknown XML) are preserved byte-for-byte.
+ */
+export function setMindmapNodeFont(xml: string, nodeId: string, patch: MindmapFontPatch): string {
+	const hasAnyDefined = ['name', 'size', 'bold', 'italic'].some(key => (patch as any)[key] !== undefined);
+	if (!hasAnyDefined) {
+		return xml;
+	}
+
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+
+		const existingFontIndex = findDirectChildFont(tags, i);
+		if (existingFontIndex !== -1) {
+			const fontTag = tags[existingFontIndex];
+			const updated = applyFontPatchToTag(xml, fontTag, patch);
+			if (updated === null) {
+				// Remove font tag entirely (and a single trailing newline-or-spaces if any).
+				return xml.slice(0, fontTag.start) + xml.slice(fontTag.end);
+			}
+			return xml.slice(0, fontTag.start) + updated + xml.slice(fontTag.end);
+		}
+
+		// No existing <font>: build one from the patch.
+		const attrs = renderFontAttrsFromPatch(patch, undefined);
+		if (!attrs) {
+			return xml;
+		}
+		const insertion = `<font ${attrs}/>`;
+		if (tag.selfClosing) {
+			const openOnly = renderOpenTagFromSelfClosing(xml, tag);
+			const closeOnly = `</${tag.name}>`;
+			return xml.slice(0, tag.start) + openOnly + insertion + closeOnly + xml.slice(tag.end);
+		}
+		return xml.slice(0, tag.end) + insertion + xml.slice(tag.end);
+	}
+	return xml;
+}
+
+function findDirectChildFont(tags: XmlTag[], openIndex: number): number {
+	const open = tags[openIndex];
+	if (open.selfClosing) {
+		return -1;
+	}
+	const closeIndex = findMatchingCloseIndex(tags, openIndex);
+	if (closeIndex === -1) {
+		return -1;
+	}
+	let depth = 0;
+	for (let j = openIndex + 1; j < closeIndex; j++) {
+		const child = tags[j];
+		if (child.name === 'node') {
+			if (child.closing) {
+				depth = Math.max(0, depth - 1);
+			} else if (!child.selfClosing) {
+				depth++;
+			}
+			continue;
+		}
+		if (depth !== 0) {
+			continue;
+		}
+		if (child.name === 'font' && !child.closing) {
+			return j;
+		}
+	}
+	return -1;
+}
+
+function applyFontPatchToTag(xml: string, fontTag: XmlTag, patch: MindmapFontPatch): string | null {
+	const current: Record<string, string> = {};
+	for (const attribute of fontTag.attributes) {
+		current[attribute.name] = attribute.value;
+	}
+	mergeFontPatch(current, patch);
+	const attrString = renderFontAttrsFromMap(current);
+	if (!attrString) {
+		return null;
+	}
+	return `<font ${attrString}/>`;
+}
+
+function renderFontAttrsFromPatch(patch: MindmapFontPatch, _existing: undefined): string | null {
+	const map: Record<string, string> = {};
+	mergeFontPatch(map, patch);
+	return renderFontAttrsFromMap(map);
+}
+
+function renderFontAttrsFromMap(map: Record<string, string>): string | null {
+	const order = ['NAME', 'SIZE', 'BOLD', 'ITALIC'];
+	const parts: string[] = [];
+	for (const key of order) {
+		const value = map[key];
+		if (value === undefined) {
+			continue;
+		}
+		parts.push(`${key}="${escapeXmlAttribute(value)}"`);
+	}
+	if (parts.length === 0) {
+		return null;
+	}
+	return parts.join(' ');
+}
+
+function mergeFontPatch(map: Record<string, string>, patch: MindmapFontPatch): void {
+	if (patch.name !== undefined) {
+		if (patch.name === null) { delete map['NAME']; } else { map['NAME'] = patch.name; }
+	}
+	if (patch.size !== undefined) {
+		if (patch.size === null) { delete map['SIZE']; } else { map['SIZE'] = String(patch.size); }
+	}
+	if (patch.bold !== undefined) {
+		if (patch.bold === null || patch.bold === false) { delete map['BOLD']; } else { map['BOLD'] = 'true'; }
+	}
+	if (patch.italic !== undefined) {
+		if (patch.italic === null || patch.italic === false) { delete map['ITALIC']; } else { map['ITALIC'] = 'true'; }
+	}
 }
 
 function renderOpenTagFromSelfClosing(xml: string, tag: XmlTag): string {

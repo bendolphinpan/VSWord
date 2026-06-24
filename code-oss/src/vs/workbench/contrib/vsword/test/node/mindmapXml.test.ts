@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeFolded, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -197,5 +197,95 @@ suite('VSWord Mindmap XML', () => {
 		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><icon BUILTIN="flag"/></node></node></map>';
 
 		assert.strictEqual(removeMindmapNodeIcon(xml, 'a', 'idea'), xml);
+	});
+
+	test('setMindmapNodeColor inserts COLOR after the last attribute when missing', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/></node></map>';
+
+		const updated = setMindmapNodeColor(xml, 'a', '#ff8800');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" COLOR="#ff8800"/></node></map>');
+	});
+
+	test('setMindmapNodeColor replaces COLOR value in place without touching other attrs', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" COLOR="#aaaaaa" BACKGROUND_COLOR="#ffffff"/></node></map>';
+
+		const updated = setMindmapNodeColor(xml, 'a', '#112233');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" COLOR="#112233" BACKGROUND_COLOR="#ffffff"/></node></map>');
+	});
+
+	test('setMindmapNodeColor with null clears COLOR and its leading whitespace', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" COLOR="#aaaaaa" BACKGROUND_COLOR="#ffffff"/></node></map>';
+
+		const updated = setMindmapNodeColor(xml, 'a', null);
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" BACKGROUND_COLOR="#ffffff"/></node></map>');
+	});
+
+	test('setMindmapNodeBackgroundColor is a no-op when clearing an absent attribute', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/></node></map>';
+
+		assert.strictEqual(setMindmapNodeBackgroundColor(xml, 'a', null), xml);
+	});
+
+	test('setMindmapNodeFont inserts a new <font/> child after the open tag', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node></node></map>';
+
+		const updated = setMindmapNodeFont(xml, 'a', { size: 16, bold: true });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font SIZE="16" BOLD="true"/><node ID="a1" TEXT="A1"/></node></node></map>');
+	});
+
+	test('setMindmapNodeFont expands self-closing nodes when inserting <font/>', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" /></node></map>';
+
+		const updated = setMindmapNodeFont(xml, 'a', { italic: true });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font ITALIC="true"/></node></node></map>');
+	});
+
+	test('setMindmapNodeFont merges patch with existing <font/> attributes', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font NAME="Arial" SIZE="12" BOLD="true"/></node></node></map>';
+
+		const updated = setMindmapNodeFont(xml, 'a', { size: 18, italic: true });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font NAME="Arial" SIZE="18" BOLD="true" ITALIC="true"/></node></node></map>');
+	});
+
+	test('setMindmapNodeFont with bold:false clears BOLD but keeps other attrs', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font NAME="Arial" SIZE="12" BOLD="true" ITALIC="true"/></node></node></map>';
+
+		const updated = setMindmapNodeFont(xml, 'a', { bold: false });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font NAME="Arial" SIZE="12" ITALIC="true"/></node></node></map>');
+	});
+
+	test('setMindmapNodeFont removes the whole <font/> tag when the patch empties it', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font BOLD="true"/></node></node></map>';
+
+		const updated = setMindmapNodeFont(xml, 'a', { bold: false });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"></node></node></map>');
+	});
+
+	test('setMindmapNodeFont does not confuse nested-node <font/> with the target', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"><font SIZE="20"/></node></node></node></map>';
+
+		const updated = setMindmapNodeFont(xml, 'a', { size: 14 });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font SIZE="14"/><node ID="a1" TEXT="A1"><font SIZE="20"/></node></node></node></map>');
+	});
+
+	test('parseMindmapXml exposes <font/> attributes on the parent node', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font NAME="Arial" SIZE="18" BOLD="true" ITALIC="true"/></node></node></map>';
+
+		const doc = parseMindmapXml(xml);
+		const a = doc.root?.children[0];
+
+		assert.strictEqual(a?.font?.name, 'Arial');
+		assert.strictEqual(a?.font?.size, 18);
+		assert.strictEqual(a?.font?.bold, true);
+		assert.strictEqual(a?.font?.italic, true);
 	});
 });

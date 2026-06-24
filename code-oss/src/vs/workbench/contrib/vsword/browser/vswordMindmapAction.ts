@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeFolded, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, MindmapFontPatch, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -111,6 +111,15 @@ class MindmapEditorManager extends Disposable {
 			case 'toggleIcon':
 				await this.handleToggleIcon(msg, webview);
 				return;
+			case 'setColor':
+				await this.handleSetColor(msg, webview);
+				return;
+			case 'setBackgroundColor':
+				await this.handleSetBackgroundColor(msg, webview);
+				return;
+			case 'setFont':
+				await this.handleSetFont(msg, webview);
+				return;
 		}
 	}
 
@@ -200,6 +209,57 @@ class MindmapEditorManager extends Disposable {
 		}
 		await this.mutateAndRender(webview, requestId, oldXml => ({
 			xml: add ? addMindmapNodeIcon(oldXml, nodeId, icon) : removeMindmapNodeIcon(oldXml, nodeId, icon),
+			newId: nodeId,
+		}));
+	}
+
+	private async handleSetColor(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		if (!nodeId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const color = parseNullableColor(msg.color);
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: setMindmapNodeColor(oldXml, nodeId, color),
+			newId: nodeId,
+		}));
+	}
+
+	private async handleSetBackgroundColor(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		if (!nodeId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const color = parseNullableColor(msg.color);
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: setMindmapNodeBackgroundColor(oldXml, nodeId, color),
+			newId: nodeId,
+		}));
+	}
+
+	private async handleSetFont(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		if (!nodeId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const patch: MindmapFontPatch = {};
+		if (msg && typeof msg === 'object') {
+			if ('name' in msg) { (patch as any).name = msg.name === null ? null : (typeof msg.name === 'string' ? msg.name : undefined); }
+			if ('size' in msg) {
+				if (msg.size === null) { (patch as any).size = null; }
+				else if (typeof msg.size === 'number' && Number.isFinite(msg.size)) { (patch as any).size = Math.max(6, Math.min(96, Math.round(msg.size))); }
+			}
+			if ('bold' in msg) { (patch as any).bold = msg.bold === null ? null : Boolean(msg.bold); }
+			if ('italic' in msg) { (patch as any).italic = msg.italic === null ? null : Boolean(msg.italic); }
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: setMindmapNodeFont(oldXml, nodeId, patch),
 			newId: nodeId,
 		}));
 	}
@@ -295,6 +355,24 @@ function countNodes(root: VSWordMindmapNode): number {
 function newMindmapNodeId(): string {
 	const randomPart = Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
 	return 'vsword-' + Date.now().toString(36) + '-' + randomPart;
+}
+
+function parseNullableColor(raw: unknown): string | null {
+	if (raw === null) {
+		return null;
+	}
+	if (typeof raw !== 'string') {
+		return null;
+	}
+	const value = raw.trim();
+	if (!value) {
+		return null;
+	}
+	// Allow #rgb / #rrggbb / #rrggbbaa hex strings only.
+	if (!/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})$/.test(value)) {
+		return null;
+	}
+	return value;
 }
 
 registerAction2(VswordOpenMindmapAction);
