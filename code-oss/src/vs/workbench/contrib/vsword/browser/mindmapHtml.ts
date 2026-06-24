@@ -69,6 +69,9 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	#status.success { color: var(--vscode-testing-iconPassed, #2ea043); }
 	button { border: 1px solid var(--vscode-button-border, transparent); border-radius: 6px; padding: 4px 9px; background: var(--vscode-button-secondaryBackground, #e5e5e5); color: var(--vscode-button-secondaryForeground, #222); cursor: pointer; }
 	button:hover { background: var(--vscode-button-secondaryHoverBackground, #d5d5d5); }
+	button:disabled { opacity: .55; cursor: default; }
+	button.danger { color: var(--vscode-errorForeground, #e51400); }
+	.toolbar-actions { display: flex; align-items: center; gap: 6px; }
 	#map { position: absolute; inset: 0; padding-top: 52px; }
 	#empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--vscode-descriptionForeground, #666); pointer-events: none; }
 	#empty.visible { display: flex; }
@@ -84,9 +87,15 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		<span class="badge">.mm</span>
 		<span class="badge" id="node-count"></span>
 		<span class="spacer"></span>
-		<span class="hint" id="mode-hint">Mind Elixir · Tab=child · Enter=sibling · Delete=remove · Dbl-click/F2=edit · Right-click=link</span>
+		<span class="hint" id="mode-hint">Mind Elixir · select a topic, then use toolbar or shortcuts</span>
+		<div class="toolbar-actions">
+			<button id="add-child" title="Add child topic (Tab)">+ Child</button>
+			<button id="add-sibling" title="Add sibling topic (Enter)">+ Sibling</button>
+			<button id="edit-node" title="Edit selected topic (F2 / double-click)">Edit</button>
+			<button id="delete-node" class="danger" title="Delete selected topic (Delete)">Delete</button>
+			<button id="fit">Fit</button>
+		</div>
 		<span id="status"></span>
-		<button id="fit">Fit</button>
 	</div>
 	<div id="map" aria-label="VSWord Mindmap"></div>
 	<div id="empty">No mindmap root node found in this .mm file.</div>
@@ -116,10 +125,32 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	let saveSeq = 0;
 	let selectedNodeId = model.selectedNodeId || null;
 	let mind = null;
+	const toolbarButtons = ['add-child', 'add-sibling', 'edit-node', 'delete-node'].map(function (id) { return document.getElementById(id); });
 
 	function setStatus(text, className) {
 		status.textContent = text || '';
 		status.className = className || '';
+	}
+
+	function updateToolbarState() {
+		const hasSelection = Boolean(selectedNodeId);
+		for (const button of toolbarButtons) {
+			if (button) { button.disabled = !editable || !hasSelection; }
+		}
+	}
+
+	function selectedElement() {
+		if (!mind || !selectedNodeId) { return null; }
+		try { return mind.findEle(selectedNodeId); } catch (_) { return null; }
+	}
+
+	function runSelected(actionName, action) {
+		const element = selectedElement();
+		if (!element) {
+			setStatus('Select a topic first', 'error');
+			return;
+		}
+		try { action(element); } catch (err) { reportError(actionName, err); }
 	}
 
 	function reportError(prefix, err) {
@@ -136,7 +167,8 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Mind Elixir · Tab=child · Enter=sibling · Delete=remove · Dbl-click/F2=edit · Right-click=link' : 'Read-only · pan/zoom · Fit';
+	document.getElementById('mode-hint').textContent = editable ? 'Mind Elixir · toolbar: child/sibling/edit/delete · shortcuts still work · drag move not saved yet' : 'Read-only · pan/zoom · Fit';
+	updateToolbarState();
 
 	if (!model.mindElixirData) {
 		document.getElementById('empty').classList.add('visible');
@@ -182,6 +214,12 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		if (!editable || !operation || !operation.name) { return; }
 		const obj = operation.obj;
 		switch (operation.name) {
+			case 'moveNodeBefore':
+			case 'moveNodeAfter':
+			case 'moveNodeIn':
+				setStatus('Move is not persisted yet; use add/delete for now', 'error');
+				setTimeout(function () { location.reload(); }, 250);
+				return;
 			case 'finishEdit':
 				if (obj && obj.id) { post('updateNodeText', { nodeId: obj.id, text: obj.topic || 'New topic' }); }
 				return;
@@ -227,6 +265,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			if (nodes && nodes[0]) {
 				selectedNodeId = nodes[0].id;
 				setStatus(nodes.length + ' selected', '');
+				updateToolbarState();
+			}
+		});
+		mind.bus.addListener('unselectNodes', function () {
+			if (!mind.currentNodes || mind.currentNodes.length === 0) {
+				selectedNodeId = null;
+				updateToolbarState();
 			}
 		});
 		mind.bus.addListener('expandNode', function (node) {
@@ -248,6 +293,25 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			if (mind && typeof mind.scaleFit === 'function') { mind.scaleFit(); }
 			else if (mind && typeof mind.toCenter === 'function') { mind.toCenter(); }
 		} catch (err) { reportError('fit', err); }
+	});
+
+	document.getElementById('add-child').addEventListener('click', function () {
+		runSelected('add-child', function (element) { mind.addChild(element); });
+	});
+	document.getElementById('add-sibling').addEventListener('click', function () {
+		runSelected('add-sibling', function (element) { mind.insertSibling('after', element); });
+	});
+	document.getElementById('edit-node').addEventListener('click', function () {
+		runSelected('edit-node', function (element) { mind.beginEdit(element); });
+	});
+	document.getElementById('delete-node').addEventListener('click', function () {
+		runSelected('delete-node', function (element) {
+			if (element.nodeObj && !element.nodeObj.parent) {
+				setStatus('Root topic cannot be deleted', 'error');
+				return;
+			}
+			mind.removeNodes([element]);
+		});
 	});
 
 	window.addEventListener('message', function (event) {
