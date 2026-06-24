@@ -31,7 +31,7 @@
       <node ID="p2-arch-be" TEXT="Backend stack"/>
     </node>
   </node>
-  <node ID="phase-3" TEXT="Phase 3 · Launch" POSITION="left" FOLDED="true">
+  <node ID="phase-3" TEXT="Phase 3 · Launch" POSITION="left" FOLDED="true" COLOR="#2563eb" BACKGROUND_COLOR="#bfdbfe"><font BOLD="true"/>
     <node ID="phase-3-test" TEXT="QA &amp; Test">
       <node ID="p3-test-unit" TEXT="Unit"/>
       <node ID="p3-test-e2e" TEXT="E2E"/>
@@ -41,11 +41,11 @@
     </node>
   </node>
   <node ID="phase-4" TEXT="Phase 4 · Iterate" POSITION="left">
-    <node ID="p4-feedback" TEXT="Feedback loop"/>
+    <node ID="p4-feedback" TEXT="Feedback loop"><node ID="vsword-mqs8ccci-d4e3c7" TEXT="New topic" /><node ID="vsword-mqs8chl8-abf2f4" TEXT="New topic" POSITION="left" /><node ID="vsword-mqs8ci6p-2ad3df" TEXT="New topic" POSITION="left"><arrowlink ID="vsword-al-mqs8rr2j-907aad" DESTINATION="p2-mvp-feat-a" STARTARROW="None" ENDARROW="Default"/></node><arrowlink ID="vsword-al-mqs8uaxo-2189fb" DESTINATION="phase-2" STARTARROW="None" ENDARROW="Default"/></node>
     <node ID="p4-metrics" TEXT="Metrics dashboard">
       <icon BUILTIN="full-1"/>
       <icon BUILTIN="clock"/>
-    </node>
+    <arrowlink ID="vsword-al-mqs8qh1f-4800bc" DESTINATION="phase-2" STARTARROW="None" ENDARROW="Default"/></node>
   </node>
 </node>
 </map>
