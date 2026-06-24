@@ -541,6 +541,23 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-5.4 — Mindmap node structure editing (Tab / Enter / Delete)
+
+**目标**：在 T-5.3 文本编辑闭环之上加入节点结构编辑，仍以 `.mm` 为唯一权威格式：
+- 选中节点（mousedown 高亮）+ root 默认选中
+- `Tab` = 新增子节点；`Enter` = 新增同级节点（root 选中时退化为编辑根文本）；`Delete` / `Backspace` = 删除子树
+- `F2` = 进入文本编辑
+- writer 侧 `appendMindmapChild` / `appendMindmapSibling` / `removeMindmapNode` 仅做最小字节切片：父节点 self-closing 时展开为 open/close 对，其余 hook / cloud / richcontent / unknown attrs / unknown children 全部保留
+- 拒绝在 root 旁创建同级、拒绝删除 root
+- 写盘后由 host 端 `setHtml` 重渲染并把新节点 ID 作为初始选中
+
+**验收**：
+- 13/13 单测通过（含 `appendMindmapChild` self-closing 展开、`appendMindmapSibling` 拒绝根、`removeMindmapNode` 保留 hook / 拒绝根 / 处理 self-closing）
+- compile 0 errors
+- 手动 smoke：Tab → 子节点；Enter → 同级；Delete → 整子树消失；unknown XML 仍在文件中
+
+---
+
 ## 3. 主代理验收流程
 
 每个任务完成后，fullstack-developer 提交报告。主代理执行：

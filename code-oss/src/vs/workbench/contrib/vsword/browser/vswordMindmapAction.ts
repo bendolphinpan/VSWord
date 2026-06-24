@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { parseMindmapXml, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -89,10 +89,26 @@ class MindmapEditorManager extends Disposable {
 	}
 
 	private async handleMessage(msg: any, webview: any): Promise<void> {
-		if (msg?.type !== 'updateNodeText') {
+		if (!msg || typeof msg.type !== 'string') {
 			return;
 		}
+		switch (msg.type) {
+			case 'updateNodeText':
+				await this.handleUpdateNodeText(msg, webview);
+				return;
+			case 'appendChild':
+				await this.handleAppendChild(msg, webview);
+				return;
+			case 'appendSibling':
+				await this.handleAppendSibling(msg, webview);
+				return;
+			case 'removeNode':
+				await this.handleRemoveNode(msg, webview);
+				return;
+		}
+	}
 
+	private async handleUpdateNodeText(msg: any, webview: any): Promise<void> {
 		const requestId = String(msg.requestId ?? '');
 		const nodeId = String(msg.nodeId ?? '');
 		const text = String(msg.text ?? '').trim();
@@ -114,6 +130,70 @@ class MindmapEditorManager extends Disposable {
 		} catch (err) {
 			this.logService.error('[VSWord Mindmap] failed to update node text:', err);
 			webview.postMessage({ type: 'nodeTextUpdated', requestId, ok: false });
+		}
+	}
+
+	private async handleAppendChild(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const parentId = String(msg.parentId ?? '');
+		const text = String(msg.text ?? '').trim() || 'New topic';
+		if (!parentId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => {
+			const newId = newMindmapNodeId();
+			return { xml: appendMindmapChild(oldXml, parentId, { newId, text }), newId };
+		});
+	}
+
+	private async handleAppendSibling(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const siblingId = String(msg.siblingId ?? '');
+		const text = String(msg.text ?? '').trim() || 'New topic';
+		const position: 'left' | 'right' | undefined = msg.position === 'left' || msg.position === 'right' ? msg.position : undefined;
+		if (!siblingId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => {
+			const newId = newMindmapNodeId();
+			return { xml: appendMindmapSibling(oldXml, siblingId, { newId, text, position }), newId };
+		});
+	}
+
+	private async handleRemoveNode(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		if (!nodeId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({ xml: removeMindmapNode(oldXml, nodeId) }));
+	}
+
+	private async mutateAndRender(webview: any, requestId: string, mutate: (xml: string) => { xml: string; newId?: string }): Promise<void> {
+		try {
+			const content = await this.fileService.readFile(this.fileUri);
+			const oldXml = content.value.toString();
+			const result = mutate(oldXml);
+			if (result.xml === oldXml) {
+				webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+				return;
+			}
+			await this.fileService.writeFile(this.fileUri, VSBuffer.fromString(result.xml));
+			const document = parseMindmapXml(result.xml);
+			webview.setHtml(getMindmapHtml({
+				fileName: basename(this.fileUri),
+				root: document.root,
+				nodeCount: document.root ? countNodes(document.root) : 0,
+				sourceKind: 'mm',
+				editable: true,
+				selectedNodeId: result.newId,
+			}));
+		} catch (err) {
+			this.logService.error('[VSWord Mindmap] failed to mutate structure:', err);
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
 		}
 	}
 }
@@ -178,6 +258,11 @@ function countNodes(root: VSWordMindmapNode): number {
 		count += countNodes(child);
 	}
 	return count;
+}
+
+function newMindmapNodeId(): string {
+	const randomPart = Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+	return 'vsword-' + Date.now().toString(36) + '-' + randomPart;
 }
 
 registerAction2(VswordOpenMindmapAction);

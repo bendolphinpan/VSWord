@@ -114,6 +114,164 @@ export function updateMindmapNodeText(xml: string, nodeId: string, text: string)
 	return xml;
 }
 
+export interface NewMindmapChildOptions {
+	readonly newId: string;
+	readonly text: string;
+	readonly position?: 'left' | 'right';
+}
+
+/**
+ * Insert a new `<node ID="..." TEXT="..." />` as the last child of the node with `parentId`.
+ * Preserves the surrounding XML byte-for-byte; only inserts the new subtree.
+ *
+ * If the parent is self-closing (e.g. `<node ID="x" TEXT="x" />`), it is expanded to an
+ * open/close pair around the new child so unknown attributes are retained.
+ */
+export function appendMindmapChild(xml: string, parentId: string, options: NewMindmapChildOptions): string {
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== parentId) {
+			continue;
+		}
+
+		const childXml = renderNewNodeXml(options);
+		if (tag.selfClosing) {
+			// Rewrite the self-closing tag into open + child + close pair.
+			const opening = tag.raw.replace(/\/\s*>$/, '>');
+			const closing = `</${tag.name}>`;
+			return xml.slice(0, tag.start) + opening + childXml + closing + xml.slice(tag.end);
+		}
+
+		// Find the matching closing tag at the same depth.
+		const closeIndex = findMatchingCloseIndex(tags, i);
+		if (closeIndex === -1) {
+			return xml;
+		}
+		const closeTag = tags[closeIndex];
+		return xml.slice(0, closeTag.start) + childXml + xml.slice(closeTag.start);
+	}
+	return xml;
+}
+
+/**
+ * Insert a new `<node ID="..." TEXT="..." />` immediately after the node with `siblingId`,
+ * inside the same parent. Returns the XML unchanged if the sibling has no parent (root) or
+ * cannot be located.
+ */
+export function appendMindmapSibling(xml: string, siblingId: string, options: NewMindmapChildOptions): string {
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== siblingId) {
+			continue;
+		}
+
+		// Refuse to insert next to the root: it has no enclosing parent node.
+		if (!hasParentNode(tags, i)) {
+			return xml;
+		}
+
+		const endIndex = tag.selfClosing ? i : findMatchingCloseIndex(tags, i);
+		if (endIndex === -1) {
+			return xml;
+		}
+		const insertOffset = tags[endIndex].end;
+		const childXml = renderNewNodeXml(options);
+		return xml.slice(0, insertOffset) + childXml + xml.slice(insertOffset);
+	}
+	return xml;
+}
+
+/**
+ * Remove the `<node ID="...">…</node>` subtree (or self-closing tag) with the given id.
+ * Returns the XML unchanged if the target is the root (no parent) or cannot be found.
+ */
+export function removeMindmapNode(xml: string, nodeId: string): string {
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+
+		// Refuse to delete the root: it has no enclosing parent node.
+		if (!hasParentNode(tags, i)) {
+			return xml;
+		}
+
+		if (tag.selfClosing) {
+			return xml.slice(0, tag.start) + xml.slice(tag.end);
+		}
+		const closeIndex = findMatchingCloseIndex(tags, i);
+		if (closeIndex === -1) {
+			return xml;
+		}
+		const closeTag = tags[closeIndex];
+		return xml.slice(0, tag.start) + xml.slice(closeTag.end);
+	}
+	return xml;
+}
+
+function findMatchingCloseIndex(tags: XmlTag[], openIndex: number): number {
+	let depth = 0;
+	for (let j = openIndex + 1; j < tags.length; j++) {
+		const candidate = tags[j];
+		if (candidate.name !== 'node') {
+			continue;
+		}
+		if (candidate.closing) {
+			if (depth === 0) {
+				return j;
+			}
+			depth--;
+			continue;
+		}
+		if (!candidate.selfClosing) {
+			depth++;
+		}
+	}
+	return -1;
+}
+
+function hasParentNode(tags: XmlTag[], targetIndex: number): boolean {
+	let depth = 0;
+	for (let j = targetIndex - 1; j >= 0; j--) {
+		const candidate = tags[j];
+		if (candidate.name !== 'node') {
+			continue;
+		}
+		if (candidate.closing) {
+			depth++;
+			continue;
+		}
+		if (candidate.selfClosing) {
+			continue;
+		}
+		if (depth === 0) {
+			return true;
+		}
+		depth--;
+	}
+	return false;
+}
+
+function renderNewNodeXml(options: NewMindmapChildOptions): string {
+	const id = escapeXmlAttribute(options.newId);
+	const text = escapeXmlAttribute(options.text);
+	const position = options.position ? ` POSITION="${options.position}"` : '';
+	return `<node ID="${id}" TEXT="${text}"${position} />`;
+}
+
 function createNode(attributes: readonly XmlAttribute[]): MutableMindmapNode {
 	const position = getAttr(attributes, 'POSITION')?.toLowerCase();
 	const node: MutableMindmapNode = {

@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { parseMindmapXml, serializeMindmapXml, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, serializeMindmapXml, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -65,5 +65,55 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(doc.root?.children.length, 1000);
 		assert.strictEqual(doc.root?.children[0].text, 'Node 1');
 		assert.strictEqual(doc.root?.children[999].text, 'Node 1000');
+	});
+
+	test('appendMindmapChild inserts as last child of an open node', () => {
+		const xml = '<?xml version="1.0"?>\n<map version="1.0.1"><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = appendMindmapChild(xml, 'root', { newId: 'c', text: 'C' });
+
+		assert.strictEqual(updated, '<?xml version="1.0"?>\n<map version="1.0.1"><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/><node ID="b" TEXT="B"/><node ID="c" TEXT="C" /></node></map>');
+	});
+
+	test('appendMindmapChild expands a self-closing parent and keeps its attrs', () => {
+		const xml = '<map><node ID="root" TEXT="Root" CREATED="1" /></map>';
+
+		const updated = appendMindmapChild(xml, 'root', { newId: 'first', text: 'First &<>' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root" CREATED="1" ><node ID="first" TEXT="First &amp;&lt;&gt;" /></node></map>');
+	});
+
+	test('appendMindmapSibling inserts after the sibling element', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = appendMindmapSibling(xml, 'a', { newId: 'a2', text: 'A2', position: 'right' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node><node ID="a2" TEXT="A2" POSITION="right" /><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('appendMindmapSibling refuses to insert next to root', () => {
+		const xml = '<map><node ID="root" TEXT="Root"/></map>';
+		assert.strictEqual(appendMindmapSibling(xml, 'root', { newId: 'x', text: 'X' }), xml);
+	});
+
+	test('removeMindmapNode removes a subtree but keeps siblings and unknown children', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node><hook NAME="MapStyle"/><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = removeMindmapNode(xml, 'a');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><hook NAME="MapStyle"/><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('removeMindmapNode refuses to delete the root', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/></node></map>';
+		assert.strictEqual(removeMindmapNode(xml, 'root'), xml);
+	});
+
+	test('removeMindmapNode handles self-closing nodes', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = removeMindmapNode(xml, 'a');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="b" TEXT="B"/></node></map>');
 	});
 });

@@ -12,6 +12,7 @@ export interface VSWordMindmapWebviewModel {
 	readonly nodeCount: number;
 	readonly sourceKind: 'mm';
 	readonly editable: boolean;
+	readonly selectedNodeId?: string;
 }
 
 export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
@@ -112,6 +113,11 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		font-weight: 400;
 	}
 	.topic.root .meta { fill: rgba(255,255,255,.82); }
+	.topic.selected rect {
+		stroke: var(--vscode-focusBorder, #007fd4);
+		stroke-width: 2.5;
+		filter: drop-shadow(0 0 4px rgba(0, 127, 212, .35));
+	}
 	.edit-box {
 		position: fixed;
 		z-index: 20;
@@ -158,10 +164,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 	const editable = Boolean(model.editable && vscode);
 	const pendingEdits = new Map();
+	const pendingStructure = new Map();
 	let editingInput = null;
 	let editingNode = null;
 	let saveSeq = 0;
+	let selectedNodeId = model.selectedNodeId || null;
 	const nodeElements = new Map();
+	const nodeParents = new Map();
 	const svg = document.getElementById('mindmap-svg');
 	const viewport = document.getElementById('viewport');
 	const linksGroup = document.getElementById('links');
@@ -169,7 +178,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const empty = document.getElementById('empty');
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Double-click topic to edit · pan/zoom · XMind-style layout' : 'Read-only MVP · pan/zoom · XMind-style layout';
+	document.getElementById('mode-hint').textContent = editable ? 'Tab = child · Enter = sibling · Delete = remove · Double-click = edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
 
 	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
 	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
@@ -266,22 +275,86 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			group.appendChild(meta);
 		}
 		if (editable && node.id) {
-			group.style.cursor = 'text';
+			group.style.cursor = 'pointer';
+			group.addEventListener('mousedown', function (event) {
+				if (event.button !== 0) { return; }
+				selectNode(node.id);
+			});
 			group.addEventListener('dblclick', function (event) {
 				event.preventDefault();
 				event.stopPropagation();
+				selectNode(node.id);
 				startEditing(node, item, text);
 			});
 		}
-		nodeElements.set(key, { node: node, text: text });
+		nodeElements.set(key, { node: node, text: text, group: group, item: item });
 		topicsGroup.appendChild(group);
 	}
 	function traverse(node, fn) {
 		const children = Array.isArray(node.children) && !node.folded ? node.children : [];
 		children.forEach(function (child) {
+			if (child.id) { nodeParents.set(child.id, node); }
 			fn(node, child);
 			traverse(child, fn);
 		});
+	}
+	function selectNode(id) {
+		if (!id) { return; }
+		selectedNodeId = id;
+		nodeElements.forEach(function (entry) {
+			if (!entry.node.id) { return; }
+			entry.group.classList.toggle('selected', entry.node.id === id);
+		});
+	}
+	function applyInitialSelection() {
+		if (selectedNodeId && nodeElements.size) {
+			let found = false;
+			nodeElements.forEach(function (entry) {
+				if (!entry.node.id) { return; }
+				if (entry.node.id === selectedNodeId) { found = true; }
+			});
+			if (found) { selectNode(selectedNodeId); }
+		}
+	}
+	function getSelectedEntry() {
+		if (!selectedNodeId) { return null; }
+		var match = null;
+		nodeElements.forEach(function (entry) {
+			if (entry.node.id === selectedNodeId) { match = entry; }
+		});
+		return match;
+	}
+	function dispatchStructure(payload, expectNewSelection) {
+		if (!editable) { return; }
+		const requestId = String(++saveSeq);
+		pendingStructure.set(requestId, { expectNewSelection: !!expectNewSelection });
+		payload.requestId = requestId;
+		showStatus('Saving…', '');
+		vscode.postMessage(payload);
+	}
+	function requestAppendChild() {
+		const entry = getSelectedEntry();
+		if (!entry || !entry.node.id) { return; }
+		dispatchStructure({ type: 'appendChild', parentId: entry.node.id, text: 'New topic' }, true);
+	}
+	function requestAppendSibling() {
+		const entry = getSelectedEntry();
+		if (!entry || !entry.node.id) { return; }
+		const parent = nodeParents.get(entry.node.id);
+		if (!parent) {
+			showStatus('Root has no sibling', 'error');
+			return;
+		}
+		dispatchStructure({ type: 'appendSibling', siblingId: entry.node.id, text: 'New topic', position: entry.item.side === 'left' ? 'left' : (entry.item.side === 'right' ? 'right' : undefined) }, true);
+	}
+	function requestRemove() {
+		const entry = getSelectedEntry();
+		if (!entry || !entry.node.id) { return; }
+		if (!nodeParents.get(entry.node.id)) {
+			showStatus('Cannot delete the root', 'error');
+			return;
+		}
+		dispatchStructure({ type: 'removeNode', nodeId: entry.node.id }, false);
 	}
 	function showStatus(message, kind) {
 		const status = document.getElementById('status');
@@ -330,19 +403,60 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	}
 	window.addEventListener('message', function (event) {
 		const msg = event.data || {};
-		if (msg.type !== 'nodeTextUpdated') { return; }
-		const pending = pendingEdits.get(String(msg.requestId));
-		pendingEdits.delete(String(msg.requestId));
-		if (msg.ok) {
-			showStatus('Saved', 'success');
+		if (msg.type === 'nodeTextUpdated') {
+			const pending = pendingEdits.get(String(msg.requestId));
+			pendingEdits.delete(String(msg.requestId));
+			if (msg.ok) {
+				showStatus('Saved', 'success');
+				return;
+			}
+			if (pending) {
+				pending.node.text = pending.oldText;
+				pending.textEl.textContent = (pending.node.folded ? '⊕ ' : '') + truncate(pending.oldText, 24);
+			}
+			showStatus('Save failed', 'error');
 			return;
 		}
-		if (pending) {
-			pending.node.text = pending.oldText;
-			pending.textEl.textContent = (pending.node.folded ? '⊕ ' : '') + truncate(pending.oldText, 24);
+		if (msg.type === 'structureUpdated') {
+			pendingStructure.delete(String(msg.requestId));
+			if (!msg.ok) {
+				showStatus('Save failed', 'error');
+			}
 		}
-		showStatus('Save failed', 'error');
 	});
+	if (editable) {
+		window.addEventListener('keydown', function (event) {
+			if (editingInput) { return; }
+			if (event.target && (event.target.tagName === 'INPUT' || event.target.tagName === 'TEXTAREA')) { return; }
+			if (event.metaKey || event.ctrlKey || event.altKey) { return; }
+			if (event.key === 'Tab') {
+				event.preventDefault();
+				requestAppendChild();
+				return;
+			}
+			if (event.key === 'Enter') {
+				event.preventDefault();
+				if (selectedNodeId && nodeParents.get(selectedNodeId)) {
+					requestAppendSibling();
+				} else {
+					const entry = getSelectedEntry();
+					if (entry) { startEditing(entry.node, entry.item, entry.text); }
+				}
+				return;
+			}
+			if (event.key === 'F2') {
+				event.preventDefault();
+				const entry = getSelectedEntry();
+				if (entry) { startEditing(entry.node, entry.item, entry.text); }
+				return;
+			}
+			if (event.key === 'Delete' || event.key === 'Backspace') {
+				event.preventDefault();
+				requestRemove();
+				return;
+			}
+		});
+	}
 	function updateTransform() { viewport.setAttribute('transform', 'translate(' + state.x + ',' + state.y + ') scale(' + state.zoom + ')'); }
 	function fit() {
 		const box = viewport.getBBox();
@@ -357,6 +471,19 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	layoutTree(model.root);
 	traverse(model.root, renderLink);
 	placed.forEach(renderTopic);
+	if (!nodeParents.size && model.root) {
+		// Ensure parent map built even when traverse skipped folded subtrees.
+		(function walk(parent) {
+			(parent.children || []).forEach(function (child) {
+				if (child.id) { nodeParents.set(child.id, parent); }
+				walk(child);
+			});
+		})(model.root);
+	}
+	if (!selectedNodeId && model.root && model.root.id) {
+		selectedNodeId = model.root.id;
+	}
+	applyInitialSelection();
 	fit();
 	document.getElementById('fit').addEventListener('click', fit);
 	svg.addEventListener('wheel', function (event) {
