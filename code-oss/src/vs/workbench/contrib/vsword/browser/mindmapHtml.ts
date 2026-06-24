@@ -325,6 +325,24 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const model = ${data};
 	const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 	const editable = Boolean(model.editable && vscode);
+	// Surface any uncaught JS error directly to the status bar so future bugs
+	// don't manifest as silent "nothing happens". Without this, the previous
+	// T-5.9 regression looked like dead UI from the user's side.
+	function reportError(prefix, err) {
+		try {
+			const msg = (err && err.stack) ? err.stack : String(err);
+			const el = document.getElementById('status');
+			if (el) {
+				el.textContent = '[' + prefix + '] ' + (msg.split('\\n')[0] || msg).slice(0, 240);
+				el.style.color = 'var(--vscode-errorForeground, #f48771)';
+			}
+			if (vscode) { vscode.postMessage({ type: 'webviewError', prefix: prefix, message: msg }); }
+			// eslint-disable-next-line no-console
+			console.error('[vsword-mindmap]', prefix, err);
+		} catch (_) { /* swallow */ }
+	}
+	window.addEventListener('error', function (e) { reportError('uncaught', e.error || e.message); });
+	window.addEventListener('unhandledrejection', function (e) { reportError('promise', e.reason); });
 	const pendingEdits = new Map();
 	const pendingStructure = new Map();
 	let editingInput = null;
@@ -718,6 +736,12 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			group.style.cursor = 'pointer';
 			group.addEventListener('mousedown', function (event) {
 				if (event.button !== 0) { return; }
+				// CRITICAL: stop propagation so the SVG-level pan handler
+				// doesn't grab the gesture and turn every click into a pan.
+				// Regression introduced in T-5.9 — previously nodes were
+				// non-interactive in read-only mode so this didn't matter,
+				// but with editable nodes we must capture the click here.
+				event.stopPropagation();
 				selectNode(node.id);
 			});
 			group.addEventListener('dblclick', function (event) {

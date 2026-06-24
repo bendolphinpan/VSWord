@@ -6,6 +6,7 @@
 import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/contributions.js';
 import { VswordWorkbenchShellContribution } from './vswordHomeView.js';
 import { VswordWordCountContribution } from './vswordWordCount.js';
+import { VswordMindmapAutoOpenContribution } from './vswordMindmapAutoOpen.js';
 
 // Effects-only imports. Each sub-module is responsible for its own registration.
 import './vswordHelloAction.js';
@@ -18,3 +19,4 @@ import './vswordWriterModeDefaults.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(VswordMindmapAutoOpenContribution.ID, VswordMindmapAutoOpenContribution, WorkbenchPhase.AfterRestored);

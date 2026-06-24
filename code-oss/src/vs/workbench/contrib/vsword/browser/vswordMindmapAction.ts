@@ -133,6 +133,10 @@ class MindmapEditorManager extends Disposable {
 			case 'removeArrowlink':
 				await this.handleRemoveArrowlink(msg, webview);
 				return;
+			case 'webviewError':
+				this.logService.error(
+					'[VSWord Mindmap] webview error [' + String(msg.prefix || '?') + ']: ' + String(msg.message || ''));
+				return;
 		}
 	}
 
