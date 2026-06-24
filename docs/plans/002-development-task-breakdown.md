@@ -483,9 +483,9 @@ code-oss/src/vs/workbench/contrib/vsword/
 **前置**：T-1.1 通过。可与 Phase 2/4 并行。
 
 **目标**：
-- 选定 XML 库（fast-xml-parser 优先）
-- 实现 `.mm` ↔ `VswordMindmapDocument`（FR-02 §3.3 schema）
-- preservation 模型实现
+- 选定 XML preservation 策略（T-5.1 采用自有轻量 token preservation，不新增 root 依赖）
+- 实现 `.mm` ↔ `VSWordMindmapXmlDocument` 基础读取（FR-02 §3.3 schema 的 P0 子集）
+- preservation 模型实现：未修改保存 byte-for-byte，单节点 `TEXT` 修改不丢 unknown XML
 - fixture 集 + round-trip 测试
 - `docs/phase0/mm-preservation-spike.md`
 
