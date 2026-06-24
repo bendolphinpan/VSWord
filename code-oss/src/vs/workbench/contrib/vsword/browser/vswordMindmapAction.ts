@@ -127,6 +127,7 @@ class MindmapEditorManager extends Disposable {
 				await this.handleCreateArrowlink(msg, webview);
 				return;
 			case 'updateArrowlink':
+			case 'setArrowlinkEndpoint':
 				await this.handleUpdateArrowlink(msg, webview);
 				return;
 			case 'removeArrowlink':

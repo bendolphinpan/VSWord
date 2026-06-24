@@ -1,0 +1,2 @@
+# Generated test artifacts — keep history but exclude binaries/timestamps if large
+# (currently small enough to commit; remove this rule if reports balloon)

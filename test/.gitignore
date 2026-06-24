@@ -1,0 +1,3 @@
+# Round-trip script outputs (timestamped) — keep latest in tree but don't commit history
+reports/arrowlink-roundtrip-*.mm
+reports/arrowlink-roundtrip-*.json
