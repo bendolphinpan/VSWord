@@ -90,16 +90,18 @@ export class VswordMindmapAutoOpenContribution extends Disposable implements IWo
 		const activeForClose = this.editorService.activeEditorPane;
 		(async () => {
 			try {
-				// Open the mindmap first so the user never sees an empty editor
-				// flash; then close the redundant text editor in the same group.
-				await this.commandService.executeCommand(MINDMAP_OPEN_COMMAND, resource);
+				// Close the redundant text editor FIRST so the user never sees
+				// two tabs for the same resource. If we open mindmap first then
+				// close, focus thrash makes the close occasionally race with
+				// onDidActiveEditorChange and we end up with a duplicate tab.
 				if (activeForClose) {
 					try {
-						await activeForClose.group.closeEditor(active, { preserveFocus: false });
+						await activeForClose.group.closeEditor(active, { preserveFocus: true });
 					} catch (err) {
 						this.logService.debug('[VSWord Mindmap] auto-open: close text editor failed: ' + err);
 					}
 				}
+				await this.commandService.executeCommand(MINDMAP_OPEN_COMMAND, resource);
 			} catch (err) {
 				this.logService.error('[VSWord Mindmap] auto-open failed: ' + err);
 			} finally {

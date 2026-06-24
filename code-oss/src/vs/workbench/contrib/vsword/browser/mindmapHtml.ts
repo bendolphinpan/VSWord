@@ -302,6 +302,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		padding: 24px;
 		text-align: center;
 		color: var(--vscode-descriptionForeground, #666);
+		pointer-events: none;
+	}
+	.empty[hidden] {
+		/* HTML hidden attribute alone is overridden by the display:flex above.
+		 * Force-hide here so the overlay never blocks SVG hit-testing
+		 * when a root node is in fact present. */
+		display: none !important;
 	}
 </style>
 </head>
