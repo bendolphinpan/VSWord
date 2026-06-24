@@ -11,6 +11,7 @@ export interface VSWordMindmapWebviewModel {
 	readonly root?: VSWordMindmapNode;
 	readonly nodeCount: number;
 	readonly sourceKind: 'mm';
+	readonly editable: boolean;
 }
 
 export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
@@ -59,6 +60,14 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	}
 	.spacer { flex: 1; }
 	.hint { color: var(--vscode-descriptionForeground, #666); font-size: 12px; white-space: nowrap; }
+	#status {
+		font-size: 12px;
+		color: var(--vscode-descriptionForeground, #666);
+		min-width: 86px;
+		text-align: right;
+	}
+	#status.error { color: var(--vscode-errorForeground, #e51400); }
+	#status.success { color: var(--vscode-testing-iconPassed, #2ea043); }
 	button {
 		border: 1px solid var(--vscode-button-border, transparent);
 		border-radius: 6px;
@@ -103,6 +112,19 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		font-weight: 400;
 	}
 	.topic.root .meta { fill: rgba(255,255,255,.82); }
+	.edit-box {
+		position: fixed;
+		z-index: 20;
+		min-width: 180px;
+		padding: 6px 8px;
+		border: 1px solid var(--vscode-focusBorder, #007acc);
+		border-radius: 8px;
+		background: var(--vscode-input-background, #fff);
+		color: var(--vscode-input-foreground, #222);
+		font: 13px var(--vscode-font-family, sans-serif);
+		box-shadow: 0 8px 24px rgba(0,0,0,.18);
+		outline: none;
+	}
 	.empty {
 		position: absolute;
 		inset: 0;
@@ -122,7 +144,8 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		<span class="badge">.mm</span>
 		<span class="badge" id="node-count"></span>
 		<span class="spacer"></span>
-		<span class="hint">Read-only MVP · pan/zoom · XMind-style layout</span>
+		<span class="hint" id="mode-hint">Read-only MVP · pan/zoom · XMind-style layout</span>
+		<span id="status"></span>
 		<button id="fit">Fit</button>
 	</div>
 	<svg id="mindmap-svg" aria-label="VSWord Mindmap"><g id="viewport"><g id="links"></g><g id="topics"></g></g></svg>
@@ -132,6 +155,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 (function () {
 	'use strict';
 	const model = ${data};
+	const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
+	const editable = Boolean(model.editable && vscode);
+	const pendingEdits = new Map();
+	let editingInput = null;
+	let editingNode = null;
+	let saveSeq = 0;
+	const nodeElements = new Map();
 	const svg = document.getElementById('mindmap-svg');
 	const viewport = document.getElementById('viewport');
 	const linksGroup = document.getElementById('links');
@@ -139,6 +169,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const empty = document.getElementById('empty');
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
+	document.getElementById('mode-hint').textContent = editable ? 'Double-click topic to edit · pan/zoom · XMind-style layout' : 'Read-only MVP · pan/zoom · XMind-style layout';
 
 	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
 	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
@@ -220,7 +251,8 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	}
 	function renderTopic(item, index) {
 		const node = item.node;
-		const group = makeSvg('g', { class: 'topic' + (item.depth === 0 ? ' root' : ''), transform: 'translate(' + (item.x - item.w / 2) + ',' + (item.y - item.h / 2) + ')', 'data-id': nodeKey(node, index) });
+		const key = nodeKey(node, index);
+		const group = makeSvg('g', { class: 'topic' + (item.depth === 0 ? ' root' : ''), transform: 'translate(' + (item.x - item.w / 2) + ',' + (item.y - item.h / 2) + ')', 'data-id': key });
 		const rect = makeSvg('rect', { width: item.w, height: item.h });
 		if (node.backgroundColor) { rect.setAttribute('fill', node.backgroundColor); }
 		if (node.color) { rect.setAttribute('stroke', node.color); }
@@ -233,6 +265,15 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			meta.textContent = '🏷 ' + node.icons.slice(0, 4).join(' · ');
 			group.appendChild(meta);
 		}
+		if (editable && node.id) {
+			group.style.cursor = 'text';
+			group.addEventListener('dblclick', function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				startEditing(node, item, text);
+			});
+		}
+		nodeElements.set(key, { node: node, text: text });
 		topicsGroup.appendChild(group);
 	}
 	function traverse(node, fn) {
@@ -242,6 +283,66 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			traverse(child, fn);
 		});
 	}
+	function showStatus(message, kind) {
+		const status = document.getElementById('status');
+		status.textContent = message || '';
+		status.className = kind || '';
+	}
+	function startEditing(node, item, textEl) {
+		if (!editable || !node.id) { return; }
+		finishEditing(false);
+		const rect = svg.getBoundingClientRect();
+		const screenX = rect.left + state.x + (item.x - item.w / 2 + 6) * state.zoom;
+		const screenY = rect.top + state.y + (item.y - item.h / 2 + 6) * state.zoom;
+		const input = document.createElement('input');
+		input.className = 'edit-box';
+		input.value = node.text || '';
+		input.style.left = screenX + 'px';
+		input.style.top = screenY + 'px';
+		input.style.width = Math.max(180, item.w * state.zoom - 12) + 'px';
+		document.body.appendChild(input);
+		editingInput = input;
+		editingNode = { node: node, textEl: textEl, oldText: node.text || '' };
+		input.focus();
+		input.select();
+		input.addEventListener('keydown', function (event) {
+			if (event.isComposing) { return; }
+			if (event.key === 'Enter') { event.preventDefault(); finishEditing(true); }
+			if (event.key === 'Escape') { event.preventDefault(); finishEditing(false); }
+		});
+		input.addEventListener('blur', function () { finishEditing(true); });
+	}
+	function finishEditing(commit) {
+		if (!editingInput || !editingNode) { return; }
+		const input = editingInput;
+		const current = editingNode;
+		editingInput = null;
+		editingNode = null;
+		input.remove();
+		const nextText = input.value.trim();
+		if (!commit || !nextText || nextText === current.oldText || !current.node.id) { return; }
+		current.node.text = nextText;
+		current.textEl.textContent = (current.node.folded ? '⊕ ' : '') + truncate(nextText, 24);
+		const requestId = String(++saveSeq);
+		pendingEdits.set(requestId, current);
+		showStatus('Saving…', '');
+		vscode.postMessage({ type: 'updateNodeText', requestId: requestId, nodeId: current.node.id, text: nextText });
+	}
+	window.addEventListener('message', function (event) {
+		const msg = event.data || {};
+		if (msg.type !== 'nodeTextUpdated') { return; }
+		const pending = pendingEdits.get(String(msg.requestId));
+		pendingEdits.delete(String(msg.requestId));
+		if (msg.ok) {
+			showStatus('Saved', 'success');
+			return;
+		}
+		if (pending) {
+			pending.node.text = pending.oldText;
+			pending.textEl.textContent = (pending.node.folded ? '⊕ ' : '') + truncate(pending.oldText, 24);
+		}
+		showStatus('Save failed', 'error');
+	});
 	function updateTransform() { viewport.setAttribute('transform', 'translate(' + state.x + ',' + state.y + ') scale(' + state.zoom + ')'); }
 	function fit() {
 		const box = viewport.getBBox();

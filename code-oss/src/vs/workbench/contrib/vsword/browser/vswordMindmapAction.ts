@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
 import { basename } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
@@ -15,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { parseMindmapXml, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { parseMindmapXml, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -70,6 +71,10 @@ class MindmapEditorManager extends Disposable {
 				root: document.root,
 				nodeCount: document.root ? countNodes(document.root) : 0,
 				sourceKind: 'mm',
+				editable: true,
+			}));
+			this._register(input.webview.onMessage(async (e) => {
+				await this.handleMessage(e.message, input.webview);
 			}));
 		} catch (err) {
 			this.logService.error('[VSWord Mindmap] failed to open .mm:', err);
@@ -78,7 +83,37 @@ class MindmapEditorManager extends Disposable {
 				root: undefined,
 				nodeCount: 0,
 				sourceKind: 'mm',
+				editable: false,
 			}));
+		}
+	}
+
+	private async handleMessage(msg: any, webview: any): Promise<void> {
+		if (msg?.type !== 'updateNodeText') {
+			return;
+		}
+
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		const text = String(msg.text ?? '').trim();
+		if (!nodeId || !text) {
+			webview.postMessage({ type: 'nodeTextUpdated', requestId, ok: false });
+			return;
+		}
+
+		try {
+			const content = await this.fileService.readFile(this.fileUri);
+			const oldXml = content.value.toString();
+			const newXml = updateMindmapNodeText(oldXml, nodeId, text);
+			if (newXml === oldXml) {
+				webview.postMessage({ type: 'nodeTextUpdated', requestId, ok: false });
+				return;
+			}
+			await this.fileService.writeFile(this.fileUri, VSBuffer.fromString(newXml));
+			webview.postMessage({ type: 'nodeTextUpdated', requestId, ok: true });
+		} catch (err) {
+			this.logService.error('[VSWord Mindmap] failed to update node text:', err);
+			webview.postMessage({ type: 'nodeTextUpdated', requestId, ok: false });
 		}
 	}
 }

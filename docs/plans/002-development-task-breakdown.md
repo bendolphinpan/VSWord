@@ -516,7 +516,28 @@ code-oss/src/vs/workbench/contrib/vsword/
 6. 中文 IME 测试
 7. 性能测试（1k / 10k 节点）
 
-**验收**：FR-02 §6 全部勾选
+**验收**：
+- `.mm` 文件 Explorer 右键可见 `Open as Mindmap`
+- 打开后出现主编辑区 webview tab，使用 XMind 风格左右分支布局
+- 显示节点文本、一级左右 `POSITION`、折叠态、图标、颜色 / 背景色
+- 支持 pan / zoom / Fit；本阶段不写 `.mm`
+
+---
+
+#### T-5.3 — Mindmap text edit write-back（FR-02 P0 slice）
+
+**前置**：T-5.2 通过。
+
+**目标**：先打通最小编辑闭环，保持 `.mm` 为唯一权威格式：
+- 双击节点进入文本编辑
+- Enter / blur 保存，Esc 取消，IME composition 期间不抢快捷键
+- 仅写回目标 `<node TEXT="...">`，保留 unknown XML
+- 保存成功 / 失败给用户反馈
+
+**验收**：
+- 修改一个节点文本后，`.mm` 文件只有对应 `TEXT` 属性变化
+- 富文本 / hook / icon / unknown 属性不丢
+- compile 与 `mindmapXml.test.js` 通过
 
 ---
 
