@@ -184,13 +184,14 @@ class MindmapEditorManager extends Disposable {
 		const siblingId = String(msg.siblingId ?? '');
 		const text = String(msg.text ?? '').trim() || 'New topic';
 		const position: 'left' | 'right' | undefined = msg.position === 'left' || msg.position === 'right' ? msg.position : undefined;
+		const siblingPlacement: 'before' | 'after' | undefined = msg.siblingPlacement === 'before' || msg.siblingPlacement === 'after' ? msg.siblingPlacement : undefined;
 		if (!siblingId) {
 			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
 			return;
 		}
 		await this.mutateAndRender(webview, requestId, oldXml => {
 			const newId = newMindmapNodeId();
-			return { xml: appendMindmapSibling(oldXml, siblingId, { newId, text, position }), newId };
+			return { xml: appendMindmapSibling(oldXml, siblingId, { newId, text, position, siblingPlacement }), newId };
 		});
 	}
 
@@ -440,13 +441,16 @@ class VswordOpenMindmapAction extends Action2 {
 			return;
 		}
 
-		const manager = accessor.get(IInstantiationService).createInstance(MindmapEditorManager, fileUri);
+		const instantiationService = accessor.get(IInstantiationService);
+		const explorerService = accessor.get(IExplorerService);
+		const logService = accessor.get(ILogService);
+		const manager = instantiationService.createInstance(MindmapEditorManager, fileUri);
 		await manager.openMindmap();
 
 		try {
-			await accessor.get(IExplorerService).select(fileUri, true);
+			await explorerService.select(fileUri, true);
 		} catch (err) {
-			accessor.get(ILogService).debug('[VSWord Mindmap] explorer select failed: ' + err);
+			logService.debug('[VSWord Mindmap] explorer select failed: ' + err);
 		}
 	}
 }

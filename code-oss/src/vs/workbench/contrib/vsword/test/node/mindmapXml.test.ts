@@ -8,6 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
+import { mindElixirNodeToMindmapNode, mindmapToMindElixirData } from '../../common/mindmapElixir.js';
 import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
@@ -34,6 +35,91 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(doc.root?.children[0].color, '#ff0000');
 		assert.strictEqual(doc.root?.children[0].backgroundColor, '#ffffff');
 		assert.deepStrictEqual(doc.root?.children[0].icons, ['full-1']);
+	});
+
+	test('maps .mm nodes to Mind Elixir node data while preserving FreeMind metadata', () => {
+		const xml = '<map><node ID="root" TEXT="Product"><node ID="left" TEXT="Left" POSITION="left" FOLDED="true" LINK="notes.md" COLOR="#111111" BACKGROUND_COLOR="#eeeeee"><font NAME="Arial" SIZE="16" BOLD="true" ITALIC="true"/><edge COLOR="#ff00ff" WIDTH="2" STYLE="sharp_linear"/><icon BUILTIN="idea"/></node><node ID="right" TEXT="Right" POSITION="right"/></node></map>';
+		const root = parseMindmapXml(xml).root;
+		assert.ok(root);
+
+		const data = mindmapToMindElixirData(root);
+		const left = data.nodeData.children?.[0];
+		const right = data.nodeData.children?.[1];
+
+		assert.strictEqual(data.direction, 2);
+		assert.strictEqual(data.nodeData.id, 'root');
+		assert.strictEqual(data.nodeData.topic, 'Product');
+		assert.strictEqual(left?.id, 'left');
+		assert.strictEqual(left?.topic, 'Left');
+		assert.strictEqual(left?.direction, 0);
+		assert.strictEqual(left?.expanded, false);
+		assert.strictEqual(left?.hyperLink, 'notes.md');
+		assert.deepStrictEqual(left?.style, {
+			color: '#111111',
+			background: '#eeeeee',
+			fontFamily: 'Arial',
+			fontSize: '16px',
+			fontWeight: 'bold',
+			fontStyle: 'italic'
+		});
+		assert.deepStrictEqual(left?.metadata.vsword.icons, ['idea']);
+		assert.deepStrictEqual(left?.metadata.vsword.edge, { color: '#ff00ff', width: '2', style: 'sharp_linear' });
+		assert.strictEqual(right?.direction, 1);
+	});
+
+	test('maps .mm arrowlinks to Mind Elixir arrows with source metadata', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default" COLOR="#aa00ff" STYLE="dashed" STARTINCLINATION="10;20;" ENDINCLINATION="30;40;" /></node><node ID="b" TEXT="B" /></node></map>';
+		const root = parseMindmapXml(xml).root;
+		assert.ok(root);
+
+		const data = mindmapToMindElixirData(root);
+
+		assert.strictEqual(data.arrows.length, 1);
+		assert.deepStrictEqual(data.arrows[0], {
+			id: 'al-1',
+			label: '',
+			from: 'a',
+			to: 'b',
+			style: { stroke: '#aa00ff', strokeDasharray: '6 4' },
+			metadata: {
+				vsword: {
+					version: 1,
+					source: 'freemind-arrowlink',
+					startArrow: 'None',
+					endArrow: 'Default',
+					startInclination: '10;20;',
+					endInclination: '30;40;'
+				}
+			}
+		});
+	});
+
+	test('maps Mind Elixir node data back to VSWord mindmap nodes for host-side write-back', () => {
+		const node = {
+			id: 'left',
+			topic: 'Left renamed',
+			hyperLink: 'notes.md',
+			expanded: false,
+			direction: 0 as const,
+			style: { color: '#111111', background: '#eeeeee', fontFamily: 'Arial', fontSize: '16px', fontWeight: 'bold', fontStyle: 'italic' },
+			children: [{ id: 'child', topic: 'Child', metadata: { vsword: { version: 1 as const, source: 'freemind-mm' as const, folded: false, icons: [], arrowlinks: [] } } }],
+			metadata: { vsword: { version: 1 as const, source: 'freemind-mm' as const, side: 'left' as const, folded: true, edge: { color: '#ff00ff', width: '2', style: 'sharp_linear' }, icons: ['idea'], arrowlinks: [] } }
+		};
+
+		assert.deepStrictEqual(mindElixirNodeToMindmapNode(node), {
+			id: 'left',
+			text: 'Left renamed',
+			side: 'left',
+			folded: true,
+			link: 'notes.md',
+			color: '#111111',
+			backgroundColor: '#eeeeee',
+			font: { name: 'Arial', size: 16, bold: true, italic: true },
+			edge: { color: '#ff00ff', width: '2', style: 'sharp_linear' },
+			arrowlinks: [],
+			icons: ['idea'],
+			children: [{ id: 'child', text: 'Child', folded: false, arrowlinks: [], icons: [], children: [] }]
+		});
 	});
 
 	test('serializes unchanged XML byte-for-byte for unknown content preservation', () => {
@@ -89,6 +175,14 @@ suite('VSWord Mindmap XML', () => {
 		const updated = appendMindmapSibling(xml, 'a', { newId: 'a2', text: 'A2', position: 'right' });
 
 		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node><node ID="a2" TEXT="A2" POSITION="right" /><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('appendMindmapSibling can insert before the sibling element for Mind Elixir before-sibling operations', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = appendMindmapSibling(xml, 'b', { newId: 'x', text: 'X', siblingPlacement: 'before' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/><node ID="x" TEXT="X" /><node ID="b" TEXT="B"/></node></map>');
 	});
 
 	test('appendMindmapSibling refuses to insert next to root', () => {

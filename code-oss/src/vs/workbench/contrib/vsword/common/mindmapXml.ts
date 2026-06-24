@@ -193,6 +193,7 @@ export interface NewMindmapChildOptions {
 	readonly newId: string;
 	readonly text: string;
 	readonly position?: 'left' | 'right';
+	readonly siblingPlacement?: 'before' | 'after';
 }
 
 /**
@@ -257,7 +258,7 @@ export function appendMindmapSibling(xml: string, siblingId: string, options: Ne
 		if (endIndex === -1) {
 			return xml;
 		}
-		const insertOffset = tags[endIndex].end;
+		const insertOffset = options.siblingPlacement === 'before' ? tag.start : tags[endIndex].end;
 		const childXml = renderNewNodeXml(options);
 		return xml.slice(0, insertOffset) + childXml + xml.slice(insertOffset);
 	}
