@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, setMindmapNodeFolded, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -105,6 +105,9 @@ class MindmapEditorManager extends Disposable {
 			case 'removeNode':
 				await this.handleRemoveNode(msg, webview);
 				return;
+			case 'toggleFolded':
+				await this.handleToggleFolded(msg, webview);
+				return;
 		}
 	}
 
@@ -170,6 +173,17 @@ class MindmapEditorManager extends Disposable {
 			return;
 		}
 		await this.mutateAndRender(webview, requestId, oldXml => ({ xml: removeMindmapNode(oldXml, nodeId) }));
+	}
+
+	private async handleToggleFolded(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		const folded = Boolean(msg.folded);
+		if (!nodeId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({ xml: setMindmapNodeFolded(oldXml, nodeId, folded), newId: nodeId }));
 	}
 
 	private async mutateAndRender(webview: any, requestId: string, mutate: (xml: string) => { xml: string; newId?: string }): Promise<void> {

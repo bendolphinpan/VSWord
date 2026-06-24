@@ -558,6 +558,24 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-5.5 — Mindmap fold/unfold persistence
+
+**目标**：折叠态从纯 webview 状态升级为 `.mm` 持久化，与 XMind 行为对齐：
+- 每个有子节点的 topic 右/左外侧出现 fold handle（`+`/`−`）
+- `Space` 快捷键 = 折叠/展开当前选中节点
+- writer 侧 `setMindmapNodeFolded` 仅插入/更新/删除 `FOLDED="true"`：
+  - 不在则插入到最后一个属性之后（不重复 self-closing 标签里已有的空白）
+  - 已在则按值改写或整段连带前导空白删除
+  - 其余属性、hook / cloud / richcontent / 子节点全部保留
+- host 端复用 `mutateAndRender`：保存后 `setHtml` 重渲染并把当前节点作为初始选中，state 与文件双向一致
+
+**验收**：
+- 18/18 单测通过（含 fold/unfold round-trip、self-closing、unknown XML 保留、状态一致 no-op）
+- compile 0 errors
+- 手动 smoke：点击 handle 或按 Space → `.mm` 文件 `FOLDED` 属性增/删；其他属性不丢
+
+---
+
 ## 3. 主代理验收流程
 
 每个任务完成后，fullstack-developer 提交报告。主代理执行：

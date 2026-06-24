@@ -118,6 +118,21 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		stroke-width: 2.5;
 		filter: drop-shadow(0 0 4px rgba(0, 127, 212, .35));
 	}
+	.fold-handle {
+		cursor: pointer;
+		fill: var(--vscode-editorWidget-background, #2d2d30);
+		stroke: var(--vscode-focusBorder, #007fd4);
+		stroke-width: 1.2;
+	}
+	.fold-handle:hover { fill: var(--vscode-list-hoverBackground, #3a3d41); }
+	.fold-handle-label {
+		pointer-events: none;
+		text-anchor: middle;
+		dominant-baseline: central;
+		font-size: 11px;
+		font-weight: 600;
+		fill: var(--vscode-foreground, #ddd);
+	}
 	.edit-box {
 		position: fixed;
 		z-index: 20;
@@ -178,7 +193,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const empty = document.getElementById('empty');
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Tab = child · Enter = sibling · Delete = remove · Double-click = edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
+	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
 
 	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
 	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
@@ -289,6 +304,26 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		}
 		nodeElements.set(key, { node: node, text: text, group: group, item: item });
 		topicsGroup.appendChild(group);
+
+		const hasChildren = Array.isArray(node.children) && node.children.length > 0;
+		if (hasChildren && node.id) {
+			const handleSide = item.side === 'left' ? 'left' : (item.side === 'root' ? 'right' : item.side);
+			const handleX = handleSide === 'left' ? item.x - item.w / 2 - 14 : item.x + item.w / 2 + 14;
+			const handle = makeSvg('g', { class: 'fold-handle-group', transform: 'translate(' + handleX + ',' + item.y + ')' });
+			const circle = makeSvg('circle', { class: 'fold-handle', r: 9, cx: 0, cy: 0 });
+			const label = makeSvg('text', { class: 'fold-handle-label', x: 0, y: 0 });
+			label.textContent = node.folded ? '+' : '−';
+			handle.appendChild(circle);
+			handle.appendChild(label);
+			handle.addEventListener('mousedown', function (event) {
+				if (event.button !== 0) { return; }
+				event.preventDefault();
+				event.stopPropagation();
+				selectNode(node.id);
+				toggleFold(node);
+			});
+			topicsGroup.appendChild(handle);
+		}
 	}
 	function traverse(node, fn) {
 		const children = Array.isArray(node.children) && !node.folded ? node.children : [];
@@ -355,6 +390,18 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			return;
 		}
 		dispatchStructure({ type: 'removeNode', nodeId: entry.node.id }, false);
+	}
+	function toggleFold(node) {
+		if (!node || !node.id) { return; }
+		if (!Array.isArray(node.children) || node.children.length === 0) {
+			showStatus('No children to fold', 'error');
+			return;
+		}
+		dispatchStructure({ type: 'toggleFolded', nodeId: node.id, folded: !node.folded }, true);
+	}
+	function toggleFoldSelected() {
+		const entry = getSelectedEntry();
+		if (entry) { toggleFold(entry.node); }
 	}
 	function showStatus(message, kind) {
 		const status = document.getElementById('status');
@@ -453,6 +500,11 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			if (event.key === 'Delete' || event.key === 'Backspace') {
 				event.preventDefault();
 				requestRemove();
+				return;
+			}
+			if (event.key === ' ' || event.code === 'Space') {
+				event.preventDefault();
+				toggleFoldSelected();
 				return;
 			}
 		});

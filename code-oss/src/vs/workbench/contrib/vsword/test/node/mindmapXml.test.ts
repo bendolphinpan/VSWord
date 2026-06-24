@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, serializeMindmapXml, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, serializeMindmapXml, setMindmapNodeFolded, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -115,5 +115,42 @@ suite('VSWord Mindmap XML', () => {
 		const updated = removeMindmapNode(xml, 'a');
 
 		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('setMindmapNodeFolded inserts FOLDED="true" on an unfolded node', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node></node></map>';
+
+		const updated = setMindmapNodeFolded(xml, 'a', true);
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" FOLDED="true"><node ID="a1" TEXT="A1"/></node></node></map>');
+	});
+
+	test('setMindmapNodeFolded inserts FOLDED on a self-closing node', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" /></node></map>';
+
+		const updated = setMindmapNodeFolded(xml, 'a', true);
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" FOLDED="true" /></node></map>');
+	});
+
+	test('setMindmapNodeFolded removes FOLDED when unfolding', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" FOLDED="true"><node ID="a1" TEXT="A1"/></node></node></map>';
+
+		const updated = setMindmapNodeFolded(xml, 'a', false);
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node></node></map>');
+	});
+
+	test('setMindmapNodeFolded is a no-op when state already matches', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/></node></map>';
+		assert.strictEqual(setMindmapNodeFolded(xml, 'a', false), xml);
+	});
+
+	test('setMindmapNodeFolded preserves unknown attributes and unknown children', () => {
+		const xml = '<map><node ID="root" TEXT="Root" CREATED="1"><node ID="a" TEXT="A" COLOR="#abc"><hook NAME="MapStyle"/><node ID="a1" TEXT="A1"/></node></node></map>';
+
+		const updated = setMindmapNodeFolded(xml, 'a', true);
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root" CREATED="1"><node ID="a" TEXT="A" COLOR="#abc" FOLDED="true"><hook NAME="MapStyle"/><node ID="a1" TEXT="A1"/></node></node></map>');
 	});
 });

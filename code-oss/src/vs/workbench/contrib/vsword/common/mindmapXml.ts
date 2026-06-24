@@ -222,6 +222,60 @@ export function removeMindmapNode(xml: string, nodeId: string): string {
 	return xml;
 }
 
+/**
+ * Set or clear the `FOLDED="true"` attribute on the `<node ID="...">` with the given id.
+ * Preserves the surrounding XML byte-for-byte; only inserts/updates/removes the FOLDED attr.
+ *
+ * - When `folded` is true and the attr is absent: insert `FOLDED="true"` at end of attrs.
+ * - When `folded` is true and the attr exists: rewrite its value to `true`.
+ * - When `folded` is false and the attr exists: remove the whole ` FOLDED="..."` slice.
+ * - When `folded` is false and the attr is absent: no-op.
+ */
+export function setMindmapNodeFolded(xml: string, nodeId: string, folded: boolean): string {
+	for (const tag of scanTags(xml)) {
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+
+		const foldedAttr = tag.attributes.find(attribute => attribute.name === 'FOLDED');
+		if (folded) {
+			if (foldedAttr) {
+				return xml.slice(0, foldedAttr.valueStart) + 'true' + xml.slice(foldedAttr.valueEnd);
+			}
+			// Insert ` FOLDED="true"` directly after the last existing attribute value's closing quote,
+			// so we don't double the whitespace that already pads `<node ... />` self-closing tags.
+			let insertAt: number;
+			if (tag.attributes.length > 0) {
+				const last = tag.attributes[tag.attributes.length - 1];
+				insertAt = last.valueEnd + 1; // past closing quote
+			} else {
+				insertAt = tag.start + 1 + tag.name.length; // right after `<node`
+			}
+			return xml.slice(0, insertAt) + ` FOLDED="true"` + xml.slice(insertAt);
+		}
+
+		if (!foldedAttr) {
+			return xml;
+		}
+		// Remove ` FOLDED="..."` (including leading whitespace) by finding the attr name token.
+		const nameStart = xml.lastIndexOf('FOLDED', foldedAttr.valueStart);
+		if (nameStart < 0) {
+			return xml;
+		}
+		// Capture preceding whitespace so we don't leave a double space.
+		let removeStart = nameStart;
+		while (removeStart > 0 && /\s/.test(xml.charAt(removeStart - 1))) {
+			removeStart--;
+		}
+		const removeEnd = foldedAttr.valueEnd + 1; // include closing quote
+		return xml.slice(0, removeStart) + xml.slice(removeEnd);
+	}
+	return xml;
+}
+
 function findMatchingCloseIndex(tags: XmlTag[], openIndex: number): number {
 	let depth = 0;
 	for (let j = openIndex + 1; j < tags.length; j++) {
