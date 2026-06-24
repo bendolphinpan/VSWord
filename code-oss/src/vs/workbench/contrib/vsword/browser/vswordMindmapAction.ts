@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, MindmapEdgePatch, MindmapFontPatch, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -122,6 +122,15 @@ class MindmapEditorManager extends Disposable {
 				return;
 			case 'setEdge':
 				await this.handleSetEdge(msg, webview);
+				return;
+			case 'createArrowlink':
+				await this.handleCreateArrowlink(msg, webview);
+				return;
+			case 'updateArrowlink':
+				await this.handleUpdateArrowlink(msg, webview);
+				return;
+			case 'removeArrowlink':
+				await this.handleRemoveArrowlink(msg, webview);
 				return;
 		}
 	}
@@ -305,6 +314,75 @@ class MindmapEditorManager extends Disposable {
 		}));
 	}
 
+	private async handleCreateArrowlink(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const sourceId = String(msg.sourceId ?? '');
+		const destination = String(msg.destination ?? '');
+		if (!sourceId || !destination || sourceId === destination) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const options: NewMindmapArrowlinkOptions = { newId: newArrowlinkId(), destination };
+		if (msg && typeof msg === 'object') {
+			if (msg.startArrow === 'None' || msg.startArrow === 'Default') { (options as any).startArrow = msg.startArrow; }
+			if (msg.endArrow === 'None' || msg.endArrow === 'Default') { (options as any).endArrow = msg.endArrow; }
+			if (typeof msg.color === 'string') {
+				const color = parseNullableColor(msg.color);
+				if (color !== null && color !== undefined) { (options as any).color = color; }
+			}
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: appendMindmapArrowlink(oldXml, sourceId, options),
+			newId: sourceId,
+		}));
+	}
+
+	private async handleUpdateArrowlink(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const arrowlinkId = String(msg.arrowlinkId ?? '');
+		if (!arrowlinkId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const patch: MindmapArrowlinkPatch = {};
+		if (msg && typeof msg === 'object') {
+			if ('destination' in msg && typeof msg.destination === 'string' && msg.destination) {
+				(patch as any).destination = msg.destination;
+			}
+			if ('startArrow' in msg) {
+				if (msg.startArrow === null) { (patch as any).startArrow = null; }
+				else if (msg.startArrow === 'None' || msg.startArrow === 'Default') { (patch as any).startArrow = msg.startArrow; }
+			}
+			if ('endArrow' in msg) {
+				if (msg.endArrow === null) { (patch as any).endArrow = null; }
+				else if (msg.endArrow === 'None' || msg.endArrow === 'Default') { (patch as any).endArrow = msg.endArrow; }
+			}
+			if ('color' in msg) {
+				const color = parseNullableColor(msg.color);
+				if (color !== undefined) { (patch as any).color = color; }
+			}
+			if ('style' in msg) {
+				if (msg.style === null) { (patch as any).style = null; }
+				else if (typeof msg.style === 'string' && msg.style) { (patch as any).style = msg.style; }
+			}
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: updateMindmapArrowlink(oldXml, arrowlinkId, patch),
+		}));
+	}
+
+	private async handleRemoveArrowlink(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const arrowlinkId = String(msg.arrowlinkId ?? '');
+		if (!arrowlinkId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: removeMindmapArrowlink(oldXml, arrowlinkId),
+		}));
+	}
+
 	private async mutateAndRender(webview: any, requestId: string, mutate: (xml: string) => { xml: string; newId?: string }): Promise<void> {
 		try {
 			const content = await this.fileService.readFile(this.fileUri);
@@ -396,6 +474,11 @@ function countNodes(root: VSWordMindmapNode): number {
 function newMindmapNodeId(): string {
 	const randomPart = Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
 	return 'vsword-' + Date.now().toString(36) + '-' + randomPart;
+}
+
+function newArrowlinkId(): string {
+	const randomPart = Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+	return 'vsword-al-' + Date.now().toString(36) + '-' + randomPart;
 }
 
 function parseNullableColor(raw: unknown): string | null {

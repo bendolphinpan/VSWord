@@ -87,6 +87,42 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		stroke-linecap: round;
 		opacity: .72;
 	}
+	.arrowlink {
+		fill: none;
+		stroke: var(--vscode-charts-purple, #b46ce0);
+		stroke-width: 1.6;
+		stroke-linecap: round;
+		opacity: 0.85;
+		pointer-events: none;
+	}
+	.arrowlink.selected { stroke-width: 2.6; opacity: 1; }
+	.arrowlink-hit {
+		fill: none;
+		stroke: transparent;
+		stroke-width: 14;
+		cursor: pointer;
+		pointer-events: stroke;
+	}
+	.al-drag-preview {
+		fill: none;
+		stroke: var(--vscode-charts-purple, #b46ce0);
+		stroke-width: 1.8;
+		stroke-dasharray: 6 4;
+		opacity: 0.7;
+		pointer-events: none;
+	}
+	.al-endpoint {
+		fill: var(--vscode-editorWidget-background, #fff);
+		stroke: var(--vscode-charts-purple, #b46ce0);
+		stroke-width: 2;
+		cursor: grab;
+	}
+	.al-endpoint:hover { fill: var(--vscode-charts-purple, #b46ce0); }
+	.topic.al-target-hover rect {
+		stroke: var(--vscode-charts-purple, #b46ce0) !important;
+		stroke-width: 3 !important;
+		filter: drop-shadow(0 0 6px rgba(180, 108, 224, .55)) !important;
+	}
 	.topic rect {
 		fill: var(--vscode-editorWidget-background, #fff);
 		stroke: var(--vscode-editorWidget-border, #b8c2cc);
@@ -280,7 +316,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		<span id="status"></span>
 		<button id="fit">Fit</button>
 	</div>
-	<svg id="mindmap-svg" aria-label="VSWord Mindmap"><g id="viewport"><g id="links"></g><g id="topics"></g></g></svg>
+	<svg id="mindmap-svg" aria-label="VSWord Mindmap"><defs><marker id="al-arrow-end" viewBox="0 0 10 10" refX="9" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--vscode-charts-purple, #b46ce0)"/></marker><marker id="al-arrow-start" viewBox="0 0 10 10" refX="1" refY="5" markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="10" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="var(--vscode-charts-purple, #b46ce0)"/></marker></defs><g id="viewport"><g id="links"></g><g id="arrowlinks"></g><g id="topics"></g><g id="arrowlink-overlay"></g></g></svg>
 	<div id="empty" class="empty" hidden>No mindmap root node found in this .mm file.</div>
 </div>
 <script nonce="vsword-mindmap">
@@ -297,14 +333,18 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	let selectedNodeId = model.selectedNodeId || null;
 	const nodeElements = new Map();
 	const nodeParents = new Map();
+	const allNodesById = new Map();
+	let selectedArrowlinkKey = null;
 	const svg = document.getElementById('mindmap-svg');
 	const viewport = document.getElementById('viewport');
 	const linksGroup = document.getElementById('links');
+	const arrowlinksGroup = document.getElementById('arrowlinks');
+	const arrowlinkOverlay = document.getElementById('arrowlink-overlay');
 	const topicsGroup = document.getElementById('topics');
 	const empty = document.getElementById('empty');
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · i=icon · s=style · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
+	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · i=icon · s=style · a=arrowlink · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
 
 	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
 	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
@@ -408,6 +448,249 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		}
 		linksGroup.appendChild(makeSvg('path', attrs));
 	}
+	function collectAllNodes(node) {
+		if (!node) { return; }
+		if (node.id) { allNodesById.set(node.id, node); }
+		const children = Array.isArray(node.children) ? node.children : [];
+		for (const child of children) { collectAllNodes(child); }
+	}
+	function isNodeVisible(nodeId) { return nodeElements.has(nodeId); }
+	function findVisibleAncestorId(nodeId) {
+		let cur = nodeId;
+		const guard = new Set();
+		while (cur && !guard.has(cur)) {
+			if (isNodeVisible(cur)) { return cur; }
+			guard.add(cur);
+			const parent = nodeParents.get(cur);
+			if (!parent || !parent.id) { break; }
+			cur = parent.id;
+		}
+		// Fallback: ascend via full-tree parent map by scanning allNodesById children.
+		const fullParents = new Map();
+		allNodesById.forEach(function (n) {
+			(n.children || []).forEach(function (c) { if (c.id) { fullParents.set(c.id, n.id); } });
+		});
+		cur = fullParents.get(nodeId);
+		const guard2 = new Set();
+		while (cur && !guard2.has(cur)) {
+			if (isNodeVisible(cur)) { return cur; }
+			guard2.add(cur);
+			cur = fullParents.get(cur);
+		}
+		return null;
+	}
+	function placedById(id) {
+		const entry = nodeElements.get(id);
+		return entry ? entry.item : null;
+	}
+	function anchorOnRect(item, towardX) {
+		// Anchor on the left or right edge of the rect closest to target.
+		const leftX = item.x - item.w / 2;
+		const rightX = item.x + item.w / 2;
+		const useRight = towardX >= item.x;
+		return { x: useRight ? rightX : leftX, y: item.y, side: useRight ? 'right' : 'left' };
+	}
+	function arrowlinkPathD(srcItem, dstItem) {
+		const sa = anchorOnRect(srcItem, dstItem.x);
+		const da = anchorOnRect(dstItem, srcItem.x);
+		const dx = da.x - sa.x;
+		const dy = da.y - sa.y;
+		const dist = Math.max(40, Math.hypot(dx, dy));
+		const bulge = Math.min(140, dist * 0.35);
+		const cx = (sa.x + da.x) / 2;
+		const cy = (sa.y + da.y) / 2 - bulge;
+		return { d: 'M ' + sa.x + ' ' + sa.y + ' Q ' + cx + ' ' + cy + ', ' + da.x + ' ' + da.y, sa: sa, da: da };
+	}
+	function arrowlinkKey(sourceId, arrowlinkId) { return sourceId + '|' + arrowlinkId; }
+	function renderArrowlinks() {
+		while (arrowlinksGroup.firstChild) { arrowlinksGroup.removeChild(arrowlinksGroup.firstChild); }
+		allNodesById.forEach(function (node) {
+			if (!node.id) { return; }
+			const arrowlinks = Array.isArray(node.arrowlinks) ? node.arrowlinks : [];
+			if (!arrowlinks.length) { return; }
+			const renderSrcId = isNodeVisible(node.id) ? node.id : findVisibleAncestorId(node.id);
+			if (!renderSrcId) { return; }
+			const srcItem = placedById(renderSrcId);
+			if (!srcItem) { return; }
+			arrowlinks.forEach(function (al) {
+				if (!al || !al.destination) { return; }
+				const renderDstId = isNodeVisible(al.destination) ? al.destination : findVisibleAncestorId(al.destination);
+				if (!renderDstId) { return; }
+				const dstItem = placedById(renderDstId);
+				if (!dstItem) { return; }
+				if (renderSrcId === renderDstId) { return; }
+				const geom = arrowlinkPathD(srcItem, dstItem);
+				const key = arrowlinkKey(node.id, al.id || ('al-' + (al.destination || 'x')));
+				const attrs = { class: 'arrowlink' + (selectedArrowlinkKey === key ? ' selected' : ''), d: geom.d, 'data-al-key': key };
+				if (al.color) { attrs.stroke = al.color; }
+				const startArrow = String(al.startArrow || '').toLowerCase();
+				const endArrow = String(al.endArrow || 'default').toLowerCase();
+				if (endArrow !== 'none') { attrs['marker-end'] = 'url(#al-arrow-end)'; }
+				if (startArrow && startArrow !== 'none') { attrs['marker-start'] = 'url(#al-arrow-start)'; }
+				const path = makeSvg('path', attrs);
+				const hit = makeSvg('path', { class: 'arrowlink-hit', d: geom.d, 'data-al-key': key });
+				arrowlinksGroup.appendChild(path);
+				arrowlinksGroup.appendChild(hit);
+				if (editable) {
+					hit.addEventListener('mousedown', function (event) {
+						if (event.button !== 0) { return; }
+						event.preventDefault();
+						event.stopPropagation();
+						selectArrowlink(key);
+					});
+				}
+				if (selectedArrowlinkKey === key && editable) {
+					const endpoint = makeSvg('circle', { class: 'al-endpoint', cx: geom.da.x, cy: geom.da.y, r: 6, 'data-al-key': key });
+					endpoint.addEventListener('mousedown', function (event) {
+						if (event.button !== 0) { return; }
+						event.preventDefault();
+						event.stopPropagation();
+						beginEndpointDrag(node.id, al.id, geom.sa, event);
+					});
+					arrowlinksGroup.appendChild(endpoint);
+				}
+			});
+		});
+	}
+	function selectArrowlink(key) {
+		selectedArrowlinkKey = key;
+		selectedNodeId = null;
+		nodeElements.forEach(function (entry) { entry.group.classList.remove('selected'); });
+		renderArrowlinks();
+	}
+	function clearArrowlinkSelection() {
+		if (selectedArrowlinkKey) {
+			selectedArrowlinkKey = null;
+			renderArrowlinks();
+		}
+	}
+	function parseArrowlinkKey(key) {
+		if (!key) { return null; }
+		const idx = key.indexOf('|');
+		if (idx < 0) { return null; }
+		return { sourceId: key.slice(0, idx), arrowlinkId: key.slice(idx + 1) };
+	}
+	function deleteSelectedArrowlink() {
+		const parts = parseArrowlinkKey(selectedArrowlinkKey);
+		if (!parts) { return false; }
+		dispatchStructure({ type: 'removeArrowlink', sourceId: parts.sourceId, arrowlinkId: parts.arrowlinkId }, false);
+		return true;
+	}
+	function clientToViewport(clientX, clientY) {
+		const rect = svg.getBoundingClientRect();
+		return {
+			x: (clientX - rect.left - state.x) / state.zoom,
+			y: (clientY - rect.top - state.y) / state.zoom
+		};
+	}
+	function topicIdAtClient(clientX, clientY) {
+		const el = document.elementFromPoint(clientX, clientY);
+		let cur = el;
+		while (cur && cur !== document.body) {
+			if (cur.classList && cur.classList.contains('topic') && cur.getAttribute('data-id')) {
+				const id = cur.getAttribute('data-id');
+				// data-id may be the synthesised 'node-N' for nodes without id; skip those.
+				if (id && id.indexOf('node-') !== 0) { return id; }
+				return null;
+			}
+			cur = cur.parentNode;
+		}
+		return null;
+	}
+	function clearTargetHover() {
+		nodeElements.forEach(function (entry) { entry.group.classList.remove('al-target-hover'); });
+	}
+	function setTargetHover(id) {
+		clearTargetHover();
+		if (!id) { return; }
+		const entry = nodeElements.get(id);
+		if (entry) { entry.group.classList.add('al-target-hover'); }
+	}
+	let activeDrag = null; // { mode: 'create'|'endpoint', sourceId, arrowlinkId?, startVp, previewEl, onMove, onUp, onKey }
+	function endDrag() {
+		if (!activeDrag) { return; }
+		if (activeDrag.previewEl && activeDrag.previewEl.parentNode) { activeDrag.previewEl.parentNode.removeChild(activeDrag.previewEl); }
+		window.removeEventListener('mousemove', activeDrag.onMove, true);
+		window.removeEventListener('mouseup', activeDrag.onUp, true);
+		window.removeEventListener('keydown', activeDrag.onKey, true);
+		clearTargetHover();
+		activeDrag = null;
+	}
+	function beginCreateDrag(sourceId, originEvent) {
+		if (!editable || !sourceId) { return; }
+		const srcItem = placedById(sourceId);
+		if (!srcItem) { return; }
+		endDrag();
+		const startVp = { x: srcItem.x, y: srcItem.y };
+		const preview = makeSvg('path', { class: 'al-drag-preview', d: 'M ' + startVp.x + ' ' + startVp.y + ' L ' + startVp.x + ' ' + startVp.y });
+		arrowlinkOverlay.appendChild(preview);
+		const drag = { mode: 'create', sourceId: sourceId, startVp: startVp, previewEl: preview };
+		drag.onMove = function (ev) {
+			const vp = clientToViewport(ev.clientX, ev.clientY);
+			preview.setAttribute('d', 'M ' + startVp.x + ' ' + startVp.y + ' L ' + vp.x + ' ' + vp.y);
+			const id = topicIdAtClient(ev.clientX, ev.clientY);
+			setTargetHover(id && id !== sourceId ? id : null);
+		};
+		drag.onUp = function (ev) {
+			const targetId = topicIdAtClient(ev.clientX, ev.clientY);
+			endDrag();
+			if (targetId && targetId !== sourceId) {
+				dispatchStructure({ type: 'createArrowlink', sourceId: sourceId, destination: targetId, endArrow: 'Default' }, false);
+			} else {
+				showStatus('Arrowlink cancelled', '');
+			}
+		};
+		drag.onKey = function (ev) {
+			if (ev.key === 'Escape') { ev.preventDefault(); endDrag(); showStatus('Arrowlink cancelled', ''); }
+		};
+		window.addEventListener('mousemove', drag.onMove, true);
+		window.addEventListener('mouseup', drag.onUp, true);
+		window.addEventListener('keydown', drag.onKey, true);
+		activeDrag = drag;
+		if (originEvent) {
+			// Seed preview to the current cursor position.
+			const vp = clientToViewport(originEvent.clientX, originEvent.clientY);
+			preview.setAttribute('d', 'M ' + startVp.x + ' ' + startVp.y + ' L ' + vp.x + ' ' + vp.y);
+		}
+		showStatus('Drag to a topic… (Esc to cancel)', '');
+	}
+	function beginEndpointDrag(sourceId, arrowlinkId, anchorVp, originEvent) {
+		if (!editable || !sourceId || !arrowlinkId) { return; }
+		endDrag();
+		const preview = makeSvg('path', { class: 'al-drag-preview', d: 'M ' + anchorVp.x + ' ' + anchorVp.y + ' L ' + anchorVp.x + ' ' + anchorVp.y });
+		arrowlinkOverlay.appendChild(preview);
+		const drag = { mode: 'endpoint', sourceId: sourceId, arrowlinkId: arrowlinkId, startVp: anchorVp, previewEl: preview };
+		drag.onMove = function (ev) {
+			const vp = clientToViewport(ev.clientX, ev.clientY);
+			preview.setAttribute('d', 'M ' + anchorVp.x + ' ' + anchorVp.y + ' L ' + vp.x + ' ' + vp.y);
+			const id = topicIdAtClient(ev.clientX, ev.clientY);
+			setTargetHover(id && id !== sourceId ? id : null);
+		};
+		drag.onUp = function (ev) {
+			const targetId = topicIdAtClient(ev.clientX, ev.clientY);
+			endDrag();
+			if (targetId && targetId !== sourceId) {
+				dispatchStructure({ type: 'setArrowlinkEndpoint', sourceId: sourceId, arrowlinkId: arrowlinkId, destination: targetId }, false);
+			}
+		};
+		drag.onKey = function (ev) {
+			if (ev.key === 'Escape') { ev.preventDefault(); endDrag(); }
+		};
+		window.addEventListener('mousemove', drag.onMove, true);
+		window.addEventListener('mouseup', drag.onUp, true);
+		window.addEventListener('keydown', drag.onKey, true);
+		activeDrag = drag;
+		if (originEvent) {
+			const vp = clientToViewport(originEvent.clientX, originEvent.clientY);
+			preview.setAttribute('d', 'M ' + anchorVp.x + ' ' + anchorVp.y + ' L ' + vp.x + ' ' + vp.y);
+		}
+		showStatus('Drag to redirect destination… (Esc to cancel)', '');
+	}
+	function startArrowlinkCreateFromSelection() {
+		const entry = getSelectedEntry();
+		if (!entry || !entry.node.id) { showStatus('Select a source topic first', 'error'); return; }
+		beginCreateDrag(entry.node.id, null);
+	}
 	function renderTopic(item, index) {
 		const node = item.node;
 		const key = nodeKey(node, index);
@@ -478,6 +761,10 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	function selectNode(id) {
 		if (!id) { return; }
 		selectedNodeId = id;
+		if (selectedArrowlinkKey) {
+			selectedArrowlinkKey = null;
+			renderArrowlinks();
+		}
 		nodeElements.forEach(function (entry) {
 			if (!entry.node.id) { return; }
 			entry.group.classList.toggle('selected', entry.node.id === id);
@@ -917,7 +1204,16 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			}
 			if (event.key === 'Delete' || event.key === 'Backspace') {
 				event.preventDefault();
-				requestRemove();
+				if (selectedArrowlinkKey) {
+					deleteSelectedArrowlink();
+				} else {
+					requestRemove();
+				}
+				return;
+			}
+			if (event.key === 'a' || event.key === 'A') {
+				event.preventDefault();
+				startArrowlinkCreateFromSelection();
 				return;
 			}
 			if (event.key === ' ' || event.code === 'Space') {
@@ -938,6 +1234,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			if (event.key === 'Escape') {
 				closeIconPicker();
 				closeStylePanel();
+				clearArrowlinkSelection();
 				return;
 			}
 		});
@@ -954,8 +1251,10 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		updateTransform();
 	}
 	layoutTree(model.root);
+	collectAllNodes(model.root);
 	traverse(model.root, renderLink);
 	placed.forEach(renderTopic);
+	renderArrowlinks();
 	if (!nodeParents.size && model.root) {
 		// Ensure parent map built even when traverse skipped folded subtrees.
 		(function walk(parent) {

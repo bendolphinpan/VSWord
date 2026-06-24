@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -354,5 +354,95 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(a?.edge?.color, '#abcdef');
 		assert.strictEqual(a?.edge?.width, 'thin');
 		assert.strictEqual(a?.edge?.style, 'bezier');
+	});
+
+	test('appendMindmapArrowlink inserts before the source </node> with default ENDARROW', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"></node><node ID="b" TEXT="B"></node></node></map>';
+
+		const updated = appendMindmapArrowlink(xml, 'a', { newId: 'al-1', destination: 'b' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default"/></node><node ID="b" TEXT="B"></node></node></map>');
+	});
+
+	test('appendMindmapArrowlink expands self-closing source nodes', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"/><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = appendMindmapArrowlink(xml, 'a', { newId: 'al-1', destination: 'b', endArrow: 'Default', color: '#ff0000' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default" COLOR="#ff0000"/></node><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('appendMindmapArrowlink leaves the source xml unchanged when the source node is missing', () => {
+		const xml = '<map><node ID="root" TEXT="Root"></node></map>';
+
+		const updated = appendMindmapArrowlink(xml, 'ghost', { newId: 'al-1', destination: 'root' });
+
+		assert.strictEqual(updated, xml);
+	});
+
+	test('appendMindmapArrowlink puts the arrow after existing edge/font/nested children', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font BOLD="true"/><edge COLOR="#111111"/><node ID="a1" TEXT="A1"/></node><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = appendMindmapArrowlink(xml, 'a', { newId: 'al-1', destination: 'b' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><font BOLD="true"/><edge COLOR="#111111"/><node ID="a1" TEXT="A1"/><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default"/></node><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('updateMindmapArrowlink rewrites the matching tag and preserves attribute order', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default" COLOR="#111111"/></node><node ID="b" TEXT="B"/></node></map>';
+
+		const updated = updateMindmapArrowlink(xml, 'al-1', { color: '#22ff22', endArrow: null });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" COLOR="#22ff22"/></node><node ID="b" TEXT="B"/></node></map>');
+	});
+
+	test('updateMindmapArrowlink retargets the destination', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default"/></node><node ID="b" TEXT="B"/><node ID="c" TEXT="C"/></node></map>';
+
+		const updated = updateMindmapArrowlink(xml, 'al-1', { destination: 'c' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="c" STARTARROW="None" ENDARROW="Default"/></node><node ID="b" TEXT="B"/><node ID="c" TEXT="C"/></node></map>');
+	});
+
+	test('updateMindmapArrowlink rejects arrow values outside the FreeMind whitelist', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default"/></node></node></map>';
+
+		const updated = updateMindmapArrowlink(xml, 'al-1', { endArrow: 'Triangle' as any });
+
+		assert.strictEqual(updated, xml);
+	});
+
+	test('removeMindmapArrowlink drops the matching tag and leaves siblings intact', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default"/><arrowlink ID="al-2" DESTINATION="c" STARTARROW="None" ENDARROW="Default"/></node></node></map>';
+
+		const updated = removeMindmapArrowlink(xml, 'al-1');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-2" DESTINATION="c" STARTARROW="None" ENDARROW="Default"/></node></node></map>');
+	});
+
+	test('removeMindmapArrowlink is a no-op when the arrowlink does not exist', () => {
+		const xml = '<map><node ID="root" TEXT="Root"></node></map>';
+
+		const updated = removeMindmapArrowlink(xml, 'al-ghost');
+
+		assert.strictEqual(updated, xml);
+	});
+
+	test('parseMindmapXml exposes arrowlinks on the source node', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><arrowlink ID="al-1" DESTINATION="b" STARTARROW="None" ENDARROW="Default" COLOR="#abcdef"/><arrowlink ID="al-2" DESTINATION="c"/></node><node ID="b" TEXT="B"/><node ID="c" TEXT="C"/></node></map>';
+
+		const doc = parseMindmapXml(xml);
+		const a = doc.root?.children[0];
+
+		assert.strictEqual(a?.arrowlinks.length, 2);
+		assert.strictEqual(a?.arrowlinks[0].id, 'al-1');
+		assert.strictEqual(a?.arrowlinks[0].destination, 'b');
+		assert.strictEqual(a?.arrowlinks[0].startArrow, 'None');
+		assert.strictEqual(a?.arrowlinks[0].endArrow, 'Default');
+		assert.strictEqual(a?.arrowlinks[0].color, '#abcdef');
+		assert.strictEqual(a?.arrowlinks[1].id, 'al-2');
+		assert.strictEqual(a?.arrowlinks[1].destination, 'c');
+		assert.strictEqual(a?.arrowlinks[1].startArrow, undefined);
+		assert.strictEqual(a?.arrowlinks[1].endArrow, undefined);
 	});
 });

@@ -16,6 +16,17 @@ export interface VSWordMindmapEdge {
 	readonly style?: string;
 }
 
+export interface VSWordMindmapArrowlink {
+	readonly id: string;
+	readonly destination: string;
+	readonly startArrow?: 'None' | 'Default';
+	readonly endArrow?: 'None' | 'Default';
+	readonly color?: string;
+	readonly style?: string;
+	readonly startInclination?: string;
+	readonly endInclination?: string;
+}
+
 export interface VSWordMindmapNode {
 	readonly id?: string;
 	readonly text: string;
@@ -26,6 +37,7 @@ export interface VSWordMindmapNode {
 	readonly backgroundColor?: string;
 	readonly font?: VSWordMindmapFont;
 	readonly edge?: VSWordMindmapEdge;
+	readonly arrowlinks: readonly VSWordMindmapArrowlink[];
 	readonly icons: readonly string[];
 	readonly children: readonly VSWordMindmapNode[];
 }
@@ -45,6 +57,7 @@ interface MutableMindmapNode {
 	backgroundColor?: string;
 	font?: VSWordMindmapFont;
 	edge?: VSWordMindmapEdge;
+	arrowlinks: VSWordMindmapArrowlink[];
 	icons: string[];
 	children: MutableMindmapNode[];
 }
@@ -123,6 +136,26 @@ export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
 					width: getAttr(tag.attributes, 'WIDTH'),
 					style: getAttr(tag.attributes, 'STYLE')
 				};
+			}
+		}
+
+		if (tag.name === 'arrowlink') {
+			const current = stack[stack.length - 1];
+			const id = getAttr(tag.attributes, 'ID');
+			const destination = getAttr(tag.attributes, 'DESTINATION');
+			if (current && id && destination) {
+				const startRaw = getAttr(tag.attributes, 'STARTARROW');
+				const endRaw = getAttr(tag.attributes, 'ENDARROW');
+				current.arrowlinks.push({
+					id,
+					destination,
+					startArrow: startRaw === 'None' || startRaw === 'Default' ? startRaw : undefined,
+					endArrow: endRaw === 'None' || endRaw === 'Default' ? endRaw : undefined,
+					color: getAttr(tag.attributes, 'COLOR'),
+					style: getAttr(tag.attributes, 'STYLE'),
+					startInclination: getAttr(tag.attributes, 'STARTINCLINATION'),
+					endInclination: getAttr(tag.attributes, 'ENDINCLINATION')
+				});
 			}
 		}
 	}
@@ -631,6 +664,177 @@ export function setMindmapNodeEdge(xml: string, nodeId: string, patch: MindmapEd
 	return xml;
 }
 
+export interface MindmapArrowlinkPatch {
+	readonly destination?: string;
+	readonly startArrow?: 'None' | 'Default' | null;
+	readonly endArrow?: 'None' | 'Default' | null;
+	readonly color?: string | null;
+	readonly style?: string | null;
+	readonly startInclination?: string | null;
+	readonly endInclination?: string | null;
+}
+
+export interface NewMindmapArrowlinkOptions {
+	readonly newId: string;
+	readonly destination: string;
+	readonly startArrow?: 'None' | 'Default';
+	readonly endArrow?: 'None' | 'Default';
+	readonly color?: string;
+	readonly style?: string;
+}
+
+const ARROW_END_WHITELIST: ReadonlySet<string> = new Set(['None', 'Default']);
+
+/**
+ * Append a new `<arrowlink ID="..." DESTINATION="..." ... />` child to the node with `sourceNodeId`.
+ *
+ * - The arrowlink links the source node to the node identified by `options.destination`.
+ * - The new tag is inserted directly before the source node's closing tag so it follows any
+ *   existing `<font>` / `<edge>` / `<icon>` / `<arrowlink>` / nested `<node>` children.
+ * - Self-closing source nodes are expanded.
+ * - Defaults: `ENDARROW="Default"` if no arrows specified.
+ * - Returns the source xml unchanged when the source node cannot be found.
+ */
+export function appendMindmapArrowlink(xml: string, sourceNodeId: string, options: NewMindmapArrowlinkOptions): string {
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== sourceNodeId) {
+			continue;
+		}
+
+		const attrs: Record<string, string> = {
+			ID: options.newId,
+			DESTINATION: options.destination,
+			STARTARROW: options.startArrow ?? 'None',
+			ENDARROW: options.endArrow ?? 'Default'
+		};
+		if (options.color !== undefined) { attrs['COLOR'] = options.color; }
+		if (options.style !== undefined) { attrs['STYLE'] = options.style; }
+		const insertion = renderArrowlinkTag(attrs);
+
+		if (tag.selfClosing) {
+			const openOnly = renderOpenTagFromSelfClosing(xml, tag);
+			const closeOnly = `</${tag.name}>`;
+			return xml.slice(0, tag.start) + openOnly + insertion + closeOnly + xml.slice(tag.end);
+		}
+		// Insert right before the matching </node>.
+		const closeIndex = findMatchingCloseIndex(tags, i);
+		if (closeIndex === -1) {
+			return xml.slice(0, tag.end) + insertion + xml.slice(tag.end);
+		}
+		const insertAt = tags[closeIndex].start;
+		return xml.slice(0, insertAt) + insertion + xml.slice(insertAt);
+	}
+	return xml;
+}
+
+/**
+ * Update the `<arrowlink ID="..."/>` child of any node with the given `arrowlinkId`.
+ *
+ * - Patch entries map to FreeMind attrs DESTINATION / STARTARROW / ENDARROW / COLOR / STYLE / STARTINCLINATION / ENDINCLINATION.
+ *   * Non-null value → set the attribute.
+ *   * `null` → clear the attribute (others kept).
+ *   * `undefined` → leave alone.
+ * - STARTARROW / ENDARROW are rejected silently if not in {None, Default}.
+ * - DESTINATION cannot be cleared (null is ignored — DESTINATION is required).
+ * - If every meaningful attr ends up undefined, returns xml unchanged.
+ */
+export function updateMindmapArrowlink(xml: string, arrowlinkId: string, patch: MindmapArrowlinkPatch): string {
+	const hasAnyDefined = ['destination', 'startArrow', 'endArrow', 'color', 'style', 'startInclination', 'endInclination']
+		.some(key => (patch as any)[key] !== undefined);
+	if (!hasAnyDefined) {
+		return xml;
+	}
+	if (patch.startArrow !== undefined && patch.startArrow !== null && !ARROW_END_WHITELIST.has(patch.startArrow)) {
+		return xml;
+	}
+	if (patch.endArrow !== undefined && patch.endArrow !== null && !ARROW_END_WHITELIST.has(patch.endArrow)) {
+		return xml;
+	}
+
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'arrowlink') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== arrowlinkId) {
+			continue;
+		}
+		const current: Record<string, string> = {};
+		for (const attribute of tag.attributes) {
+			current[attribute.name] = attribute.value;
+		}
+		mergeArrowlinkPatch(current, patch);
+		const replacement = renderArrowlinkTag(current);
+		return xml.slice(0, tag.start) + replacement + xml.slice(tag.end);
+	}
+	return xml;
+}
+
+/**
+ * Remove the `<arrowlink ID="..."/>` child anywhere in the tree.
+ * Returns xml unchanged if the arrowlink is not found.
+ */
+export function removeMindmapArrowlink(xml: string, arrowlinkId: string): string {
+	for (const tag of scanTags(xml)) {
+		if (tag.closing || tag.name !== 'arrowlink') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== arrowlinkId) {
+			continue;
+		}
+		return xml.slice(0, tag.start) + xml.slice(tag.end);
+	}
+	return xml;
+}
+
+function renderArrowlinkTag(attrs: Record<string, string>): string {
+	const order = ['ID', 'DESTINATION', 'STARTARROW', 'ENDARROW', 'COLOR', 'STYLE', 'STARTINCLINATION', 'ENDINCLINATION'];
+	const parts: string[] = [];
+	for (const key of order) {
+		const value = attrs[key];
+		if (value === undefined) {
+			continue;
+		}
+		parts.push(`${key}="${escapeXmlAttribute(value)}"`);
+	}
+	for (const key of Object.keys(attrs)) {
+		if (order.indexOf(key) === -1) {
+			parts.push(`${key}="${escapeXmlAttribute(attrs[key])}"`);
+		}
+	}
+	return `<arrowlink ${parts.join(' ')}/>`;
+}
+
+function mergeArrowlinkPatch(map: Record<string, string>, patch: MindmapArrowlinkPatch): void {
+	if (patch.destination !== undefined && patch.destination !== null) {
+		map['DESTINATION'] = patch.destination;
+	}
+	if (patch.startArrow !== undefined) {
+		if (patch.startArrow === null) { delete map['STARTARROW']; } else { map['STARTARROW'] = patch.startArrow; }
+	}
+	if (patch.endArrow !== undefined) {
+		if (patch.endArrow === null) { delete map['ENDARROW']; } else { map['ENDARROW'] = patch.endArrow; }
+	}
+	if (patch.color !== undefined) {
+		if (patch.color === null) { delete map['COLOR']; } else { map['COLOR'] = patch.color; }
+	}
+	if (patch.style !== undefined) {
+		if (patch.style === null) { delete map['STYLE']; } else { map['STYLE'] = patch.style; }
+	}
+	if (patch.startInclination !== undefined) {
+		if (patch.startInclination === null) { delete map['STARTINCLINATION']; } else { map['STARTINCLINATION'] = patch.startInclination; }
+	}
+	if (patch.endInclination !== undefined) {
+		if (patch.endInclination === null) { delete map['ENDINCLINATION']; } else { map['ENDINCLINATION'] = patch.endInclination; }
+	}
+}
+
 function findDirectChildEdge(tags: XmlTag[], openIndex: number): number {
 	const open = tags[openIndex];
 	if (open.selfClosing) {
@@ -855,6 +1059,7 @@ function createNode(attributes: readonly XmlAttribute[]): MutableMindmapNode {
 		link: getAttr(attributes, 'LINK'),
 		color: getAttr(attributes, 'COLOR'),
 		backgroundColor: getAttr(attributes, 'BACKGROUND_COLOR'),
+		arrowlinks: [],
 		icons: [],
 		children: []
 	};

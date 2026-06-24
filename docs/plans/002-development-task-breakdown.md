@@ -613,6 +613,44 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-5.8 — Mindmap edge styling (.mm `<edge>` child element)
+
+**目标**：在 `.mm` `<node>` 内首个子节点位置 upsert/clear self-closing `<edge>` 子元素，承载 XMind 风格的「线到父节点」样式：COLOR / WIDTH (`thin` | `1`..`8`) / STYLE (`bezier|sharp_bezier|linear|sharp_linear|hide_edge`)：
+- `setMindmapNodeEdge(xml, id, patch)`：patch 字段 `color|width|style` 三态（值 = 写入；`null` = 清此 attr；`undefined` = 不动）；patch 把 tag 清空时整条 `<edge/>` 删除；目标 `<node>` 为 self-closing 时自动展开
+- parser 暴露 `node.edge { color?, width?, style? }`；width 数字归一化为 `'1'..'8'`，非数字仅接受 `'thin'`
+- webview style-panel 在节点样式下方新增「Edge」段：颜色 swatch×8 + 宽度（Thin / 1 / 2 / 3）+ 风格（bezier / sharp_bezier / linear / sharp_linear / hide_edge）→ postMessage `setEdge` → host `mutateAndRender` 写盘
+- 渲染层 `renderLink` 优先读 child 的 `edge`：style 切换 cubic / quadratic / orthogonal / linear 路径；`hide_edge` 直接跳过；color/width 覆盖 stroke
+- host `vswordMindmapAction` 新增 `setEdge` case，复用 `mutateAndRender`；`parseNullableColor` / 数值 clamp 复用
+
+**验收**：
+- 43/43 单测通过（+8 T-5.8 用例：edge 插入 / self-closing 展开 / merge / null 清单 attr / 整 tag 删除 / hide_edge round-trip / width thin / parser 暴露 edge）
+- compile 0 errors
+- 手动 smoke：选中子节点 → `s` → Edge 颜色变化 → SVG 连线变色；切到 sharp_linear → 折线；切 hide_edge → 该子节点连线消失（折叠后再展开恢复）
+- secret/CSP 静态扫描通过
+- commit `aebc92ad`、push `origin/dev`
+
+---
+
+#### T-5.9 — Mindmap arrowlink (.mm `<arrowlink>` 关联线 / cross-tree connection)
+
+**目标**：在 `.mm` 源 `<node>` 内承载 self-closing `<arrowlink>` 子元素，建立任意两节点（含跨子树、含被折叠分支祖先）的有向关联：ID / DESTINATION / STARTARROW (`None|Default`) / ENDARROW (`None|Default`) / COLOR / STYLE / STARTINCLINATION / ENDINCLINATION，未知属性 byte-for-byte 保留：
+- `appendMindmapArrowlink(xml, sourceId, { newId, destination, startArrow?, endArrow?, color?, style? })`：在源节点首个子节点位置 insert 新 `<arrowlink/>`；self-closing 源自动展开；DESTINATION 必填；startArrow/endArrow 白名单校验
+- `removeMindmapArrowlink(xml, sourceId, arrowlinkId)`：按 ID 删整条 `<arrowlink/>`
+- `setMindmapArrowlinkEndpoint(xml, sourceId, arrowlinkId, patch)`：patch 字段 `destination|startArrow|endArrow|color|style` 三态（值 = 写入；`null` = 清此 attr；`undefined` = 不动）
+- parser 暴露 `node.arrowlinks: VSWordMindmapArrowlink[]`；source 与 destination 同 ID 池（`newMindmapNodeId()` + `newArrowlinkId()` 同时间戳格式但前缀区分）
+- webview 新增 SVG `<g id="arrowlinks">` 层（层级在 `links` 之上、`topics` 之下）+ 单独 `arrowlink-overlay` 拖拽预览层；`<defs>` 内 `marker#al-arrow-end` / `marker#al-arrow-start` 实心三角箭头
+- 渲染：跨子树 quadratic 弧线（向上 bulge = min(140, dist*0.35)），endArrow 默认 `Default`；source/destination 在折叠分支内时 fallback 到最近可见祖先（host/parser 不变）；hit-area 透明 stroke-width:14 用于点击命中
+- 交互：按 `a` 从选中节点起拖到目标节点 → `createArrowlink`；选中 arrowlink（path hit-area）→ destination 端点显示可拖圆点 → 拖到新目标 → `setArrowlinkEndpoint`；选中 arrowlink + Del → `removeArrowlink`；Esc 取消拖拽 / 清除选择
+- host `vswordMindmapAction` 新增 `createArrowlink` / `removeArrowlink` / `setArrowlinkEndpoint` case，复用 `mutateAndRender`；`startArrow`/`endArrow` 走白名单；`color` 走 `parseNullableColor`
+
+**验收**：
+- 53/53 单测通过（在 43 个 T-5.8 基础上 +10 个 T-5.9 用例：append 第一条 / append 多条 / self-closing 源展开 / remove 按 ID / setEndpoint patch / null 清单 attr / 未知 attr 保留 / 多 arrowlink 共存 / 跨子树 destination round-trip / parser 暴露 arrowlinks）
+- compile 0 errors
+- 手动 smoke：选源节点 → `a` → 拖到目标 → 出现紫色弧线 + 箭头；点击 arrowlink → 端点圆点亮起 → 拖端点到第三节点 → DESTINATION 改写；Del → arrowlink 移除；折叠源/目标分支 → fallback 到最近可见祖先继续渲染
+- secret/CSP 静态扫描通过
+
+---
+
 ## 3. 主代理验收流程
 
 每个任务完成后，fullstack-developer 提交报告。主代理执行：
