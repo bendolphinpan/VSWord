@@ -450,6 +450,32 @@ code-oss/src/vs/workbench/contrib/vsword/
 
 ---
 
+#### T-4.7 — Canvas 产品化收口与阶段验收（阶段成果交付）
+
+**前置**：T-4.4/T-4.5/T-4.6 已完成并通过 compile/code review；React Flow Canvas 已具备文件生命周期、文件节点体验、操作反馈与异常状态。
+
+**目标**：按 `D:\GIT\VSWord\docs\requirements\FR-06-canvas-productization-acceptance.md` 完成 Phase 4 收口：把 Canvas 当前 P0 能力整理成统一验收流程、明确完成边界、记录后续遗留项，避免直接进入 Phase 5 时 Canvas 主线状态不清。
+
+**修改文件清单上限**：优先限制在：
+- `D:\GIT\VSWord\docs\requirements\FR-06-canvas-productization-acceptance.md`
+- `D:\GIT\VSWord\docs\plans\002-development-task-breakdown.md`
+- `D:\GIT\VSWord\docs\phase0\canvas-phase4-acceptance-report.md`
+
+**交付**：
+- Phase 4 Canvas 已交付能力矩阵。
+- 面向用户的手动验收清单。
+- 面向开发者的回归/安全检查清单。
+- Phase 4 遗留项与 Phase 5 入口说明。
+
+**验收 Gate（阶段成果一次验收）**：
+- [ ] T-4.4/T-4.5/T-4.6 能力被归并到一份完整手动验收清单。
+- [ ] 文档明确 Canvas 当前 P0 完成边界与不做项。
+- [ ] 文档明确下一步进入 Phase 5 或根据验收反馈修复 Canvas 的判断条件。
+- [ ] 文档/路径/提交记录静态检查通过。
+- [ ] 工作区 clean，提交推送到 `origin/dev`。
+
+---
+
 ### Phase 5 — Mindmap
 
 #### T-5.1 — `.mm` parser/writer + Gate F fixtures
