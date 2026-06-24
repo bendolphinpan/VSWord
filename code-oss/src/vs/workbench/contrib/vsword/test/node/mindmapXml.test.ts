@@ -8,7 +8,7 @@ import { readFileSync } from 'fs';
 import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, serializeMindmapXml, setMindmapNodeFolded, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeFolded, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -152,5 +152,50 @@ suite('VSWord Mindmap XML', () => {
 		const updated = setMindmapNodeFolded(xml, 'a', true);
 
 		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root" CREATED="1"><node ID="a" TEXT="A" COLOR="#abc" FOLDED="true"><hook NAME="MapStyle"/><node ID="a1" TEXT="A1"/></node></node></map>');
+	});
+
+	test('addMindmapNodeIcon inserts <icon BUILTIN="..."/> after the open tag', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node></node></map>';
+
+		const updated = addMindmapNodeIcon(xml, 'a', 'idea');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><icon BUILTIN="idea"/><node ID="a1" TEXT="A1"/></node></node></map>');
+	});
+
+	test('addMindmapNodeIcon expands self-closing nodes while keeping attrs', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" COLOR="#abc" /></node></map>';
+
+		const updated = addMindmapNodeIcon(xml, 'a', 'flag');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A" COLOR="#abc"><icon BUILTIN="flag"/></node></node></map>');
+	});
+
+	test('addMindmapNodeIcon is a no-op when the icon already exists on that node', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><icon BUILTIN="idea"/></node></node></map>';
+
+		assert.strictEqual(addMindmapNodeIcon(xml, 'a', 'idea'), xml);
+	});
+
+	test('addMindmapNodeIcon does not confuse nested-node icons with the target node', () => {
+		// Child `a1` already has `idea`, but the target is `a` — `a` should still receive its own icon.
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"><icon BUILTIN="idea"/></node></node></node></map>';
+
+		const updated = addMindmapNodeIcon(xml, 'a', 'idea');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><icon BUILTIN="idea"/><node ID="a1" TEXT="A1"><icon BUILTIN="idea"/></node></node></node></map>');
+	});
+
+	test('removeMindmapNodeIcon removes one icon and keeps surrounding hook / nested nodes intact', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><icon BUILTIN="idea"/><hook NAME="MapStyle"/><node ID="a1" TEXT="A1"><icon BUILTIN="idea"/></node></node></node></map>';
+
+		const updated = removeMindmapNodeIcon(xml, 'a', 'idea');
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><hook NAME="MapStyle"/><node ID="a1" TEXT="A1"><icon BUILTIN="idea"/></node></node></node></map>');
+	});
+
+	test('removeMindmapNodeIcon is a no-op when the target icon is absent', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><icon BUILTIN="flag"/></node></node></map>';
+
+		assert.strictEqual(removeMindmapNodeIcon(xml, 'a', 'idea'), xml);
 	});
 });

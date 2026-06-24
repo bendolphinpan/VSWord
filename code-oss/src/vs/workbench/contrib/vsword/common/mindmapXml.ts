@@ -225,11 +225,6 @@ export function removeMindmapNode(xml: string, nodeId: string): string {
 /**
  * Set or clear the `FOLDED="true"` attribute on the `<node ID="...">` with the given id.
  * Preserves the surrounding XML byte-for-byte; only inserts/updates/removes the FOLDED attr.
- *
- * - When `folded` is true and the attr is absent: insert `FOLDED="true"` at end of attrs.
- * - When `folded` is true and the attr exists: rewrite its value to `true`.
- * - When `folded` is false and the attr exists: remove the whole ` FOLDED="..."` slice.
- * - When `folded` is false and the attr is absent: no-op.
  */
 export function setMindmapNodeFolded(xml: string, nodeId: string, folded: boolean): string {
 	for (const tag of scanTags(xml)) {
@@ -274,6 +269,131 @@ export function setMindmapNodeFolded(xml: string, nodeId: string, folded: boolea
 		return xml.slice(0, removeStart) + xml.slice(removeEnd);
 	}
 	return xml;
+}
+
+/**
+ * Add an `<icon BUILTIN="..."/>` child to the `<node ID="...">` with the given id.
+ * - Inserts the icon immediately after the node's open tag, preserving every other byte (including hook / cloud / richcontent / nested nodes / unknown attrs).
+ * - When `icon` is already present on the node, returns the input unchanged (no-op, never duplicates).
+ * - When the node is self-closing, expands it to `<node ...></node>` so the icon child has a place to live, preserving all attrs.
+ * - When the node id is not found, returns the input unchanged.
+ */
+export function addMindmapNodeIcon(xml: string, nodeId: string, icon: string): string {
+	if (!icon) {
+		return xml;
+	}
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+
+		// Check whether this <icon BUILTIN="..."/> is already a direct child.
+		if (nodeAlreadyHasIcon(tags, i, icon)) {
+			return xml;
+		}
+
+		const insertion = `<icon BUILTIN="${escapeXmlAttribute(icon)}"/>`;
+		if (tag.selfClosing) {
+			const openOnly = renderOpenTagFromSelfClosing(xml, tag);
+			const closeOnly = `</${tag.name}>`;
+			return xml.slice(0, tag.start) + openOnly + insertion + closeOnly + xml.slice(tag.end);
+		}
+		return xml.slice(0, tag.end) + insertion + xml.slice(tag.end);
+	}
+	return xml;
+}
+
+/**
+ * Remove the first matching `<icon BUILTIN="..."/>` direct child from the `<node ID="...">` with the given id.
+ * - Only removes a single occurrence so callers can repeat to drop duplicates intentionally.
+ * - Preserves every other byte: hook / cloud / richcontent / nested nodes / unknown attrs are untouched.
+ * - Returns the input unchanged when the node is self-closing, when the node id is not found, or when the icon is absent.
+ */
+export function removeMindmapNodeIcon(xml: string, nodeId: string, icon: string): string {
+	if (!icon) {
+		return xml;
+	}
+	const tags = scanTags(xml);
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (tag.closing || tag.name !== 'node') {
+			continue;
+		}
+		if (getAttr(tag.attributes, 'ID') !== nodeId) {
+			continue;
+		}
+		if (tag.selfClosing) {
+			return xml;
+		}
+		const closeIndex = findMatchingCloseIndex(tags, i);
+		if (closeIndex === -1) {
+			return xml;
+		}
+		// Walk direct children: skip nested `<node>` subtrees, only look at top-level `<icon BUILTIN="...">` tags.
+		let depth = 0;
+		for (let j = i + 1; j < closeIndex; j++) {
+			const child = tags[j];
+			if (child.name === 'node') {
+				if (child.closing) {
+					depth = Math.max(0, depth - 1);
+				} else if (!child.selfClosing) {
+					depth++;
+				}
+				continue;
+			}
+			if (depth !== 0) {
+				continue;
+			}
+			if (child.name === 'icon' && !child.closing && getAttr(child.attributes, 'BUILTIN') === icon) {
+				return xml.slice(0, child.start) + xml.slice(child.end);
+			}
+		}
+		return xml;
+	}
+	return xml;
+}
+
+function nodeAlreadyHasIcon(tags: XmlTag[], openIndex: number, icon: string): boolean {
+	const open = tags[openIndex];
+	if (open.selfClosing) {
+		return false;
+	}
+	const closeIndex = findMatchingCloseIndex(tags, openIndex);
+	if (closeIndex === -1) {
+		return false;
+	}
+	let depth = 0;
+	for (let j = openIndex + 1; j < closeIndex; j++) {
+		const child = tags[j];
+		if (child.name === 'node') {
+			if (child.closing) {
+				depth = Math.max(0, depth - 1);
+			} else if (!child.selfClosing) {
+				depth++;
+			}
+			continue;
+		}
+		if (depth !== 0) {
+			continue;
+		}
+		if (child.name === 'icon' && !child.closing && getAttr(child.attributes, 'BUILTIN') === icon) {
+			return true;
+		}
+	}
+	return false;
+}
+
+function renderOpenTagFromSelfClosing(xml: string, tag: XmlTag): string {
+	// `<node ... />` → `<node ...>`; preserves attribute formatting exactly.
+	const original = xml.slice(tag.start, tag.end);
+	// Strip the final `/>` (with optional whitespace before it) and append `>`.
+	const trimmed = original.replace(/\s*\/>$/, '>');
+	return trimmed;
 }
 
 function findMatchingCloseIndex(tags: XmlTag[], openIndex: number): number {

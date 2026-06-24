@@ -133,6 +133,47 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		font-weight: 600;
 		fill: var(--vscode-foreground, #ddd);
 	}
+	.icon-picker {
+		position: fixed;
+		z-index: 60;
+		min-width: 220px;
+		padding: 8px 10px;
+		background: var(--vscode-editorWidget-background, #2d2d30);
+		color: var(--vscode-editorWidget-foreground, #ddd);
+		border: 1px solid var(--vscode-focusBorder, #007fd4);
+		border-radius: 4px;
+		box-shadow: 0 6px 18px rgba(0, 0, 0, .35);
+		font-size: 12px;
+	}
+	.icon-picker-title {
+		font-weight: 600;
+		margin-bottom: 6px;
+		opacity: .85;
+	}
+	.icon-picker-grid {
+		display: grid;
+		grid-template-columns: repeat(8, 22px);
+		gap: 4px;
+	}
+	.icon-picker-cell {
+		width: 22px;
+		height: 22px;
+		border-radius: 3px;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		cursor: pointer;
+		border: 1px solid transparent;
+		background: var(--vscode-list-hoverBackground, #3a3d41);
+		font-size: 14px;
+	}
+	.icon-picker-cell.active {
+		border-color: var(--vscode-focusBorder, #007fd4);
+		background: var(--vscode-list-activeSelectionBackground, #094771);
+	}
+	.icon-picker-cell:hover {
+		border-color: var(--vscode-focusBorder, #007fd4);
+	}
 	.edit-box {
 		position: fixed;
 		z-index: 20;
@@ -193,7 +234,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const empty = document.getElementById('empty');
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
+	document.getElementById('mode-hint').textContent = editable ? 'Tab=child · Enter=sibling · Space=fold · i=icon · Delete=remove · Dbl-click=edit' : 'Read-only MVP · pan/zoom · XMind-style layout';
 
 	const state = { x: 0, y: 0, zoom: 1, panning: false, lastX: 0, lastY: 0 };
 	const layout = { topicGapX: 190, topicGapY: 28, minTopicWidth: 108, maxTopicWidth: 220, lineHeight: 18, padX: 14, padY: 9 };
@@ -403,6 +444,64 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		const entry = getSelectedEntry();
 		if (entry) { toggleFold(entry.node); }
 	}
+	const BUILTIN_ICONS = [
+		{ id: 'idea', glyph: '💡' },
+		{ id: 'help', glyph: '❓' },
+		{ id: 'attention', glyph: '⚠' },
+		{ id: 'flag', glyph: '🚩' },
+		{ id: 'button_ok', glyph: '✅' },
+		{ id: 'button_cancel', glyph: '❌' },
+		{ id: 'full-1', glyph: '①' },
+		{ id: 'full-2', glyph: '②' },
+		{ id: 'full-3', glyph: '③' },
+		{ id: 'full-4', glyph: '④' },
+		{ id: 'full-5', glyph: '⑤' },
+		{ id: 'stop-sign', glyph: '🛑' },
+		{ id: 'clock', glyph: '⏰' },
+		{ id: 'calendar', glyph: '📅' },
+		{ id: 'wizard', glyph: '🪄' },
+		{ id: 'family', glyph: '👨‍👩‍👧' }
+	];
+	let iconPickerEl = null;
+	function closeIconPicker() {
+		if (iconPickerEl) {
+			iconPickerEl.remove();
+			iconPickerEl = null;
+		}
+	}
+	function openIconPicker() {
+		closeIconPicker();
+		const entry = getSelectedEntry();
+		if (!entry || !entry.node.id) { return; }
+		const rect = entry.group.getBoundingClientRect();
+		const picker = document.createElement('div');
+		picker.className = 'icon-picker';
+		picker.style.left = Math.max(8, rect.left) + 'px';
+		picker.style.top = (rect.bottom + 6) + 'px';
+		const title = document.createElement('div');
+		title.className = 'icon-picker-title';
+		title.textContent = 'Icons · click to toggle · Esc to close';
+		picker.appendChild(title);
+		const grid = document.createElement('div');
+		grid.className = 'icon-picker-grid';
+		const current = new Set(Array.isArray(entry.node.icons) ? entry.node.icons : []);
+		BUILTIN_ICONS.forEach(function (icon) {
+			const cell = document.createElement('div');
+			cell.className = 'icon-picker-cell' + (current.has(icon.id) ? ' active' : '');
+			cell.title = icon.id;
+			cell.textContent = icon.glyph;
+			cell.addEventListener('mousedown', function (event) {
+				event.preventDefault();
+				event.stopPropagation();
+				dispatchStructure({ type: 'toggleIcon', nodeId: entry.node.id, icon: icon.id, add: !current.has(icon.id) }, true);
+				closeIconPicker();
+			});
+			grid.appendChild(cell);
+		});
+		picker.appendChild(grid);
+		document.body.appendChild(picker);
+		iconPickerEl = picker;
+	}
 	function showStatus(message, kind) {
 		const status = document.getElementById('status');
 		status.textContent = message || '';
@@ -505,6 +604,15 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			if (event.key === ' ' || event.code === 'Space') {
 				event.preventDefault();
 				toggleFoldSelected();
+				return;
+			}
+			if (event.key === 'i' || event.key === 'I') {
+				event.preventDefault();
+				openIconPicker();
+				return;
+			}
+			if (event.key === 'Escape') {
+				closeIconPicker();
 				return;
 			}
 		});
