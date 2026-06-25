@@ -16,6 +16,9 @@ export interface VswordFrontmatterKnown {
 	readonly cover?: string;
 }
 
+const knownFrontmatterKeys = new Set(['title', 'created', 'updated', 'tags', 'aliases', 'status', 'cover']);
+const knownFrontmatterWriteOrder = ['title', 'created', 'updated', 'tags', 'aliases', 'status', 'cover'] as const;
+
 /**
  * Result of splitting frontmatter from document body.
  */
@@ -78,7 +81,7 @@ function parseFrontmatterYaml(yaml: string): ParsedYamlMetadata {
 	let activeArrayKey: string | undefined;
 	let parseError: string | undefined;
 
-	for (const rawLine of yaml.replace(/\r\n/g, '\n').split('\n')) {
+	for (const rawLine of normalizeLineEndings(yaml).split('\n')) {
 		const line = rawLine.trimEnd();
 		const trimmed = line.trim();
 		if (!trimmed || trimmed.startsWith('#')) {
@@ -153,6 +156,96 @@ function unquoteYamlScalar(value: string): string {
 		return trimmed.slice(1, -1);
 	}
 	return trimmed;
+}
+
+/**
+ * Update known VSWord frontmatter fields while preserving unknown fields and body text.
+ *
+ * This intentionally writes a simple YAML subset that VSWord can round-trip today.
+ * The original body is preserved byte-for-byte after the closing frontmatter fence.
+ */
+export function updateMarkdownFrontmatter(content: string, patch: Partial<VswordFrontmatterKnown>): string {
+	const parsed = parseFrontmatter(content);
+	const newline = detectNewline(content);
+	const body = parsed.body;
+	const existingLines = parsed.hasFrontmatter && parsed.frontmatter
+		? dropTrailingEmptyLines(splitLines(parsed.frontmatter).slice(1))
+		: [];
+	const outputLines: string[] = ['---'];
+	const written = new Set<string>();
+
+	for (const line of existingLines) {
+		const key = /^([A-Za-z0-9_-]+):/.exec(line)?.[1];
+		if (key && knownFrontmatterKeys.has(key)) {
+			if (Object.hasOwn(patch, key)) {
+				const rendered = renderFrontmatterLine(key, patch[key as keyof VswordFrontmatterKnown]);
+				if (rendered) {
+					outputLines.push(rendered);
+				}
+				written.add(key);
+			}
+			continue;
+		}
+		if (line.trim() !== '---') {
+			outputLines.push(line);
+		}
+	}
+
+	for (const key of knownFrontmatterWriteOrder) {
+		if (!written.has(key) && Object.hasOwn(patch, key)) {
+			const rendered = renderFrontmatterLine(key, patch[key]);
+			if (rendered) {
+				outputLines.push(rendered);
+			}
+		}
+	}
+
+	outputLines.push('---');
+	return `${outputLines.join(newline)}${newline}${body}`;
+}
+
+function renderFrontmatterLine(key: string, value: string | string[] | undefined): string | undefined {
+	if (value === undefined) {
+		return undefined;
+	}
+	if (Array.isArray(value)) {
+		return `${key}: [${value.map(escapeYamlArrayItem).join(', ')}]`;
+	}
+	return `${key}: ${escapeYamlScalar(value)}`;
+}
+
+function escapeYamlScalar(value: string): string {
+	if (!value) {
+		return '""';
+	}
+	if (/^[A-Za-z0-9_./ -]+$/.test(value)) {
+		return value;
+	}
+	return `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function escapeYamlArrayItem(value: string): string {
+	return /^[A-Za-z0-9_./ -]+$/.test(value) ? value : `"${value.replace(/\\/g, '\\\\').replace(/"/g, '\\"')}"`;
+}
+
+function detectNewline(content: string): string {
+	return content.includes('\r\n') ? '\r\n' : '\n';
+}
+
+function splitLines(content: string): string[] {
+	return normalizeLineEndings(content).split('\n');
+}
+
+function normalizeLineEndings(content: string): string {
+	return content.replace(/\r\n/g, '\n');
+}
+
+function dropTrailingEmptyLines(lines: string[]): string[] {
+	let end = lines.length;
+	while (end > 0 && lines[end - 1] === '') {
+		end--;
+	}
+	return lines.slice(0, end);
 }
 
 /**

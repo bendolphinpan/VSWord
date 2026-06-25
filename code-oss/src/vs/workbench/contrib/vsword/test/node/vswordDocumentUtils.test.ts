@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { countWords, parseFrontmatter } from '../../common/vswordDocumentUtils.js';
+import { countWords, parseFrontmatter, updateMarkdownFrontmatter } from '../../common/vswordDocumentUtils.js';
 
 suite('VSWord Markdown document utils', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -54,5 +54,41 @@ suite('VSWord Markdown document utils', () => {
 		const count = countWords(parsed.body);
 
 		assert.strictEqual(count.words, 3);
+	});
+
+	test('updates known frontmatter fields while preserving unknown fields and body', () => {
+		const markdown = [
+			'---',
+			'title: Old Title',
+			'customField: keep me',
+			'tags: [old]',
+			'---',
+			'# Heading',
+			'',
+			'Body text',
+		].join('\n');
+
+		assert.strictEqual(updateMarkdownFrontmatter(markdown, {
+			title: 'New Title',
+			tags: ['writing', 'roadmap'],
+			status: 'draft'
+		}), [
+			'---',
+			'title: New Title',
+			'customField: keep me',
+			'tags: [writing, roadmap]',
+			'status: draft',
+			'---',
+			'# Heading',
+			'',
+			'Body text',
+		].join('\n'));
+	});
+
+	test('creates frontmatter for documents that do not have it', () => {
+		assert.strictEqual(updateMarkdownFrontmatter('# Heading\n\nBody', {
+			title: 'New Document',
+			tags: ['draft']
+		}), '---\ntitle: New Document\ntags: [draft]\n---\n# Heading\n\nBody');
 	});
 });
