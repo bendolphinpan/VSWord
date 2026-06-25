@@ -131,6 +131,23 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(mindmapToMarkdownBullets(root), '- Product \\*Plan\\*\n  - Phase 1\n    - Design \\[UI\\]\n  - Line 1 Line 2\n');
 	});
 
+	test('parses summary bracket hook correctly', () => {
+		const xml = '<map><node ID="root" TEXT="Project"><node ID="g1" TEXT="Project Goals"><node ID="f1" TEXT="Feature 1"/><node ID="f2" TEXT="Feature 2"/><node ID="f3" TEXT="Feature 3"/><hook NAME="vsword:summary"><Parameters ID="sum1" LABEL="Key Features" START="0" END="2"/></hook></node></map>';
+		const doc = parseMindmapXml(xml);
+		const root = doc.root;
+		assert.ok(root);
+		assert.strictEqual(root.children.length, 1);
+		const group = root.children[0];
+		assert.ok(group);
+		assert.ok(group.summaries);
+		assert.strictEqual(group.summaries.length, 1);
+		const summary = group.summaries[0];
+		assert.strictEqual(summary.label, 'Key Features');
+		assert.strictEqual(summary.start, 0);
+		assert.strictEqual(summary.end, 2);
+		assert.strictEqual(group.children.length, 3);
+	});
+
 	test('serializes unchanged XML byte-for-byte for unknown content preservation', () => {
 		const xml = '<?xml version="1.0"?>\n<!-- keep -->\n<map version="1.0.1"><node ID="root" TEXT="Root" CREATED="1"><hook NAME="MapStyle"><properties show_icon_for_attributes="true" /></hook><node ID="child" TEXT="Child"><cloud COLOR="#cccccc" /></node></node></map>';
 
@@ -536,17 +553,17 @@ suite('VSWord Mindmap XML', () => {
 
 		const doc = parseMindmapXml(xml);
 		const a = doc.root?.children[0];
-
-		assert.strictEqual(a?.arrowlinks.length, 2);
-		assert.strictEqual(a?.arrowlinks[0].id, 'al-1');
-		assert.strictEqual(a?.arrowlinks[0].destination, 'b');
-		assert.strictEqual(a?.arrowlinks[0].startArrow, 'None');
-		assert.strictEqual(a?.arrowlinks[0].endArrow, 'Default');
-		assert.strictEqual(a?.arrowlinks[0].color, '#abcdef');
-		assert.strictEqual(a?.arrowlinks[1].id, 'al-2');
-		assert.strictEqual(a?.arrowlinks[1].destination, 'c');
-		assert.strictEqual(a?.arrowlinks[1].startArrow, undefined);
-		assert.strictEqual(a?.arrowlinks[1].endArrow, undefined);
+		assert.ok(a);
+		assert.strictEqual((a.arrowlinks || []).length, 2);
+		assert.strictEqual(a.arrowlinks![0].id, 'al-1');
+		assert.strictEqual(a.arrowlinks![0].destination, 'b');
+		assert.strictEqual(a.arrowlinks![0].startArrow, 'None');
+		assert.strictEqual(a.arrowlinks![0].endArrow, 'Default');
+		assert.strictEqual(a.arrowlinks![0].color, '#abcdef');
+		assert.strictEqual(a.arrowlinks![1].id, 'al-2');
+		assert.strictEqual(a.arrowlinks![1].destination, 'c');
+		assert.strictEqual(a.arrowlinks![1].startArrow, undefined);
+		assert.strictEqual(a.arrowlinks![1].endArrow, undefined);
 	});
 
 	test('moveMindmapNode moves an entire subtree before a target sibling without touching unknown XML', () => {

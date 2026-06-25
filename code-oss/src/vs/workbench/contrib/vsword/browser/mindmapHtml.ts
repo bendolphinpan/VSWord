@@ -102,6 +102,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	.swatch.clear { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(128,128,128,.28) 4px 6px); }
 	select.style-select { height: 24px; border-radius: 6px; border: 1px solid var(--vscode-dropdown-border, rgba(128,128,128,.55)); background: var(--vscode-dropdown-background, #fff); color: var(--vscode-dropdown-foreground, #222); }
 	#map { position: absolute; inset: 0; padding-top: 52px; }
+	#summary-brackets-svg { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
 	#source-view, #markdown-view { position: absolute; inset: 0; padding: 68px 16px 16px; overflow: auto; background: var(--vscode-editor-background, #ffffff); }
 	#source-view[hidden], #markdown-view[hidden], #map[hidden] { display: none !important; }
 	.source-code, .markdown-code { margin: 0; min-height: 100%; white-space: pre-wrap; word-break: break-word; font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: var(--vscode-editor-font-size, 13px); line-height: 1.55; }
@@ -145,6 +146,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		<div class="style-group"><span class="style-label">Edge</span><button class="swatch" data-color="#1f6feb" data-style-action="edge-color" title="Blue edge" style="background:#1f6feb"></button><button class="swatch" data-color="#cf222e" data-style-action="edge-color" title="Red edge" style="background:#cf222e"></button><select id="edge-style" class="style-select" title="Edge style"><option value="">Edge</option><option value="bezier">Bezier</option><option value="linear">Linear</option><option value="sharp_bezier">Sharp</option><option value="hide_edge">Hidden</option></select><select id="edge-width" class="style-select" title="Edge width"><option value="">Width</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="6">6</option></select></div>
 	</div>
 	<div id="map" aria-label="VSWord Mindmap"></div>
+	<svg id="summary-brackets-svg"></svg>
 	<div id="source-view" aria-label=".mm XML source" hidden><pre class="source-code" id="source-code"></pre></div>
 	<div id="markdown-view" aria-label="Markdown bullet notes" hidden><pre class="markdown-code" id="markdown-code"></pre></div>
 	<div id="empty">No mindmap root node found in this .mm file.</div>
@@ -177,6 +179,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	let stylePanelOpen = Boolean(viewState.stylePanelOpen);
 	let viewMode = viewState.viewMode === 'xml' || viewState.viewMode === 'markdown' ? viewState.viewMode : 'mindmap';
 	let mind = null;
+	let bracketSvg = null;
 	const toolbarButtons = ['add-child', 'add-sibling', 'edit-node', 'style-node', 'delete-node'].map(function (id) { return document.getElementById(id); });
 	const stylePanel = document.getElementById('style-panel');
 
@@ -325,7 +328,136 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		if (viewMode === 'mindmap' && mind) {
 			setTimeout(function () {
 				try { if (typeof mind.scaleFit === 'function') { mind.scaleFit(); } else { mind.toCenter(); } } catch (_) { /* noop */ }
+				redrawSummaryBrackets();
 			}, 0);
+		}
+	}
+
+	function collectLeafDescendants(node, targetIds, result) {
+		if (!node.children || node.children.length === 0) {
+			if (targetIds.includes(node.id)) {
+				result.push(node);
+			}
+			return;
+		}
+		for (const child of node.children) {
+			if (targetIds.includes(child.id) && (!child.children || child.children.length === 0)) {
+				result.push(child);
+			} else {
+				collectLeafDescendants(child, targetIds, result);
+			}
+		}
+	}
+
+	function redrawSummaryBrackets() {
+		if (!mind || !model.mindElixirData) { return; }
+		if (!bracketSvg) {
+			bracketSvg = document.getElementById('summary-brackets-svg');
+		}
+		bracketSvg.innerHTML = '';
+		const containerRect = document.getElementById('map').getBoundingClientRect();
+		const rootData = mind.getAllData();
+		if (!rootData || !rootData.nodeData) { return; }
+
+		// Traverse all nodes to find those with summary
+		const nodesWithSummary = [];
+		function traverse(n) {
+			if (n.metadata?.vsword?.summary) {
+				nodesWithSummary.push({ node: n, summary: n.metadata.vsword.summary });
+			}
+			if (n.children) {
+				for (const child of n.children) { traverse(child); }
+			}
+		}
+		traverse(rootData.nodeData);
+
+		// Get current zoom / translation from mind-elixir
+		const scale = mind.scale || 1;
+		const translation = mind.translation || { x: 0, y: 0 };
+		const container = document.querySelector('.map-container svg');
+		if (!container) { return; }
+
+		for (const item of nodesWithSummary) {
+			const { summary } = item;
+			// Collect only leaf descendants that match enclosed IDs (user requirement: "if choose middle node, bracket always on lowest level")
+			const leaves = [];
+			collectLeafDescendants(rootData.nodeData, summary.enclosedIds, leaves);
+			if (leaves.length === 0) { continue; }
+
+			// Compute bounding box in mind-elixir local coordinates
+			let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+			for (const leaf of leaves) {
+				if (!leaf.layout) { continue; }
+				const x = leaf.layout.x;
+				const y = leaf.layout.y;
+				const w = leaf.layout.width || 60;
+				const h = leaf.layout.height || 24;
+				// Node box: from left-top of topic to bottom-right
+				const dir = leaf.direction || 0;
+				if (dir === 0) { // left
+					minX = Math.min(minX, x - w);
+				} else { // right
+					maxX = Math.max(maxX, x + w);
+				}
+				minY = Math.min(minY, y - h/2);
+				maxY = Math.max(maxY, y + h/2);
+			}
+			if (!isFinite(minX) || !isFinite(maxY)) { continue; }
+
+			// Add some padding
+			const padding = 10;
+			const radius = 8;
+			minX -= padding;
+			maxX += padding;
+			minY -= padding;
+			maxY += padding;
+
+			// Convert to SVG view coordinates relative to container
+			const tx = translation.x;
+			const ty = translation.y;
+			const x1 = (minX + tx) * scale;
+			const y1 = (minY + ty) * scale;
+			const x2 = (maxX + tx) * scale;
+			const y2 = (maxY + ty) * scale;
+
+			// Determine bracket side: all nodes must be on same side, as per user requirement
+			const firstDir = leaves[0].direction || 0;
+			const isLeft = firstDir === 0;
+
+			// Draw bracket: curved bracket from open side to close, rounded corners
+			let path = '';
+			const stroke = getComputedStyle(document.documentElement).getPropertyValue('--vscode-textSeparator-foreground') || '#888';
+			const strokeWidth = Math.max(2, 2 * scale);
+			if (isLeft) {
+				// Left bracket: open on right, close on left
+				path = 'M ' + x2 + ' ' + (y1 + radius) + ' Q ' + x2 + ' ' + y1 + ', ' + (x2 - radius) + ' ' + y1 + ' L ' + (x1 + radius) + ' ' + y1 + ' Q ' + x1 + ' ' + y1 + ', ' + x1 + ' ' + (y1 + radius) + ' L ' + x1 + ' ' + (y2 - radius) + ' Q ' + x1 + ' ' + y2 + ', ' + (x1 + radius) + ' ' + y2 + ' L ' + (x2 - radius) + ' ' + y2 + ' Q ' + x2 + ' ' + y2 + ', ' + x2 + ' ' + (y2 - radius) + ' Z';
+			} else {
+				// Right bracket: open on left, close on right
+				path = 'M ' + x1 + ' ' + (y1 + radius) + ' Q ' + x1 + ' ' + y1 + ', ' + (x1 + radius) + ' ' + y1 + ' L ' + (x2 - radius) + ' ' + y1 + ' Q ' + x2 + ' ' + y1 + ', ' + x2 + ' ' + (y1 + radius) + ' L ' + x2 + ' ' + (y2 - radius) + ' Q ' + x2 + ' ' + y2 + ', ' + (x2 - radius) + ' ' + y2 + ' L ' + (x1 + radius) + ' ' + y2 + ' Q ' + x1 + ' ' + y2 + ', ' + x1 + ' ' + (y2 - radius) + ' Z';
+			}
+
+			const pathEl = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+			pathEl.setAttribute('d', path);
+			pathEl.setAttribute('fill', 'none');
+			pathEl.setAttribute('stroke', stroke);
+			pathEl.setAttribute('stroke-width', String(strokeWidth));
+			pathEl.setAttribute('stroke-linecap', 'round');
+			pathEl.setAttribute('stroke-linejoin', 'round');
+			pathEl.setAttribute('opacity', '0.65');
+			bracketSvg.appendChild(pathEl);
+		}
+	}
+
+	// Re-draw after layout changes or pan/zoom
+	function hookMindLayoutEvents() {
+		if (!mind || !mind.on) { return; }
+		// mind-elixir emits 'render' after layout
+		if (typeof mind.on === 'function') {
+			try {
+				mind.on('render', function () {
+					redrawSummaryBrackets();
+				});
+			} catch (err) { /* ignore */ }
 		}
 	}
 
@@ -409,6 +541,33 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			case 'removeArrow':
 				if (obj && obj.id) { post('removeArrowlink', { arrowlinkId: obj.id }); }
 				return;
+			case 'createSummary':
+				if (obj && obj.id && obj.parent && typeof obj.start === 'number' && typeof obj.end === 'number') {
+					post('createSummary', {
+						id: obj.id,
+						parentId: obj.parent,
+						label: obj.label || '',
+						start: obj.start,
+						end: obj.end,
+						style: obj.style
+					});
+				}
+				return;
+			case 'finishEditSummary':
+				if (obj && obj.id && obj.parent) {
+					post('updateSummary', {
+						summaryId: obj.id,
+						parentId: obj.parent,
+						label: obj.label || '',
+						style: obj.style
+					});
+				}
+				return;
+			case 'removeSummary':
+				if (obj && obj.id && obj.parent) {
+					post('removeSummary', { summaryId: obj.id, parentId: obj.parent });
+				}
+				return;
 		}
 	}
 
@@ -454,6 +613,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		}, 0);
 		setStatus(editable ? 'Ready' : 'Read-only', 'success');
 		setViewMode(viewMode);
+		hookMindLayoutEvents();
 	} catch (err) {
 		reportError('init', err);
 	}

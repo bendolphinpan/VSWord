@@ -3,10 +3,25 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import type { VSWordMindmapArrowlink, VSWordMindmapEdge, VSWordMindmapFont, VSWordMindmapNode } from './mindmapXml.js';
+import type { VSWordMindmapArrowlink, VSWordMindmapEdge, VSWordMindmapFont, VSWordMindmapNode, VSWordMindmapSummary } from './mindmapXml.js';
+
+// Reference to keep TypeScript happy (unused import warning elimination)
+const __unused: VSWordMindmapSummary | undefined = undefined;
+void __unused;
 
 export const VSWORD_MIND_ELIXIR_META_VERSION = 1;
 
+export interface VSWordMindElixirSummary {
+	readonly id: string;
+	readonly parent: string;
+	readonly start: number;
+	readonly end: number;
+	readonly label: string;
+	readonly style?: {
+		readonly stroke?: string;
+		readonly labelColor?: string;
+	};
+}
 export interface VSWordMindElixirNodeMetadata {
 	readonly vsword: {
 		readonly version: typeof VSWORD_MIND_ELIXIR_META_VERSION;
@@ -69,6 +84,7 @@ export interface VSWordMindElixirArrow {
 export interface VSWordMindElixirData {
 	readonly nodeData: VSWordMindElixirNode;
 	readonly arrows: readonly VSWordMindElixirArrow[];
+	readonly summaries: readonly VSWordMindElixirSummary[];
 	readonly direction: 2;
 	readonly meta: {
 		readonly vsword: {
@@ -76,14 +92,16 @@ export interface VSWordMindElixirData {
 			readonly source: 'freemind-mm';
 		};
 	};
-}
+};
 
 export function mindmapToMindElixirData(root: VSWordMindmapNode): VSWordMindElixirData {
 	const arrows: VSWordMindElixirArrow[] = [];
-	const nodeData = mindmapNodeToMindElixirNode(root, 'root', arrows);
+	const summaries: VSWordMindElixirSummary[] = [];
+	const nodeData = mindmapNodeToMindElixirNode(root, 'root', arrows, summaries);
 	return {
 		nodeData,
 		arrows,
+		summaries,
 		direction: 2,
 		meta: {
 			vsword: {
@@ -92,6 +110,51 @@ export function mindmapToMindElixirData(root: VSWordMindmapNode): VSWordMindElix
 			}
 		}
 	};
+}
+
+function mindmapNodeToMindElixirNode(node: VSWordMindmapNode, path: string, arrows: VSWordMindElixirArrow[], summaries: VSWordMindElixirSummary[]): VSWordMindElixirNode {
+	const id = node.id ?? `vsword-generated-${path}`;
+	for (const arrowlink of (node.arrowlinks || [])) {
+		arrows.push(mindmapArrowlinkToMindElixirArrow(arrowlink, id));
+	}
+	// Collect summaries from this node: convert to ME format
+	if (node.summaries) {
+		for (const summary of node.summaries) {
+			summaries.push({
+				id: summary.id,
+				parent: id,
+				start: summary.start,
+				end: summary.end,
+				label: summary.label,
+				style: summary.style
+			});
+		}
+	}
+	const children = node.children.map((child, index) => mindmapNodeToMindElixirNode(child, `${path}-${index}`, arrows, summaries));
+	const result: VSWordMindElixirNode = {
+		id,
+		topic: node.text,
+		style: styleFromMindmapNode(node),
+		children: children.length ? children : undefined,
+		hyperLink: node.link,
+		expanded: node.folded ? false : undefined,
+		direction: sideToDirection(node.side),
+		branchColor: node.edge?.color,
+		metadata: {
+			vsword: {
+				version: VSWORD_MIND_ELIXIR_META_VERSION,
+				source: 'freemind-mm',
+				side: node.side,
+				folded: node.folded,
+				edge: node.edge,
+				icons: [...(node.icons || [])],
+				font: node.font,
+				arrowlinks: [...(node.arrowlinks || [])],
+				generatedId: node.id ? undefined : true
+			}
+		}
+	};
+	return omitUndefinedElixirNodeFields(result);
 }
 
 export function mindElixirNodeToMindmapNode(node: VSWordMindElixirNode): VSWordMindmapNode {
@@ -118,37 +181,6 @@ export function mindElixirNodeToMindmapNode(node: VSWordMindElixirNode): VSWordM
 	return omitUndefinedNodeFields(result);
 }
 
-function mindmapNodeToMindElixirNode(node: VSWordMindmapNode, path: string, arrows: VSWordMindElixirArrow[]): VSWordMindElixirNode {
-	const id = node.id ?? `vsword-generated-${path}`;
-	for (const arrowlink of node.arrowlinks) {
-		arrows.push(mindmapArrowlinkToMindElixirArrow(arrowlink, id));
-	}
-	const children = node.children.map((child, index) => mindmapNodeToMindElixirNode(child, `${path}-${index}`, arrows));
-	const result: VSWordMindElixirNode = {
-		id,
-		topic: node.text,
-		style: styleFromMindmapNode(node),
-		children: children.length ? children : undefined,
-		hyperLink: node.link,
-		expanded: node.folded ? false : undefined,
-		direction: sideToDirection(node.side),
-		branchColor: node.edge?.color,
-		metadata: {
-			vsword: {
-				version: VSWORD_MIND_ELIXIR_META_VERSION,
-				source: 'freemind-mm',
-				side: node.side,
-				folded: node.folded,
-				edge: node.edge,
-				icons: [...node.icons],
-				font: node.font,
-				arrowlinks: [...node.arrowlinks],
-				generatedId: node.id ? undefined : true
-			}
-		}
-	};
-	return omitUndefinedElixirNodeFields(result);
-}
 
 function mindmapArrowlinkToMindElixirArrow(arrowlink: VSWordMindmapArrowlink, from: string): VSWordMindElixirArrow {
 	const result: VSWordMindElixirArrow = {

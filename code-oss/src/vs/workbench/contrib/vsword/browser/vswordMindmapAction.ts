@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, moveMindmapNode, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { addMindmapNodeIcon, addMindmapSummary, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, moveMindmapNode, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, removeMindmapSummary, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, updateMindmapSummary, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -137,6 +137,15 @@ class MindmapEditorManager extends Disposable {
 				return;
 			case 'removeArrowlink':
 				await this.handleRemoveArrowlink(msg, webview);
+				return;
+			case 'createSummary':
+				await this.handleCreateSummary(msg, webview);
+				return;
+			case 'updateSummary':
+				await this.handleUpdateSummary(msg, webview);
+				return;
+			case 'removeSummary':
+				await this.handleRemoveSummary(msg, webview);
 				return;
 			case 'webviewError':
 				this.logService.error(
@@ -407,6 +416,57 @@ class MindmapEditorManager extends Disposable {
 		}
 		await this.mutateAndRender(webview, requestId, oldXml => ({
 			xml: removeMindmapArrowlink(oldXml, arrowlinkId),
+		}));
+	}
+
+	private async handleCreateSummary(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const parentId = String(msg.parentId ?? '');
+		if (!parentId || typeof msg.start !== 'number' || typeof msg.end !== 'number') {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const summaryId = String(msg.id || `vsword-summary-${Date.now()}`);
+		const label = String(msg.label || 'Summary');
+		const patch = {
+			id: summaryId,
+			label: label,
+			start: msg.start,
+			end: msg.end,
+			style: msg.style
+		};
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: addMindmapSummary(oldXml, parentId, patch),
+			newId: summaryId
+		}));
+	}
+
+	private async handleUpdateSummary(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const parentId = String(msg.parentId ?? '');
+		const summaryId = String(msg.summaryId ?? '');
+		if (!parentId || !summaryId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		const patch: any = {};
+		if ('label' in msg) { patch.label = msg.label; }
+		if ('style' in msg) { patch.style = msg.style; }
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: updateMindmapSummary(oldXml, parentId, summaryId, patch),
+		}));
+	}
+
+	private async handleRemoveSummary(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const parentId = String(msg.parentId ?? '');
+		const summaryId = String(msg.summaryId ?? '');
+		if (!parentId || !summaryId) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: removeMindmapSummary(oldXml, parentId, summaryId),
 		}));
 	}
 

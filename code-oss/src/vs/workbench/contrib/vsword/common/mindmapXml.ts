@@ -27,6 +27,18 @@ export interface VSWordMindmapArrowlink {
 	readonly endInclination?: string;
 }
 
+export interface VSWordMindmapSummary {
+	readonly id: string;
+	readonly label: string;
+	readonly start: number;
+	readonly end: number;
+	readonly childIds?: readonly string[];
+	readonly style?: {
+		readonly stroke?: string;
+		readonly labelColor?: string;
+	};
+}
+
 export interface VSWordMindmapNode {
 	readonly id?: string;
 	readonly text: string;
@@ -37,8 +49,9 @@ export interface VSWordMindmapNode {
 	readonly backgroundColor?: string;
 	readonly font?: VSWordMindmapFont;
 	readonly edge?: VSWordMindmapEdge;
-	readonly arrowlinks: readonly VSWordMindmapArrowlink[];
-	readonly icons: readonly string[];
+	readonly icons?: readonly string[];
+	readonly arrowlinks?: readonly VSWordMindmapArrowlink[];
+	readonly summaries?: readonly VSWordMindmapSummary[];
 	readonly children: readonly VSWordMindmapNode[];
 }
 
@@ -57,9 +70,18 @@ interface MutableMindmapNode {
 	backgroundColor?: string;
 	font?: VSWordMindmapFont;
 	edge?: VSWordMindmapEdge;
-	arrowlinks: VSWordMindmapArrowlink[];
-	icons: string[];
+	icons?: string[];
+	arrowlinks?: VSWordMindmapArrowlink[];
+	summaries?: VSWordMindmapSummary[];
 	children: MutableMindmapNode[];
+	_pendingVswordSummary?: {
+		id: string;
+		label: string;
+		start: number;
+		end: number;
+		childIds?: string[];
+		style?: VSWordMindmapSummary['style'];
+	};
 }
 
 interface XmlAttribute {
@@ -78,6 +100,10 @@ interface XmlTag {
 	readonly closing: boolean;
 	readonly selfClosing: boolean;
 	readonly attributes: readonly XmlAttribute[];
+}
+
+function generateId(): string {
+	return 'vsum_' + Math.random().toString(36).slice(2, 10);
 }
 
 export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
@@ -110,7 +136,52 @@ export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
 			const current = stack[stack.length - 1];
 			const icon = getAttr(tag.attributes, 'BUILTIN');
 			if (current && icon) {
+				if (!current.icons) { current.icons = []; }
 				current.icons.push(icon);
+			}
+		}
+
+		if (tag.name === 'hook') {
+			const current = stack[stack.length - 1];
+			const name = getAttr(tag.attributes, 'NAME');
+			if (current && name === 'vsword:summary') {
+				// We expect a <Parameters> child with summary attributes
+				// Store as pending until we see Parameters closing tag
+				current._pendingVswordSummary = { id: '', label: '', start: 0, end: 0, childIds: [] as string[] };
+			}
+			// keep the hook for roundtrip preservation anyway
+		}
+
+		if (tag.name === 'Parameters') {
+			const current = stack[stack.length - 1];
+			if (current && current._pendingVswordSummary) {
+				// parse vsword:summary parameters
+				const pending = current._pendingVswordSummary;
+				pending.id = getAttr(tag.attributes, 'ID') || pending.id || generateId();
+				pending.label = getAttr(tag.attributes, 'LABEL') || 'Summary';
+				const startStr = getAttr(tag.attributes, 'START');
+				const endStr = getAttr(tag.attributes, 'END');
+				pending.start = startStr ? Number.parseInt(startStr, 10) : 0;
+				pending.end = endStr ? Number.parseInt(endStr, 10) : 0;
+				const childIdsStr = getAttr(tag.attributes, 'CHILD_IDS');
+				pending.childIds = childIdsStr ? childIdsStr.split(/\s+/).filter(Boolean) : [];
+				// style
+				const stroke = getAttr(tag.attributes, 'STYLE_STROKE');
+				const labelColor = getAttr(tag.attributes, 'STYLE_LABEL_COLOR');
+				if (stroke || labelColor) {
+					pending.style = { stroke, labelColor };
+				}
+				// After parsing, add to summaries array
+				if (!current.summaries) { current.summaries = []; }
+				current.summaries.push({
+					id: pending.id,
+					label: pending.label,
+					start: pending.start,
+					end: pending.end,
+					childIds: pending.childIds,
+					style: pending.style
+				});
+				delete current._pendingVswordSummary;
 			}
 		}
 
@@ -146,6 +217,7 @@ export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
 			if (current && id && destination) {
 				const startRaw = getAttr(tag.attributes, 'STARTARROW');
 				const endRaw = getAttr(tag.attributes, 'ENDARROW');
+				if (!current.arrowlinks) { current.arrowlinks = []; }
 				current.arrowlinks.push({
 					id,
 					destination,
@@ -154,7 +226,7 @@ export function parseMindmapXml(xml: string): VSWordMindmapXmlDocument {
 					color: getAttr(tag.attributes, 'COLOR'),
 					style: getAttr(tag.attributes, 'STYLE'),
 					startInclination: getAttr(tag.attributes, 'STARTINCLINATION'),
-					endInclination: getAttr(tag.attributes, 'ENDINCLINATION')
+					endInclination: getAttr(tag.attributes, 'ENDINCLINATION'),
 				});
 			}
 		}
@@ -1261,4 +1333,151 @@ function escapeXmlAttribute(value: string): string {
 		.replace(/"/g, '&quot;')
 		.replace(/</g, '&lt;')
 		.replace(/>/g, '&gt;');
+}
+/**
+ * Add a new summary bracket to a parent node.
+ * Stores as <hook NAME="vsword:summary"><Parameters ID="..." LABEL="..." START="..." END="..." /></hook>
+ */
+export function addMindmapSummary(
+	xml: string,
+	parentNodeId: string,
+	patch: {
+		id: string;
+		label: string;
+		start: number;
+		end: number;
+		style?: { stroke?: string; labelColor?: string };
+	}
+): string {
+	const tags = scanTags(xml);
+	const nodeIndex = findNodeOpenIndexById(tags, parentNodeId);
+	if (nodeIndex === -1) {
+		return xml;
+	}
+	const tag = tags[nodeIndex];
+	let params = `ID="${escapeXmlAttribute(patch.id)}" LABEL="${escapeXmlAttribute(patch.label)}" START="${patch.start}" END="${patch.end}"`;
+	if (patch.style) {
+		if (patch.style.stroke) { params += ` STROKE="${escapeXmlAttribute(patch.style.stroke)}"`; }
+		if (patch.style.labelColor) { params += ` LABEL_COLOR="${escapeXmlAttribute(patch.style.labelColor)}"`; }
+	}
+	const hook = `<hook NAME="vsword:summary"><Parameters ${params}/></hook>`;
+	if (tag.selfClosing) {
+		const openOnly = renderOpenTagFromSelfClosing(xml, tag);
+		const closeOnly = `</${tag.name}>`;
+		return xml.slice(0, tag.start) + openOnly + hook + closeOnly + xml.slice(tag.end);
+	}
+	return xml.slice(0, tag.end - (`</${tag.name}>`).length) + hook + xml.slice(tag.end - (`</${tag.name}>`).length);
+}
+
+/**
+ * Update an existing summary bracket label or style.
+ */
+export function updateMindmapSummary(
+	xml: string,
+	parentNodeId: string,
+	summaryId: string,
+	patch: {
+		label?: string;
+		style?: { stroke?: string; labelColor?: string };
+	}
+): string {
+ 	const tags = scanTags(xml);
+ 	const nodeIndex = findNodeOpenIndexById(tags, parentNodeId);
+ 	if (nodeIndex === -1) {
+ 		return xml;
+ 	}
+ 	const tag = tags[nodeIndex];
+ 	let content = xml.slice(tag.start, tag.end);
+ 	// Find the <hook> with matching ID
+ 	const hooks = findAllHookTagsWithName(content, 'vsword:summary', tag.start);
+ 	for (const hook of hooks) {
+ 		const start = hook.start;
+ 		const end = hook.end;
+ 		const paramTags = findAllTagsByName(content.slice(hook.start - tag.start, hook.end - tag.start), 'parameters');
+ 		if (paramTags.length === 0) continue;
+ 		const paramTag = paramTags[0];
+ 		// Check if this is the one we want
+ 		const idAttr = getAttr(paramTag.attributes, 'ID');
+ 		if (!idAttr || idAttr !== summaryId) continue;
+ 		// Clone existing parameters, update patch fields
+ 		const existing: Record<string, string> = {};
+ 		for (const attr of paramTag.attributes) {
+ 			existing[attr.name.toLowerCase()] = attr.value;
+ 		}
+ 		if (patch.label !== undefined) { existing.label = patch.label; }
+ 		if (patch.style) {
+ 			if (patch.style.stroke !== undefined) { existing.stroke = patch.style.stroke; }
+ 			if (patch.style.labelColor !== undefined) { existing.label_color = patch.style.labelColor; }
+ 		}
+ 		let attrs = '';
+ 		for (const [k, v] of Object.entries(existing)) {
+ 			attrs += ` ${k.toUpperCase()}="${escapeXmlAttribute(v)}"`;
+ 		}
+ 		const newHookContent = `<hook NAME="vsword:summary"><Parameters ${attrs}/></hook>`;
+ 		const absoluteStart = start;
+ 		const absoluteEnd = end;
+ 		return xml.slice(0, absoluteStart) + newHookContent + xml.slice(absoluteEnd);
+ 	}
+ 	return xml;
+ }
+
+/**
+ * Remove an existing summary bracket from a parent node.
+ */
+export function removeMindmapSummary(
+	xml: string,
+	parentNodeId: string,
+	summaryId: string
+): string {
+	const tags = scanTags(xml);
+	const nodeIndex = findNodeOpenIndexById(tags, parentNodeId);
+	if (nodeIndex === -1) {
+		return xml;
+	}
+	const tag = tags[nodeIndex];
+	let content = xml.slice(tag.start, tag.end);
+	const hooks = findAllHookTagsWithName(content, 'vsword:summary', tag.start);
+	for (const hook of hooks) {
+		const start = hook.start;
+		const end = hook.end;
+		const paramTags = findAllTagsByName(content.slice(hook.start - tag.start, hook.end - tag.start), 'parameters');
+		if (paramTags.length === 0) continue;
+		const paramTag = paramTags[0];
+		const idAttr = getAttr(paramTag.attributes, 'ID');
+		if (!idAttr || idAttr !== summaryId) continue;
+		const absoluteStart = start;
+		const absoluteEnd = end;
+		// Remove the entire hook (including whitespace before/after)
+		let trimStart = absoluteStart;
+		while (trimStart > tag.start && /\s/.test(xml[trimStart - 1])) {
+			trimStart--;
+		}
+		return xml.slice(0, trimStart) + xml.slice(absoluteEnd);
+	}
+	return xml;
+}
+
+function findAllTagsByName(content: string, name: string): XmlTag[] {
+	const result: XmlTag[] = [];
+	const tags = scanTags(content);
+	for (const tag of tags) {
+		if (tag.name === name) {
+			result.push(tag);
+		}
+	}
+	return result;
+}
+
+function findAllHookTagsWithName(content: string, name: string, baseOffset: number): Array<{ start: number; end: number }> {
+	const result: Array<{ start: number; end: number }> = [];
+	const tags = scanTags(content);
+	for (const tag of tags) {
+		if (tag.name === 'hook') {
+			const hookName = getAttr(tag.attributes, 'NAME');
+			if (hookName === name) {
+				result.push({ start: baseOffset + tag.start, end: baseOffset + tag.end });
+			}
+		}
+	}
+	return result;
 }
