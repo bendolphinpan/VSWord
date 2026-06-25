@@ -1245,10 +1245,14 @@ function parseAttributes(body: string, bodyStart: number): XmlAttribute[] {
 function unescapeXmlAttribute(value: string): string {
 	return value
 		.replace(/&quot;/g, '"')
-		.replace(/&apos;/g, '\'')
+		.replace(/&apos;/g, "'")
 		.replace(/&lt;/g, '<')
 		.replace(/&gt;/g, '>')
-		.replace(/&amp;/g, '&');
+		.replace(/&amp;/g, '&')
+		.replace(/&#10;/g, '\n')
+		.replace(/&#xA;/g, '\n')
+		.replace(/&#13;/g, '\n')
+		.replace(/&#9;/g, '	');
 }
 
 function escapeXmlAttribute(value: string): string {

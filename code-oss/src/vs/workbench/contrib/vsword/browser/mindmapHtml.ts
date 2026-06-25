@@ -5,6 +5,7 @@
 
 import { webviewGenericCspSource } from '../../webview/common/webview.js';
 import { mindmapToMindElixirData, VSWordMindElixirData } from '../common/mindmapElixir.js';
+import { mindmapToMarkdownBullets } from '../common/mindmapMarkdown.js';
 import { VSWordMindmapNode } from '../common/mindmapXml.js';
 import { mindElixirScriptBase64, mindElixirStyleBase64 } from './mindmapElixirAssets.js';
 
@@ -12,6 +13,8 @@ export interface VSWordMindmapWebviewModel {
 	readonly fileName: string;
 	readonly root?: VSWordMindmapNode;
 	readonly mindElixirData?: VSWordMindElixirData;
+	readonly sourceXml?: string;
+	readonly markdownBullets?: string;
 	readonly nodeCount: number;
 	readonly sourceKind: 'mm';
 	readonly editable: boolean;
@@ -22,7 +25,8 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const cspSource = webviewGenericCspSource;
 	const htmlModel: VSWordMindmapWebviewModel = {
 		...model,
-		mindElixirData: model.root ? mindmapToMindElixirData(model.root) : undefined
+		mindElixirData: model.root ? mindmapToMindElixirData(model.root) : undefined,
+		markdownBullets: model.root ? mindmapToMarkdownBullets(model.root) : ''
 	};
 	const data = escapeScriptJson(htmlModel);
 	const elixirCssBase64 = escapeScriptJson(mindElixirStyleBase64);
@@ -72,6 +76,9 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	button:disabled { opacity: .55; cursor: default; }
 	button.danger { color: var(--vscode-errorForeground, #e51400); }
 	.toolbar-actions { display: flex; align-items: center; gap: 6px; }
+	.view-switcher { display: flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,.35)); border-radius: 8px; background: color-mix(in srgb, var(--vscode-editorWidget-background, #f7f7f7) 75%, transparent); }
+	.view-switcher button { padding: 3px 8px; border-color: transparent; background: transparent; }
+	.view-switcher button.active { background: var(--vscode-button-secondaryBackground, #e5e5e5); border-color: var(--vscode-focusBorder, #0078d4); }
 	#style-panel {
 		position: fixed;
 		top: 64px;
@@ -95,6 +102,11 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	.swatch.clear { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(128,128,128,.28) 4px 6px); }
 	select.style-select { height: 24px; border-radius: 6px; border: 1px solid var(--vscode-dropdown-border, rgba(128,128,128,.55)); background: var(--vscode-dropdown-background, #fff); color: var(--vscode-dropdown-foreground, #222); }
 	#map { position: absolute; inset: 0; padding-top: 52px; }
+	#source-view, #markdown-view { position: absolute; inset: 0; padding: 68px 16px 16px; overflow: auto; background: var(--vscode-editor-background, #ffffff); }
+	#source-view[hidden], #markdown-view[hidden], #map[hidden] { display: none !important; }
+	.source-code, .markdown-code { margin: 0; min-height: 100%; white-space: pre-wrap; word-break: break-word; font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: var(--vscode-editor-font-size, 13px); line-height: 1.55; }
+	.source-code { color: var(--vscode-editor-foreground, #1f2328); }
+	.markdown-code { color: var(--vscode-foreground, #1f2328); }
 	#empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--vscode-descriptionForeground, #666); pointer-events: none; }
 	#empty.visible { display: flex; }
 	.map-container { background: radial-gradient(circle at 50% 50%, rgba(120, 120, 120, 0.08), transparent 0 28px), var(--vscode-editor-background, #ffffff) !important; background-size: 32px 32px !important; }
@@ -109,6 +121,11 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		<span class="badge">.mm</span>
 		<span class="badge" id="node-count"></span>
 		<span class="spacer"></span>
+		<div class="view-switcher" aria-label="Display mode">
+			<button id="view-mindmap" data-view-mode="mindmap" title="Show visual mindmap">Mindmap</button>
+			<button id="view-xml" data-view-mode="xml" title="Show .mm XML source">XML</button>
+			<button id="view-md" data-view-mode="markdown" title="Show Markdown bullet notes">MD</button>
+		</div>
 		<span class="hint" id="mode-hint">Mind Elixir · select a topic, then use toolbar or shortcuts</span>
 		<div class="toolbar-actions">
 			<button id="add-child" title="Add child topic (Tab)">+ Child</button>
@@ -128,6 +145,8 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		<div class="style-group"><span class="style-label">Edge</span><button class="swatch" data-color="#1f6feb" data-style-action="edge-color" title="Blue edge" style="background:#1f6feb"></button><button class="swatch" data-color="#cf222e" data-style-action="edge-color" title="Red edge" style="background:#cf222e"></button><select id="edge-style" class="style-select" title="Edge style"><option value="">Edge</option><option value="bezier">Bezier</option><option value="linear">Linear</option><option value="sharp_bezier">Sharp</option><option value="hide_edge">Hidden</option></select><select id="edge-width" class="style-select" title="Edge width"><option value="">Width</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="6">6</option></select></div>
 	</div>
 	<div id="map" aria-label="VSWord Mindmap"></div>
+	<div id="source-view" aria-label=".mm XML source" hidden><pre class="source-code" id="source-code"></pre></div>
+	<div id="markdown-view" aria-label="Markdown bullet notes" hidden><pre class="markdown-code" id="markdown-code"></pre></div>
 	<div id="empty">No mindmap root node found in this .mm file.</div>
 </div>
 <script nonce="vsword-mindmap">
@@ -156,6 +175,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	let saveSeq = 0;
 	let selectedNodeId = model.selectedNodeId || viewState.selectedNodeId || null;
 	let stylePanelOpen = Boolean(viewState.stylePanelOpen);
+	let viewMode = viewState.viewMode === 'xml' || viewState.viewMode === 'markdown' ? viewState.viewMode : 'mindmap';
 	let mind = null;
 	const toolbarButtons = ['add-child', 'add-sibling', 'edit-node', 'style-node', 'delete-node'].map(function (id) { return document.getElementById(id); });
 	const stylePanel = document.getElementById('style-panel');
@@ -167,16 +187,17 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 
 	function saveViewState() {
 		if (vscode && typeof vscode.setState === 'function') {
-			vscode.setState({ selectedNodeId: selectedNodeId, stylePanelOpen: stylePanelOpen });
+			vscode.setState({ selectedNodeId: selectedNodeId, stylePanelOpen: stylePanelOpen, viewMode: viewMode });
 		}
 	}
 
 	function updateToolbarState() {
 		const hasSelection = Boolean(selectedNodeId);
+		const mapMode = viewMode === 'mindmap';
 		for (const button of toolbarButtons) {
-			if (button) { button.disabled = !editable || !hasSelection; }
+			if (button) { button.disabled = !editable || !hasSelection || !mapMode; }
 		}
-		stylePanel.classList.toggle('visible', Boolean(editable && hasSelection && stylePanelOpen));
+		stylePanel.classList.toggle('visible', Boolean(editable && hasSelection && stylePanelOpen && mapMode));
 		saveViewState();
 	}
 
@@ -264,11 +285,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Mind Elixir · toolbar: child/sibling/edit/delete · drag to move · shortcuts still work' : 'Read-only · pan/zoom · Fit';
+	document.getElementById('source-code').textContent = model.sourceXml || '';
+	document.getElementById('markdown-code').textContent = model.markdownBullets || '';
 	updateToolbarState();
 
 	if (!model.mindElixirData) {
 		document.getElementById('empty').classList.add('visible');
+		setViewMode(viewMode);
 		return;
 	}
 
@@ -282,6 +305,28 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		if (!vscode) { return; }
 		vscode.postMessage(Object.assign({ type: type, requestId: 'me-' + (++saveSeq) }, payload || {}));
 		setStatus('Saving...', '');
+	}
+
+	function setViewMode(mode) {
+		viewMode = mode === 'xml' || mode === 'markdown' ? mode : 'mindmap';
+		document.getElementById('map').hidden = viewMode !== 'mindmap';
+		document.getElementById('source-view').hidden = viewMode !== 'xml';
+		document.getElementById('markdown-view').hidden = viewMode !== 'markdown';
+		document.querySelectorAll('[data-view-mode]').forEach(function (button) {
+			button.classList.toggle('active', button.getAttribute('data-view-mode') === viewMode);
+		});
+		const hint = viewMode === 'xml'
+			? '.mm XML source · read-only preview in this page'
+			: viewMode === 'markdown'
+				? 'Markdown bullet notes · XMind-style outline preview'
+				: (editable ? 'Mind Elixir · toolbar: child/sibling/edit/delete · drag to move · shortcuts still work' : 'Read-only · pan/zoom · Fit');
+		document.getElementById('mode-hint').textContent = hint;
+		updateToolbarState();
+		if (viewMode === 'mindmap' && mind) {
+			setTimeout(function () {
+				try { if (typeof mind.scaleFit === 'function') { mind.scaleFit(); } else { mind.toCenter(); } } catch (_) { /* noop */ }
+			}, 0);
+		}
 	}
 
 	function parentDirection(parent, child) {
@@ -408,6 +453,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			try { mind.toCenter(); } catch (_) { /* noop */ }
 		}, 0);
 		setStatus(editable ? 'Ready' : 'Read-only', 'success');
+		setViewMode(viewMode);
 	} catch (err) {
 		reportError('init', err);
 	}
@@ -417,6 +463,10 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			if (mind && typeof mind.scaleFit === 'function') { mind.scaleFit(); }
 			else if (mind && typeof mind.toCenter === 'function') { mind.toCenter(); }
 		} catch (err) { reportError('fit', err); }
+	});
+
+	document.querySelectorAll('[data-view-mode]').forEach(function (button) {
+		button.addEventListener('click', function () { setViewMode(button.getAttribute('data-view-mode')); });
 	});
 
 	document.getElementById('add-child').addEventListener('click', function () {

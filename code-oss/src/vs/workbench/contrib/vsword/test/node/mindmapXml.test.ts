@@ -9,6 +9,7 @@ import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { mindElixirNodeToMindmapNode, mindmapToMindElixirData } from '../../common/mindmapElixir.js';
+import { mindmapToMarkdownBullets } from '../../common/mindmapMarkdown.js';
 import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, moveMindmapNode, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
@@ -120,6 +121,14 @@ suite('VSWord Mindmap XML', () => {
 			icons: ['idea'],
 			children: [{ id: 'child', text: 'Child', folded: false, arrowlinks: [], icons: [], children: [] }]
 		});
+	});
+
+	test('renders .mm nodes as XMind-style Markdown bullet notes', () => {
+		const xml = '<map><node ID="root" TEXT="Product *Plan*"><node ID="a" TEXT="Phase 1"><node ID="a1" TEXT="Design [UI]"/></node><node ID="b" TEXT="Line 1&#10;Line 2"/></node></map>';
+		const root = parseMindmapXml(xml).root;
+		assert.ok(root);
+
+		assert.strictEqual(mindmapToMarkdownBullets(root), '- Product \\*Plan\\*\n  - Phase 1\n    - Design \\[UI\\]\n  - Line 1 Line 2\n');
 	});
 
 	test('serializes unchanged XML byte-for-byte for unknown content preservation', () => {

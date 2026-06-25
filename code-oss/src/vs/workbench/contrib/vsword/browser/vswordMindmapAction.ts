@@ -69,6 +69,7 @@ class MindmapEditorManager extends Disposable {
 			input.webview.setHtml(getMindmapHtml({
 				fileName: basename(this.fileUri),
 				root: document.root,
+				sourceXml: xml,
 				nodeCount: document.root ? countNodes(document.root) : 0,
 				sourceKind: 'mm',
 				editable: true,
@@ -81,6 +82,7 @@ class MindmapEditorManager extends Disposable {
 			input.webview.setHtml(getMindmapHtml({
 				fileName: basename(this.fileUri),
 				root: undefined,
+				sourceXml: '',
 				nodeCount: 0,
 				sourceKind: 'mm',
 				editable: false,
@@ -422,6 +424,7 @@ class MindmapEditorManager extends Disposable {
 			webview.setHtml(getMindmapHtml({
 				fileName: basename(this.fileUri),
 				root: document.root,
+				sourceXml: result.xml,
 				nodeCount: document.root ? countNodes(document.root) : 0,
 				sourceKind: 'mm',
 				editable: true,
