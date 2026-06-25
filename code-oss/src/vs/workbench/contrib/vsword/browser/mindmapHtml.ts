@@ -72,6 +72,28 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	button:disabled { opacity: .55; cursor: default; }
 	button.danger { color: var(--vscode-errorForeground, #e51400); }
 	.toolbar-actions { display: flex; align-items: center; gap: 6px; }
+	#style-panel {
+		position: fixed;
+		top: 64px;
+		left: 12px;
+		z-index: 29;
+		display: none;
+		align-items: center;
+		gap: 10px;
+		max-width: calc(100vw - 24px);
+		padding: 7px 9px;
+		border: 1px solid var(--vscode-editorWidget-border, rgba(128,128,128,.35));
+		border-radius: 10px;
+		background: color-mix(in srgb, var(--vscode-editorWidget-background, #f7f7f7) 94%, transparent);
+		box-shadow: 0 6px 22px rgba(0,0,0,.10);
+		font-size: 12px;
+	}
+	#style-panel.visible { display: flex; }
+	.style-group { display: flex; align-items: center; gap: 4px; }
+	.style-label { color: var(--vscode-descriptionForeground, #666); margin-right: 2px; }
+	.swatch { width: 20px; height: 20px; border-radius: 999px; padding: 0; border-color: rgba(128,128,128,.55); }
+	.swatch.clear { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(128,128,128,.28) 4px 6px); }
+	select.style-select { height: 24px; border-radius: 6px; border: 1px solid var(--vscode-dropdown-border, rgba(128,128,128,.55)); background: var(--vscode-dropdown-background, #fff); color: var(--vscode-dropdown-foreground, #222); }
 	#map { position: absolute; inset: 0; padding-top: 52px; }
 	#empty { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; text-align: center; color: var(--vscode-descriptionForeground, #666); pointer-events: none; }
 	#empty.visible { display: flex; }
@@ -92,10 +114,18 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 			<button id="add-child" title="Add child topic (Tab)">+ Child</button>
 			<button id="add-sibling" title="Add sibling topic (Enter)">+ Sibling</button>
 			<button id="edit-node" title="Edit selected topic (F2 / double-click)">Edit</button>
+			<button id="style-node" title="Show style controls for selected topic">Style</button>
 			<button id="delete-node" class="danger" title="Delete selected topic (Delete)">Delete</button>
 			<button id="fit">Fit</button>
 		</div>
 		<span id="status"></span>
+	</div>
+	<div id="style-panel" aria-label="Selected topic style controls">
+		<div class="style-group"><span class="style-label">Text</span><button class="swatch" data-color="#1f6feb" data-style-action="text-color" title="Blue text" style="background:#1f6feb"></button><button class="swatch" data-color="#cf222e" data-style-action="text-color" title="Red text" style="background:#cf222e"></button><button class="swatch clear" data-style-action="text-color-clear" title="Clear text color"></button></div>
+		<div class="style-group"><span class="style-label">Fill</span><button class="swatch" data-color="#dbeafe" data-style-action="fill-color" title="Blue fill" style="background:#dbeafe"></button><button class="swatch" data-color="#fff8c5" data-style-action="fill-color" title="Yellow fill" style="background:#fff8c5"></button><button class="swatch clear" data-style-action="fill-color-clear" title="Clear fill"></button></div>
+		<div class="style-group"><button data-style-action="bold" title="Toggle bold">B</button><button data-style-action="italic" title="Toggle italic"><em>I</em></button><select id="font-size" class="style-select" title="Font size"><option value="">Size</option><option value="12">12</option><option value="14">14</option><option value="16">16</option><option value="20">20</option><option value="24">24</option></select></div>
+		<div class="style-group"><span class="style-label">Icon</span><button data-style-action="icon-idea" title="Add idea icon">💡</button><button data-style-action="icon-ok" title="Add OK icon">✅</button><button data-style-action="icon-stop" title="Add stop icon">⛔</button></div>
+		<div class="style-group"><span class="style-label">Edge</span><button class="swatch" data-color="#1f6feb" data-style-action="edge-color" title="Blue edge" style="background:#1f6feb"></button><button class="swatch" data-color="#cf222e" data-style-action="edge-color" title="Red edge" style="background:#cf222e"></button><select id="edge-style" class="style-select" title="Edge style"><option value="">Edge</option><option value="bezier">Bezier</option><option value="linear">Linear</option><option value="sharp_bezier">Sharp</option><option value="hide_edge">Hidden</option></select><select id="edge-width" class="style-select" title="Edge width"><option value="">Width</option><option value="1">1</option><option value="2">2</option><option value="4">4</option><option value="6">6</option></select></div>
 	</div>
 	<div id="map" aria-label="VSWord Mindmap"></div>
 	<div id="empty">No mindmap root node found in this .mm file.</div>
@@ -122,14 +152,23 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : null;
 	const editable = Boolean(model.editable && vscode);
 	const status = document.getElementById('status');
+	const viewState = vscode && typeof vscode.getState === 'function' ? (vscode.getState() || {}) : {};
 	let saveSeq = 0;
-	let selectedNodeId = model.selectedNodeId || null;
+	let selectedNodeId = model.selectedNodeId || viewState.selectedNodeId || null;
+	let stylePanelOpen = Boolean(viewState.stylePanelOpen);
 	let mind = null;
-	const toolbarButtons = ['add-child', 'add-sibling', 'edit-node', 'delete-node'].map(function (id) { return document.getElementById(id); });
+	const toolbarButtons = ['add-child', 'add-sibling', 'edit-node', 'style-node', 'delete-node'].map(function (id) { return document.getElementById(id); });
+	const stylePanel = document.getElementById('style-panel');
 
 	function setStatus(text, className) {
 		status.textContent = text || '';
 		status.className = className || '';
+	}
+
+	function saveViewState() {
+		if (vscode && typeof vscode.setState === 'function') {
+			vscode.setState({ selectedNodeId: selectedNodeId, stylePanelOpen: stylePanelOpen });
+		}
 	}
 
 	function updateToolbarState() {
@@ -137,6 +176,64 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		for (const button of toolbarButtons) {
 			if (button) { button.disabled = !editable || !hasSelection; }
 		}
+		stylePanel.classList.toggle('visible', Boolean(editable && hasSelection && stylePanelOpen));
+		saveViewState();
+	}
+
+	function getSelectedNodeObject() {
+		const element = selectedElement();
+		return element && element.nodeObj ? element.nodeObj : null;
+	}
+
+	function selectedStyle() {
+		const node = getSelectedNodeObject();
+		const metadata = node && node.metadata && node.metadata.vsword ? node.metadata.vsword : {};
+		return { node: node, style: (node && node.style) || {}, font: metadata.font || {}, edge: metadata.edge || {}, icons: metadata.icons || [] };
+	}
+
+	function refreshStyleControls() {
+		const state = selectedStyle();
+		const size = document.getElementById('font-size');
+		if (size) { size.value = state.font.size ? String(state.font.size) : ''; }
+		const edgeStyle = document.getElementById('edge-style');
+		if (edgeStyle) { edgeStyle.value = state.edge.style || ''; }
+		const edgeWidth = document.getElementById('edge-width');
+		if (edgeWidth) { edgeWidth.value = state.edge.width || ''; }
+	}
+
+	function postStyle(type, payload) {
+		if (!selectedNodeId) { setStatus('Select a topic first', 'error'); return; }
+		saveViewState();
+		post(type, Object.assign({ nodeId: selectedNodeId }, payload || {}));
+	}
+
+	function toggleFontFlag(flag) {
+		const state = selectedStyle();
+		const current = Boolean(state.font && state.font[flag]);
+		const payload = {};
+		payload[flag] = !current;
+		postStyle('setFont', payload);
+	}
+
+	function toggleIcon(icon) {
+		const state = selectedStyle();
+		const icons = Array.isArray(state.icons) ? state.icons : [];
+		postStyle('toggleIcon', { icon: icon, add: icons.indexOf(icon) < 0 });
+	}
+
+	function handleStyleAction(target) {
+		const action = target && target.getAttribute ? target.getAttribute('data-style-action') : '';
+		if (!action) { return; }
+		if (action === 'text-color') { postStyle('setColor', { color: target.getAttribute('data-color') }); return; }
+		if (action === 'text-color-clear') { postStyle('setColor', { color: null }); return; }
+		if (action === 'fill-color') { postStyle('setBackgroundColor', { color: target.getAttribute('data-color') }); return; }
+		if (action === 'fill-color-clear') { postStyle('setBackgroundColor', { color: null }); return; }
+		if (action === 'bold') { toggleFontFlag('bold'); return; }
+		if (action === 'italic') { toggleFontFlag('italic'); return; }
+		if (action === 'icon-idea') { toggleIcon('idea'); return; }
+		if (action === 'icon-ok') { toggleIcon('button_ok'); return; }
+		if (action === 'icon-stop') { toggleIcon('stop'); return; }
+		if (action === 'edge-color') { postStyle('setEdge', { color: target.getAttribute('data-color') }); return; }
 	}
 
 	function selectedElement() {
@@ -291,11 +388,13 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 				selectedNodeId = nodes[0].id;
 				setStatus(nodes.length + ' selected', '');
 				updateToolbarState();
+				refreshStyleControls();
 			}
 		});
 		mind.bus.addListener('unselectNodes', function () {
 			if (!mind.currentNodes || mind.currentNodes.length === 0) {
 				selectedNodeId = null;
+				stylePanelOpen = false;
 				updateToolbarState();
 			}
 		});
@@ -328,6 +427,27 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	});
 	document.getElementById('edit-node').addEventListener('click', function () {
 		runSelected('edit-node', function (element) { mind.beginEdit(element); });
+	});
+	document.getElementById('style-node').addEventListener('click', function () {
+		stylePanelOpen = !stylePanelOpen;
+		updateToolbarState();
+		refreshStyleControls();
+	});
+	stylePanel.addEventListener('click', function (event) {
+		const target = event.target && event.target.closest ? event.target.closest('[data-style-action]') : event.target;
+		handleStyleAction(target);
+	});
+	document.getElementById('font-size').addEventListener('change', function (event) {
+		const value = event.target && event.target.value ? Number(event.target.value) : null;
+		postStyle('setFont', { size: Number.isFinite(value) ? value : null });
+	});
+	document.getElementById('edge-style').addEventListener('change', function (event) {
+		const value = event.target && event.target.value ? event.target.value : null;
+		postStyle('setEdge', { style: value });
+	});
+	document.getElementById('edge-width').addEventListener('change', function (event) {
+		const value = event.target && event.target.value ? Number(event.target.value) : null;
+		postStyle('setEdge', { width: Number.isFinite(value) ? value : null });
 	});
 	document.getElementById('delete-node').addEventListener('click', function () {
 		runSelected('delete-node', function (element) {
