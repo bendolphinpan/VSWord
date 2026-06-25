@@ -265,6 +265,77 @@ export function appendMindmapSibling(xml: string, siblingId: string, options: Ne
 	return xml;
 }
 
+export interface MoveMindmapNodeOptions {
+	readonly parentId: string;
+	readonly siblingId?: string;
+	readonly placement: 'inside' | 'before' | 'after';
+}
+
+/**
+ * Move an existing `<node>` subtree to a new parent/sibling location.
+ * Preserves the moved subtree byte-for-byte and leaves unknown XML untouched.
+ */
+export function moveMindmapNode(xml: string, nodeId: string, options: MoveMindmapNodeOptions): string {
+	const tags = scanTags(xml);
+	const sourceIndex = findNodeOpenIndexById(tags, nodeId);
+	if (sourceIndex === -1 || !hasParentNode(tags, sourceIndex)) {
+		return xml;
+	}
+
+	const sourceTag = tags[sourceIndex];
+	const sourceEndIndex = sourceTag.selfClosing ? sourceIndex : findMatchingCloseIndex(tags, sourceIndex);
+	if (sourceEndIndex === -1) {
+		return xml;
+	}
+	const sourceStart = sourceTag.start;
+	const sourceEnd = tags[sourceEndIndex].end;
+	const movedXml = xml.slice(sourceStart, sourceEnd);
+
+	const edits: Array<{ start: number; end: number; text: string }> = [{ start: sourceStart, end: sourceEnd, text: '' }];
+
+	if (options.placement === 'inside') {
+		const parentIndex = findNodeOpenIndexById(tags, options.parentId);
+		if (parentIndex === -1 || isTagInsideRange(tags[parentIndex], sourceStart, sourceEnd)) {
+			return xml;
+		}
+		const parentTag = tags[parentIndex];
+		if (parentTag.selfClosing) {
+			edits.push({
+				start: parentTag.start,
+				end: parentTag.end,
+				text: renderOpenTagFromSelfClosingPreservingPad(xml, parentTag) + movedXml + `</${parentTag.name}>`
+			});
+		} else {
+			const parentCloseIndex = findMatchingCloseIndex(tags, parentIndex);
+			if (parentCloseIndex === -1) {
+				return xml;
+			}
+			edits.push({ start: tags[parentCloseIndex].start, end: tags[parentCloseIndex].start, text: movedXml });
+		}
+	} else {
+		if (!options.siblingId) {
+			return xml;
+		}
+		const siblingIndex = findNodeOpenIndexById(tags, options.siblingId);
+		if (siblingIndex === -1 || !hasParentNode(tags, siblingIndex) || isTagInsideRange(tags[siblingIndex], sourceStart, sourceEnd)) {
+			return xml;
+		}
+		const siblingParentId = findParentNodeId(tags, siblingIndex);
+		if (siblingParentId !== options.parentId) {
+			return xml;
+		}
+		const siblingTag = tags[siblingIndex];
+		const siblingEndIndex = siblingTag.selfClosing ? siblingIndex : findMatchingCloseIndex(tags, siblingIndex);
+		if (siblingEndIndex === -1) {
+			return xml;
+		}
+		const insertAt = options.placement === 'before' ? siblingTag.start : tags[siblingEndIndex].end;
+		edits.push({ start: insertAt, end: insertAt, text: movedXml });
+	}
+
+	return applyXmlEdits(xml, edits);
+}
+
 /**
  * Remove the `<node ID="...">…</node>` subtree (or self-closing tag) with the given id.
  * Returns the XML unchanged if the target is the root (no parent) or cannot be found.
@@ -1001,6 +1072,12 @@ function renderOpenTagFromSelfClosing(xml: string, tag: XmlTag): string {
 	return trimmed;
 }
 
+function renderOpenTagFromSelfClosingPreservingPad(xml: string, tag: XmlTag): string {
+	// `<node ... />` → `<node ... >`; used when moving into an existing parent
+	// where preserving that parent tag's whitespace is more important than normalizing it.
+	return xml.slice(tag.start, tag.end).replace(/\/>$/, '>');
+}
+
 function findMatchingCloseIndex(tags: XmlTag[], openIndex: number): number {
 	let depth = 0;
 	for (let j = openIndex + 1; j < tags.length; j++) {
@@ -1042,6 +1119,51 @@ function hasParentNode(tags: XmlTag[], targetIndex: number): boolean {
 		depth--;
 	}
 	return false;
+}
+
+function findNodeOpenIndexById(tags: XmlTag[], nodeId: string): number {
+	for (let i = 0; i < tags.length; i++) {
+		const tag = tags[i];
+		if (!tag.closing && tag.name === 'node' && getAttr(tag.attributes, 'ID') === nodeId) {
+			return i;
+		}
+	}
+	return -1;
+}
+
+function findParentNodeId(tags: XmlTag[], targetIndex: number): string | undefined {
+	let depth = 0;
+	for (let j = targetIndex - 1; j >= 0; j--) {
+		const candidate = tags[j];
+		if (candidate.name !== 'node') {
+			continue;
+		}
+		if (candidate.closing) {
+			depth++;
+			continue;
+		}
+		if (candidate.selfClosing) {
+			continue;
+		}
+		if (depth === 0) {
+			return getAttr(candidate.attributes, 'ID');
+		}
+		depth--;
+	}
+	return undefined;
+}
+
+function isTagInsideRange(tag: XmlTag, start: number, end: number): boolean {
+	return tag.start >= start && tag.start < end;
+}
+
+function applyXmlEdits(xml: string, edits: Array<{ start: number; end: number; text: string }>): string {
+	let result = xml;
+	const ordered = [...edits].sort((a, b) => b.start - a.start);
+	for (const edit of ordered) {
+		result = result.slice(0, edit.start) + edit.text + result.slice(edit.end);
+	}
+	return result;
 }
 
 function renderNewNodeXml(options: NewMindmapChildOptions): string {

@@ -16,7 +16,7 @@ import { ILogService } from '../../../../platform/log/common/log.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, moveMindmapNode, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
 const MINDMAP_VIEW_TYPE_PREFIX = 'vsword.mindmap';
@@ -104,6 +104,9 @@ class MindmapEditorManager extends Disposable {
 				return;
 			case 'removeNode':
 				await this.handleRemoveNode(msg, webview);
+				return;
+			case 'moveNode':
+				await this.handleMoveNode(msg, webview);
 				return;
 			case 'toggleFolded':
 				await this.handleToggleFolded(msg, webview);
@@ -203,6 +206,22 @@ class MindmapEditorManager extends Disposable {
 			return;
 		}
 		await this.mutateAndRender(webview, requestId, oldXml => ({ xml: removeMindmapNode(oldXml, nodeId) }));
+	}
+
+	private async handleMoveNode(msg: any, webview: any): Promise<void> {
+		const requestId = String(msg.requestId ?? '');
+		const nodeId = String(msg.nodeId ?? '');
+		const parentId = String(msg.parentId ?? '');
+		const siblingId = typeof msg.siblingId === 'string' ? msg.siblingId : undefined;
+		const placement = msg.placement === 'inside' || msg.placement === 'before' || msg.placement === 'after' ? msg.placement : undefined;
+		if (!nodeId || !parentId || !placement) {
+			webview.postMessage({ type: 'structureUpdated', requestId, ok: false });
+			return;
+		}
+		await this.mutateAndRender(webview, requestId, oldXml => ({
+			xml: moveMindmapNode(oldXml, nodeId, { parentId, siblingId, placement }),
+			newId: nodeId,
+		}));
 	}
 
 	private async handleToggleFolded(msg: any, webview: any): Promise<void> {

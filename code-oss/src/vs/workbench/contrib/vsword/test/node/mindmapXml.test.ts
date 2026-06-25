@@ -9,7 +9,7 @@ import { join, resolve } from '../../../../../base/common/path.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { mindElixirNodeToMindmapNode, mindmapToMindElixirData } from '../../common/mindmapElixir.js';
-import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
+import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, moveMindmapNode, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -538,5 +538,28 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(a?.arrowlinks[1].destination, 'c');
 		assert.strictEqual(a?.arrowlinks[1].startArrow, undefined);
 		assert.strictEqual(a?.arrowlinks[1].endArrow, undefined);
+	});
+
+	test('moveMindmapNode moves an entire subtree before a target sibling without touching unknown XML', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><hook NAME="keep"/><node ID="a1" TEXT="A1"/></node><node ID="b" TEXT="B"><node ID="b1" TEXT="B1"/></node><node ID="c" TEXT="C"/></node></map>';
+
+		const updated = moveMindmapNode(xml, 'a', { parentId: 'root', siblingId: 'c', placement: 'before' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="b" TEXT="B"><node ID="b1" TEXT="B1"/></node><node ID="a" TEXT="A"><hook NAME="keep"/><node ID="a1" TEXT="A1"/></node><node ID="c" TEXT="C"/></node></map>');
+	});
+
+	test('moveMindmapNode moves into a self-closing parent and preserves the moved subtree', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node><node ID="b" TEXT="B" /></node></map>';
+
+		const updated = moveMindmapNode(xml, 'a', { parentId: 'b', placement: 'inside' });
+
+		assert.strictEqual(updated, '<map><node ID="root" TEXT="Root"><node ID="b" TEXT="B" ><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node></node></node></map>');
+	});
+
+	test('moveMindmapNode refuses root and descendant moves', () => {
+		const xml = '<map><node ID="root" TEXT="Root"><node ID="a" TEXT="A"><node ID="a1" TEXT="A1"/></node><node ID="b" TEXT="B"/></node></map>';
+
+		assert.strictEqual(moveMindmapNode(xml, 'root', { parentId: 'b', placement: 'inside' }), xml);
+		assert.strictEqual(moveMindmapNode(xml, 'a', { parentId: 'a1', placement: 'inside' }), xml);
 	});
 });

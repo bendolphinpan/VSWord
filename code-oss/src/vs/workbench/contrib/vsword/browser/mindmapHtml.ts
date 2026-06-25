@@ -167,7 +167,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 
 	document.getElementById('file-name').textContent = model.fileName;
 	document.getElementById('node-count').textContent = String(model.nodeCount) + ' nodes';
-	document.getElementById('mode-hint').textContent = editable ? 'Mind Elixir · toolbar: child/sibling/edit/delete · shortcuts still work · drag move not saved yet' : 'Read-only · pan/zoom · Fit';
+	document.getElementById('mode-hint').textContent = editable ? 'Mind Elixir · toolbar: child/sibling/edit/delete · drag to move · shortcuts still work' : 'Read-only · pan/zoom · Fit';
 	updateToolbarState();
 
 	if (!model.mindElixirData) {
@@ -210,15 +210,40 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		return parent.children[index - 1] || null;
 	}
 
+	function firstMovedNode(operation) {
+		const nodes = Array.isArray(operation.objs) ? operation.objs : (operation.obj ? [operation.obj] : []);
+		return nodes && nodes[0] ? nodes[0] : null;
+	}
+
+	function moveTargetNode(operation) {
+		return operation.toObj || operation.obj || null;
+	}
+
+	function postMove(operation, placement) {
+		const moved = firstMovedNode(operation);
+		const target = moveTargetNode(operation);
+		if (!moved || !moved.id || !target || !target.id) { return; }
+		if (placement === 'inside') {
+			post('moveNode', { nodeId: moved.id, parentId: target.id, placement: 'inside' });
+			return;
+		}
+		const parent = target.parent;
+		if (!parent || !parent.id) { return; }
+		post('moveNode', { nodeId: moved.id, parentId: parent.id, siblingId: target.id, placement: placement });
+	}
+
 	function handleOperation(operation) {
 		if (!editable || !operation || !operation.name) { return; }
 		const obj = operation.obj;
 		switch (operation.name) {
 			case 'moveNodeBefore':
+				postMove(operation, 'before');
+				return;
 			case 'moveNodeAfter':
+				postMove(operation, 'after');
+				return;
 			case 'moveNodeIn':
-				setStatus('Move is not persisted yet; use add/delete for now', 'error');
-				setTimeout(function () { location.reload(); }, 250);
+				postMove(operation, 'inside');
 				return;
 			case 'finishEdit':
 				if (obj && obj.id) { post('updateNodeText', { nodeId: obj.id, text: obj.topic || 'New topic' }); }
