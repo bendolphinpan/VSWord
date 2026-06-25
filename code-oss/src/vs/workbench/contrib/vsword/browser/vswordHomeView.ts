@@ -14,6 +14,8 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
+import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -51,6 +53,8 @@ class VswordHomeView extends ViewPane {
 		@IEditorService private readonly editorService: IEditorService,
 		@IHostService private readonly hostService: IHostService,
 		@INotificationService private readonly notificationService: INotificationService,
+		@IFileDialogService private readonly fileDialogService: IFileDialogService,
+		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
 		@ICommandService private readonly commandService: ICommandService
 	) {
@@ -88,7 +92,7 @@ class VswordHomeView extends ViewPane {
 		this.renderButton(actions, localize('vswordShowExplorer', 'Show File Explorer'), () => this.commandService.executeCommand('workbench.view.explorer'));
 		this.renderButton(actions, localize('vswordShowOutline', 'Show Outline'), () => this.commandService.executeCommand('outline.focus'));
 		this.renderButton(actions, localize('vswordOpenCanvas', 'Open Canvas'), () => this.commandService.executeCommand('vsword.actions.openCanvas'));
-		this.renderButton(actions, localize('vswordOpenMindMap', 'Open Mind Map'), () => this.notificationService.info(localize('vswordMindMapComingSoon', 'Mind Map is coming in T-5.')));
+		this.renderButton(actions, localize('vswordOpenMindMap', 'Open Mind Map'), () => this.openMindMap());
 		this.renderButton(actions, localize('vswordRefreshRecent', 'Refresh Recent'), () => this.renderHome(container));
 
 		append(root, $('h3', undefined, localize('vswordRecent', 'Recent')));
@@ -143,6 +147,24 @@ class VswordHomeView extends ViewPane {
 		if (isRecentWorkspace(recent)) {
 			await this.hostService.openWindow([{ workspaceUri: recent.workspace.configPath }], { remoteAuthority: recent.remoteAuthority || null });
 		}
+	}
+
+	private async openMindMap(): Promise<void> {
+		const workspaceFolder = this.workspaceContextService.getWorkspace().folders[0]?.uri;
+		const selected = await this.fileDialogService.showOpenDialog({
+			title: localize('vswordSelectMindMap', 'Select Mind Map'),
+			openLabel: localize('vswordOpenMindMapDialog', 'Open Mind Map'),
+			defaultUri: workspaceFolder,
+			canSelectFiles: true,
+			canSelectFolders: false,
+			canSelectMany: false,
+			filters: [{ name: localize('vswordMindMapFiles', 'FreeMind Mind Maps'), extensions: ['mm'] }]
+		});
+		const resource = selected?.[0];
+		if (!resource) {
+			return;
+		}
+		await this.commandService.executeCommand('vsword.actions.openMindmap', resource);
 	}
 
 	private async newMarkdownDocument(): Promise<void> {
