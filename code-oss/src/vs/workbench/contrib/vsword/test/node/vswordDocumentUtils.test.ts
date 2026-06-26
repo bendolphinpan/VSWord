@@ -85,6 +85,34 @@ suite('VSWord Markdown document utils', () => {
 		].join('\n'));
 	});
 
+	test('preserves known frontmatter fields that are not part of the patch', () => {
+		const markdown = [
+			'---',
+			'title: Old Title',
+			'created: 2026-06-20',
+			'cover: assets/cover.png',
+			'customField: keep me',
+			'---',
+			'# Heading',
+			'',
+			'Body text',
+		].join('\n');
+
+		assert.strictEqual(updateMarkdownFrontmatter(markdown, {
+			title: 'New Title'
+		}), [
+			'---',
+			'title: New Title',
+			'created: 2026-06-20',
+			'cover: assets/cover.png',
+			'customField: keep me',
+			'---',
+			'# Heading',
+			'',
+			'Body text',
+		].join('\n'));
+	});
+
 	test('creates frontmatter for documents that do not have it', () => {
 		assert.strictEqual(updateMarkdownFrontmatter('# Heading\n\nBody', {
 			title: 'New Document',

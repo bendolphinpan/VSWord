@@ -1,6 +1,8 @@
 # Round-trip script outputs (timestamped) — keep latest in tree but don't commit history
 reports/arrowlink-roundtrip-*.mm
 reports/arrowlink-roundtrip-*.json
+reports/markdown-frontmatter-roundtrip-*.md
+reports/markdown-frontmatter-roundtrip-*.json
 
 # Per-workspace VSWord canvas viewport state (auto-generated when opening .mm/canvas files in dev build)
 .vsword/

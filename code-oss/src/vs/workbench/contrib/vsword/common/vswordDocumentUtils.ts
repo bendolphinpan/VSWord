@@ -200,6 +200,11 @@ export function updateMarkdownFrontmatter(content: string, patch: Partial<Vsword
 					outputLines.push(rendered);
 				}
 				written.add(key);
+			} else {
+				// Known field not in patch — preserve the original line as-is so updates
+				// never silently drop existing metadata (e.g. created/cover).
+				outputLines.push(line);
+				written.add(key);
 			}
 			continue;
 		}
