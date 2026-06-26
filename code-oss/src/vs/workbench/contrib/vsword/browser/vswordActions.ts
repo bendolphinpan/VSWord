@@ -6,6 +6,7 @@
 import { localize, localize2 } from '../../../../nls.js';
 import { getCodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
+import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
 import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
@@ -16,6 +17,22 @@ import { parseFrontmatter, parseMarkdownTagsInput, updateMarkdownFrontmatter } f
 import { VSWORD_HOME_VIEW_ID } from './vswordHomeView.js';
 
 const VSWORD_CATEGORY = localize2('vsword', 'VSWord');
+
+function getActiveMarkdownModel(accessor: ServicesAccessor): ReturnType<NonNullable<ReturnType<typeof getCodeEditor>>['getModel']> | undefined {
+	const editorService = accessor.get(IEditorService);
+	const codeEditor = getCodeEditor(editorService.activeTextEditorControl);
+	const model = codeEditor?.getModel();
+	return model?.getLanguageId() === 'markdown' ? model : undefined;
+}
+
+async function runActiveMarkdownCommand(accessor: ServicesAccessor, commandId: string): Promise<void> {
+	const notificationService = accessor.get(INotificationService);
+	if (!getActiveMarkdownModel(accessor)) {
+		notificationService.info(localize('vsword.markdown.noActiveMarkdownEditor', 'Open a Markdown document before using this VSWord Markdown command.'));
+		return;
+	}
+	await accessor.get(ICommandService).executeCommand(commandId);
+}
 
 class VswordOpenHomeAction extends Action2 {
 	static readonly ID = 'vsword.actions.openHome';
@@ -52,6 +69,57 @@ class VswordNewMarkdownDocumentAction extends Action2 {
 			languageId: 'markdown',
 			options: { pinned: true }
 		});
+	}
+}
+
+class VswordShowMarkdownPreviewAction extends Action2 {
+	static readonly ID = 'vsword.actions.showMarkdownPreview';
+
+	constructor() {
+		super({
+			id: VswordShowMarkdownPreviewAction.ID,
+			title: localize2('vsword.markdown.showPreview', 'VSWord: Show Markdown Preview'),
+			category: VSWORD_CATEGORY,
+			f1: true
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await runActiveMarkdownCommand(accessor, 'markdown.showPreview');
+	}
+}
+
+class VswordShowMarkdownPreviewToSideAction extends Action2 {
+	static readonly ID = 'vsword.actions.showMarkdownPreviewToSide';
+
+	constructor() {
+		super({
+			id: VswordShowMarkdownPreviewToSideAction.ID,
+			title: localize2('vsword.markdown.showPreviewToSide', 'VSWord: Show Markdown Preview to Side'),
+			category: VSWORD_CATEGORY,
+			f1: true
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await runActiveMarkdownCommand(accessor, 'markdown.showPreviewToSide');
+	}
+}
+
+class VswordShowMarkdownSourceAction extends Action2 {
+	static readonly ID = 'vsword.actions.showMarkdownSource';
+
+	constructor() {
+		super({
+			id: VswordShowMarkdownSourceAction.ID,
+			title: localize2('vsword.markdown.showSource', 'VSWord: Show Markdown Source'),
+			category: VSWORD_CATEGORY,
+			f1: true
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		await accessor.get(ICommandService).executeCommand('markdown.reopenAsSource');
 	}
 }
 
@@ -131,4 +199,7 @@ class VswordUpdateMarkdownMetadataAction extends Action2 {
 
 registerAction2(VswordOpenHomeAction);
 registerAction2(VswordNewMarkdownDocumentAction);
+registerAction2(VswordShowMarkdownPreviewAction);
+registerAction2(VswordShowMarkdownPreviewToSideAction);
+registerAction2(VswordShowMarkdownSourceAction);
 registerAction2(VswordUpdateMarkdownMetadataAction);

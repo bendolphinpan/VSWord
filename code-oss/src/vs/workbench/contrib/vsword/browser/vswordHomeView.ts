@@ -87,6 +87,8 @@ class VswordHomeView extends ViewPane {
 		actions.style.margin = '16px 0 20px';
 
 		this.renderButton(actions, localize('vswordNewMarkdown', 'New Markdown Document'), () => this.newMarkdownDocument());
+		this.renderButton(actions, localize('vswordShowMarkdownPreview', 'Show Markdown Preview'), () => this.commandService.executeCommand('vsword.actions.showMarkdownPreview'));
+		this.renderButton(actions, localize('vswordShowMarkdownPreviewToSide', 'Show Markdown Preview to Side'), () => this.commandService.executeCommand('vsword.actions.showMarkdownPreviewToSide'));
 		this.renderButton(actions, localize('vswordOpenFolder', 'Open Folder...'), () => this.commandService.executeCommand('workbench.action.files.openFolder'));
 		this.renderButton(actions, localize('vswordOpenFile', 'Open File...'), () => this.commandService.executeCommand('workbench.action.files.openFile'));
 		this.renderButton(actions, localize('vswordShowExplorer', 'Show File Explorer'), () => this.commandService.executeCommand('workbench.view.explorer'));
