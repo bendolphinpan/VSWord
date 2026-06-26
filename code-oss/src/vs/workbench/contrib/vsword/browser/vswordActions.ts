@@ -3,12 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
+import { getCodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { Action2, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { IQuickInputService } from '../../../../platform/quickinput/common/quickInput.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IViewsService } from '../../../services/views/common/viewsService.js';
 import { createUntitledMarkdownResource } from '../common/vswordMarkdown.js';
+import { parseFrontmatter, parseMarkdownTagsInput, updateMarkdownFrontmatter } from '../common/vswordDocumentUtils.js';
 import { VSWORD_HOME_VIEW_ID } from './vswordHomeView.js';
 
 const VSWORD_CATEGORY = localize2('vsword', 'VSWord');
@@ -51,5 +55,80 @@ class VswordNewMarkdownDocumentAction extends Action2 {
 	}
 }
 
+class VswordUpdateMarkdownMetadataAction extends Action2 {
+	static readonly ID = 'vsword.actions.updateMarkdownMetadata';
+
+	constructor() {
+		super({
+			id: VswordUpdateMarkdownMetadataAction.ID,
+			title: localize2('vsword.markdown.updateMetadata', 'VSWord: Update Markdown Metadata'),
+			category: VSWORD_CATEGORY,
+			f1: true
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const editorService = accessor.get(IEditorService);
+		const notificationService = accessor.get(INotificationService);
+		const quickInputService = accessor.get(IQuickInputService);
+		const codeEditor = getCodeEditor(editorService.activeTextEditorControl);
+		const model = codeEditor?.getModel();
+		if (!codeEditor || !model) {
+			notificationService.info(localize('vsword.metadata.noActiveEditor', 'No active text editor.'));
+			return;
+		}
+		if (model.getLanguageId() !== 'markdown') {
+			notificationService.info(localize('vsword.metadata.notMarkdown', 'Open a Markdown document before updating VSWord metadata.'));
+			return;
+		}
+
+		const text = model.getValue();
+		const current = parseFrontmatter(text).known;
+		const title = await quickInputService.input({
+			title: localize('vsword.metadata.titleInputTitle', 'VSWord Markdown Metadata'),
+			prompt: localize('vsword.metadata.titleInputPrompt', 'Title'),
+			value: current.title ?? ''
+		});
+		if (title === undefined) {
+			return;
+		}
+		const status = await quickInputService.input({
+			title: localize('vsword.metadata.statusInputTitle', 'VSWord Markdown Metadata'),
+			prompt: localize('vsword.metadata.statusInputPrompt', 'Status'),
+			value: current.status ?? ''
+		});
+		if (status === undefined) {
+			return;
+		}
+		const tagsInput = await quickInputService.input({
+			title: localize('vsword.metadata.tagsInputTitle', 'VSWord Markdown Metadata'),
+			prompt: localize('vsword.metadata.tagsInputPrompt', 'Tags, comma separated'),
+			value: current.tags?.join(', ') ?? ''
+		});
+		if (tagsInput === undefined) {
+			return;
+		}
+
+		const updated = updateMarkdownFrontmatter(text, {
+			title: title.trim() || undefined,
+			status: status.trim() || undefined,
+			tags: parseMarkdownTagsInput(tagsInput)
+		});
+		if (updated === text) {
+			notificationService.info(localize('vsword.metadata.noChanges', 'VSWord metadata is unchanged.'));
+			return;
+		}
+
+		const selection = codeEditor.getSelection();
+		const success = codeEditor.executeEdits(VswordUpdateMarkdownMetadataAction.ID, [{ range: model.getFullModelRange(), text: updated }], selection ? [selection] : undefined);
+		if (!success) {
+			notificationService.error(localize('vsword.metadata.updateFailed', 'Failed to update VSWord metadata.'));
+			return;
+		}
+		notificationService.info(localize('vsword.metadata.updated', 'VSWord metadata updated.'));
+	}
+}
+
 registerAction2(VswordOpenHomeAction);
 registerAction2(VswordNewMarkdownDocumentAction);
+registerAction2(VswordUpdateMarkdownMetadataAction);

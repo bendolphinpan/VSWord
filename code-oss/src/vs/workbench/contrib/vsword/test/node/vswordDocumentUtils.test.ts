@@ -5,7 +5,7 @@
 
 import assert from 'assert';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
-import { countWords, parseFrontmatter, updateMarkdownFrontmatter } from '../../common/vswordDocumentUtils.js';
+import { countWords, parseFrontmatter, parseMarkdownTagsInput, updateMarkdownFrontmatter } from '../../common/vswordDocumentUtils.js';
 
 suite('VSWord Markdown document utils', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
@@ -90,5 +90,10 @@ suite('VSWord Markdown document utils', () => {
 			title: 'New Document',
 			tags: ['draft']
 		}), '---\ntitle: New Document\ntags: [draft]\n---\n# Heading\n\nBody');
+	});
+
+	test('parses comma separated markdown tags input', () => {
+		assert.deepStrictEqual(parseMarkdownTagsInput(' writing, roadmap，中文 , writing '), ['writing', 'roadmap', '中文']);
+		assert.strictEqual(parseMarkdownTagsInput('   '), undefined);
 	});
 });

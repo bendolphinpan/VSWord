@@ -159,6 +159,23 @@ function unquoteYamlScalar(value: string): string {
 }
 
 /**
+ * Parse comma separated tag input from quick input into a stable unique tag list.
+ */
+export function parseMarkdownTagsInput(input: string): string[] | undefined {
+	const tags: string[] = [];
+	const seen = new Set<string>();
+	for (const raw of input.split(/[,，]/)) {
+		const tag = raw.trim();
+		if (!tag || seen.has(tag)) {
+			continue;
+		}
+		seen.add(tag);
+		tags.push(tag);
+	}
+	return tags.length ? tags : undefined;
+}
+
+/**
  * Update known VSWord frontmatter fields while preserving unknown fields and body text.
  *
  * This intentionally writes a simple YAML subset that VSWord can round-trip today.
