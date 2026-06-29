@@ -13,6 +13,7 @@ import './vswordHelloAction.js';
 import './vswordActions.js';
 import './vswordCanvasAction.js';
 import './vswordMindmapAction.js';
+import './blockeditor/blockEditorAction.js';
 import './spikes/reactflow/reactFlowCanvasAction.js';
 // Writer-mode defaults: register on import (no DI needed).
 import './vswordWriterModeDefaults.js';
