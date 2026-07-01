@@ -50,5 +50,9 @@ Thumbs.db
 .env.*
 !.env.example
 
+# Stray root package-lock.json (no root package.json exists; lockfiles belong under code-oss/)
+/package-lock.json
+/package.json
+
 # WSL NTFS symlink not supported: ignore test fixtures that contain symlinks
 code-oss/extensions/terminal-suggest/src/test/fixtures/
