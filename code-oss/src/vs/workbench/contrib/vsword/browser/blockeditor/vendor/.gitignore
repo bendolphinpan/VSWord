@@ -1,6 +1,0 @@
-# Block editor vendor assets (built by build-blockeditor.cjs)
-# Keep THIRD_PARTY_LICENSES.md in git, ignore built JS/CSS/fonts
-index.js
-index.css
-*.woff
-*.woff2

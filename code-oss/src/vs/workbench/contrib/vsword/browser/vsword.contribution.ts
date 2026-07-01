@@ -7,13 +7,12 @@ import { registerWorkbenchContribution2, WorkbenchPhase } from '../../../common/
 import { VswordWorkbenchShellContribution } from './vswordHomeView.js';
 import { VswordWordCountContribution } from './vswordWordCount.js';
 import { VswordMindmapAutoOpenContribution } from './vswordMindmapAutoOpen.js';
+import { VswordMilkdownEditorContribution } from './milkdownEditor/milkdownEditorContribution.js';
 
 // Effects-only imports. Each sub-module is responsible for its own registration.
 import './vswordHelloAction.js';
 import './vswordActions.js';
-import './vswordCanvasAction.js';
 import './vswordMindmapAction.js';
-import './blockeditor/blockEditorAction.js';
 import './spikes/reactflow/reactFlowCanvasAction.js';
 // Writer-mode defaults: register on import (no DI needed).
 import './vswordWriterModeDefaults.js';
@@ -21,3 +20,4 @@ import './vswordWriterModeDefaults.js';
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordMindmapAutoOpenContribution.ID, VswordMindmapAutoOpenContribution, WorkbenchPhase.AfterRestored);
+registerWorkbenchContribution2(VswordMilkdownEditorContribution.ID, VswordMilkdownEditorContribution, WorkbenchPhase.BlockStartup);
