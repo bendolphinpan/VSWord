@@ -47,12 +47,11 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 		background: var(--vscode-editor-background, #ffffff);
 		color: var(--vscode-foreground, #1f2328);
 	}
-	#app { width: 100vw; height: 100vh; position: relative; }
+	#app { width: 100vw; height: 100vh; position: relative; display: flex; flex-direction: column; overflow: hidden; }
 	#toolbar {
-		position: fixed;
-		top: 12px;
-		left: 12px;
-		right: 12px;
+		position: relative;
+		margin: 12px;
+		flex: 0 0 auto;
 		z-index: 30;
 		display: flex;
 		align-items: center;
@@ -80,7 +79,7 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	.view-switcher button { padding: 3px 8px; border-color: transparent; background: transparent; }
 	.view-switcher button.active { background: var(--vscode-button-secondaryBackground, #e5e5e5); border-color: var(--vscode-focusBorder, #0078d4); }
 	#style-panel {
-		position: fixed;
+		position: absolute;
 		top: 64px;
 		left: 12px;
 		z-index: 29;
@@ -101,8 +100,8 @@ export function getMindmapHtml(model: VSWordMindmapWebviewModel): string {
 	.swatch { width: 20px; height: 20px; border-radius: 999px; padding: 0; border-color: rgba(128,128,128,.55); }
 	.swatch.clear { background: repeating-linear-gradient(45deg, transparent 0 4px, rgba(128,128,128,.28) 4px 6px); }
 	select.style-select { height: 24px; border-radius: 6px; border: 1px solid var(--vscode-dropdown-border, rgba(128,128,128,.55)); background: var(--vscode-dropdown-background, #fff); color: var(--vscode-dropdown-foreground, #222); }
-	#map { position: absolute; inset: 0; padding-top: 52px; }
-	#summary-brackets-svg { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+	#map { position: relative; flex: 1 1 auto; min-height: 0; overflow: hidden; }
+	#summary-brackets-svg { position: absolute; left: 0; right: 0; bottom: 0; top: 64px; pointer-events: none; z-index: 5; }
 	#source-view, #markdown-view { position: absolute; inset: 0; padding: 68px 16px 16px; overflow: auto; background: var(--vscode-editor-background, #ffffff); }
 	#source-view[hidden], #markdown-view[hidden], #map[hidden] { display: none !important; }
 	.source-code, .markdown-code { margin: 0; min-height: 100%; white-space: pre-wrap; word-break: break-word; font-family: var(--vscode-editor-font-family, Consolas, monospace); font-size: var(--vscode-editor-font-size, 13px); line-height: 1.55; }
