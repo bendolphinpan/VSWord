@@ -14,8 +14,6 @@ import { SyncDescriptor } from '../../../../platform/instantiation/common/descri
 import { IInstantiationService } from '../../../../platform/instantiation/common/instantiation.js';
 import { IKeybindingService } from '../../../../platform/keybinding/common/keybinding.js';
 import { INotificationService } from '../../../../platform/notification/common/notification.js';
-import { IFileDialogService } from '../../../../platform/dialogs/common/dialogs.js';
-import { IWorkspaceContextService } from '../../../../platform/workspace/common/workspace.js';
 import { IOpenerService } from '../../../../platform/opener/common/opener.js';
 import { ICommandService } from '../../../../platform/commands/common/commands.js';
 import { Registry } from '../../../../platform/registry/common/platform.js';
@@ -30,7 +28,6 @@ import { IEditorService } from '../../../services/editor/common/editorService.js
 import { IHostService } from '../../../services/host/browser/host.js';
 import { IViewDescriptorService } from '../../../common/views.js';
 import { IHoverService } from '../../../../platform/hover/browser/hover.js';
-import { createUntitledMarkdownResource } from '../common/vswordMarkdown.js';
 
 export const VSWORD_HOME_VIEW_CONTAINER_ID = 'workbench.view.vsword.home';
 export const VSWORD_HOME_VIEW_ID = 'vsword.home';
@@ -53,8 +50,6 @@ class VswordHomeView extends ViewPane {
 		@IEditorService private readonly editorService: IEditorService,
 		@IHostService private readonly hostService: IHostService,
 		@INotificationService private readonly notificationService: INotificationService,
-		@IFileDialogService private readonly fileDialogService: IFileDialogService,
-		@IWorkspaceContextService private readonly workspaceContextService: IWorkspaceContextService,
 		@IWorkspacesService private readonly workspacesService: IWorkspacesService,
 		@ICommandService private readonly commandService: ICommandService
 	) {
@@ -78,7 +73,7 @@ class VswordHomeView extends ViewPane {
 
 		const title = append(root, $('h2', undefined, localize('vswordHomeTitle', 'VSWord')));
 		title.style.margin = '0 0 8px';
-		append(root, $('p', undefined, localize('vswordHomeSubtitle', 'A writing-first workspace for Markdown, blocks, canvas, and mind maps.')));
+		append(root, $('p', undefined, localize('vswordHomeSubtitle', 'A writing-first workspace for Markdown, canvas, and mind maps.')));
 
 		const actions = append(root, $('.vsword-home-actions'));
 		actions.style.display = 'flex';
@@ -86,19 +81,20 @@ class VswordHomeView extends ViewPane {
 		actions.style.gap = '8px';
 		actions.style.margin = '16px 0 20px';
 
-		this.renderButton(actions, localize('vswordNewMarkdown', 'New Markdown Document'), () => this.newMarkdownDocument());
-		this.renderButton(actions, localize('vswordOpenBlockEditor', 'Open Block Editor'), () => this.commandService.executeCommand('vsword.actions.openBlockEditor'));
-		this.renderButton(actions, localize('vswordShowMarkdownPreview', 'Show Markdown Preview'), () => this.commandService.executeCommand('vsword.actions.showMarkdownPreview'));
-		this.renderButton(actions, localize('vswordShowMarkdownPreviewToSide', 'Show Markdown Preview to Side'), () => this.commandService.executeCommand('vsword.actions.showMarkdownPreviewToSide'));
 		this.renderButton(actions, localize('vswordOpenFolder', 'Open Folder...'), () => this.commandService.executeCommand('workbench.action.files.openFolder'));
 		this.renderButton(actions, localize('vswordOpenFile', 'Open File...'), () => this.commandService.executeCommand('workbench.action.files.openFile'));
-		this.renderButton(actions, localize('vswordShowExplorer', 'Show File Explorer'), () => this.commandService.executeCommand('workbench.view.explorer'));
-		this.renderButton(actions, localize('vswordShowOutline', 'Show Outline'), () => this.commandService.executeCommand('outline.focus'));
-		this.renderButton(actions, localize('vswordOpenCanvas', 'Open Canvas'), () => this.commandService.executeCommand('vsword.actions.openCanvas'));
-		this.renderButton(actions, localize('vswordOpenMindMap', 'Open Mind Map'), () => this.openMindMap());
-		this.renderButton(actions, localize('vswordRefreshRecent', 'Refresh Recent'), () => this.renderHome(container));
 
-		append(root, $('h3', undefined, localize('vswordRecent', 'Recent')));
+		const recentHeader = append(root, $('.vsword-home-recent-header'));
+		recentHeader.style.display = 'flex';
+		recentHeader.style.alignItems = 'center';
+		recentHeader.style.justifyContent = 'space-between';
+		append(recentHeader, $('h3', undefined, localize('vswordRecent', 'Recent')));
+		const refresh = append(recentHeader, $('a.vsword-home-refresh', undefined, localize('vswordRefreshRecent', 'Refresh')));
+		refresh.style.cursor = 'pointer';
+		refresh.style.fontSize = '12px';
+		refresh.style.color = 'var(--vscode-textLink-foreground)';
+		this._register(addDisposableListener(refresh, 'click', () => { this.renderHome(container); }));
+
 		const recents = append(root, $('.vsword-home-recents'));
 		const recentlyOpened = await this.workspacesService.getRecentlyOpened();
 		const items: IRecent[] = [...recentlyOpened.files, ...recentlyOpened.workspaces].slice(0, 10);
@@ -152,31 +148,6 @@ class VswordHomeView extends ViewPane {
 		}
 	}
 
-	private async openMindMap(): Promise<void> {
-		const workspaceFolder = this.workspaceContextService.getWorkspace().folders[0]?.uri;
-		const selected = await this.fileDialogService.showOpenDialog({
-			title: localize('vswordSelectMindMap', 'Select Mind Map'),
-			openLabel: localize('vswordOpenMindMapDialog', 'Open Mind Map'),
-			defaultUri: workspaceFolder,
-			canSelectFiles: true,
-			canSelectFolders: false,
-			canSelectMany: false,
-			filters: [{ name: localize('vswordMindMapFiles', 'FreeMind Mind Maps'), extensions: ['mm'] }]
-		});
-		const resource = selected?.[0];
-		if (!resource) {
-			return;
-		}
-		await this.commandService.executeCommand('vsword.actions.openMindmap', resource);
-	}
-
-	private async newMarkdownDocument(): Promise<void> {
-		await this.editorService.openEditor({
-			resource: createUntitledMarkdownResource(),
-			languageId: 'markdown',
-			options: { pinned: true }
-		});
-	}
 }
 
 const viewContainer = Registry.as<IViewContainersRegistry>(Extensions.ViewContainersRegistry).registerViewContainer({
