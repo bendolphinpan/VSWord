@@ -156,6 +156,10 @@ window.addEventListener('message', event => {
     createEditor(String(msg.markdown ?? '')).catch(err => reportError('init', err));
     return;
   }
+  if (msg.type === 'reload') {
+    createEditor(String(msg.markdown ?? '')).catch(err => reportError('reload', err));
+    return;
+  }
   if (msg.type === 'dirtyChanged') {
     dirty = !!msg.dirty;
     setStatus(dirty ? 'Unsaved changes…' : 'Ready', dirty ? 'dirty' : 'ok');

@@ -44,7 +44,7 @@ VSWord = Code OSS 1.124.2 基线
 | **Phase 1** | Writer Workbench Shell（Home / writer-mode / 布局） | ✅ 完成 | 100% |
 | **Phase 2** | Markdown Core（frontmatter / 字数 / round-trip） | ✅ 完成 | 100% |
 | **Phase 3（旧）** | Block Editor（BlockNote） | ❌ **废弃** | 卡死不可用，本次移除 |
-| **Phase 3（新）** | **Markdown WYSIWYG 编辑器（Milkdown 重建）** | 🟡 进行中 | T-3.0/3.1/3.2 已完成；T-3.2b~T-3.9 待启动 |
+| **Phase 3（新）** | **Markdown WYSIWYG 编辑器（Milkdown 重建）** | 🟡 进行中 | T-3.0/3.1/3.2/3.2b ✅；T-3.3~T-3.9 待启动 |
 | **Phase 4** | Canvas（React Flow，文件夹视图） | ✅ 完成 | 100% |
 | **Phase 5** | Mindmap（`.mm` XMind 对齐，mind-elixir） | ✅ 深度完成 | ~90%（T-5.1~5.9） |
 | **Phase 6** | 多维表（Notion-like 数据库） | ⚪ 后期规划 | 标记为后期功能 |
@@ -195,7 +195,9 @@ Markdown 文本 ← remark 序列化 ← ProseMirror 文档 ← 编辑后文档
 - ✅ 旧路线约束：未复活 BlockNote / blockeditor；未增加主页按钮入口
 - ⚠️ 边界：当前 dirty 状态主要在 webview 内展示，并由 debounce/手动保存写回文件；还不是 VS Code 原生 WorkingCopy dirty dot/关闭前确认。已计划在 **T-3.2b** 升级为原生 EditorPane + WorkingCopy（用户决策 P-1=A）。
 
-#### T-3.2b — 升级到 EditorPane + WorkingCopy（原生 dirty / backup / external-change）🔴 待启动
+- ✅ **T-3.2b 已完成（2026-07-01）**：升级到 `MilkdownEditorInput extends WebviewInput` + `MilkdownWorkingCopy implements IWorkingCopy`，走 pane binding 自动复用 `WebviewEditor`（省 EditorPane 自建）。原生 dirty dot / Ctrl+S / 关闭前弹框 / Revert / external change / Backup 全部代理到 WorkingCopy。`npm run compile` 0 errors，`npm run test-node` 10910 passing（新增 8 个 milkdownWorkingCopy 测试全绿；唯一失败 Kerberos 环境无关）。Gate D 六项手工验收由用户在真机跑一遍确认。
+
+#### T-3.2b — 升级到 EditorPane + WorkingCopy（原生 dirty / backup / external-change）✅ 已完成（2026-07-01）
 **背景**：T-3.2 用 `WebviewInput`，dirty 状态只在 webview 内展示，缺少 VS Code 原生 dirty dot、Ctrl+W 保存提示、backup、external-change 合流。用户明确要求现在升级（决策 P-1=A），避免后期返工，也为 T-3.3~T-3.9 及最终 UI 重构留干净接口。
 
 **目标**：
@@ -239,9 +241,9 @@ Markdown 文本 ← remark 序列化 ← ProseMirror 文档 ← 编辑后文档
 T-3.0  清理旧 Block Editor                          ✅ 已完成
 T-3.1  Milkdown spike                               ✅ 已完成
 T-3.2  WYSIWYG MVP（文件类型关联）                  ✅ 已完成
-T-3.2b EditorPane + WorkingCopy 升级                🔴 待启动 ← 下一步
+T-3.2b EditorPane + WorkingCopy 升级                ✅ 已完成（2026-07-01）
 ────────── 以下是决策后拆解的完整 Typora 1:1 复刻任务 ──────────
-T-3.3  Typora 级即时渲染 + 排版基础
+T-3.3  Typora 级即时渲染 + 排版基础                  ← 下一步
        ├─ 3.3.1 CSS 主题系统（内置 4 主题：Light / Dark / GitHub / Serif）
        ├─ 3.3.2 光标进出代码块/表格切换源码/渲染（inline WYSIWYG 精髓）
        ├─ 3.3.3 slash menu（/ 插入块）

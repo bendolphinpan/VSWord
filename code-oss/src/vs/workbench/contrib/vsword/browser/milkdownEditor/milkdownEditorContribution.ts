@@ -3,53 +3,58 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { basename } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
-import { IFileService } from '../../../../../platform/files/common/files.js';
+import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
+import { FileChangeType } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IWorkbenchContribution } from '../../../../common/contributions.js';
-import { EditorInputWithOptions } from '../../../../common/editor.js';
-import { IEditorResolverService, RegisteredEditorPriority } from '../../../../services/editor/common/editorResolverService.js';
+import { EditorInputWithOptions, SaveReason } from '../../../../common/editor.js';
+import {
+	IEditorResolverService,
+	RegisteredEditorPriority,
+} from '../../../../services/editor/common/editorResolverService.js';
 import { IEditorService } from '../../../../services/editor/common/editorService.js';
 import { IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
 import { IWebviewService } from '../../../webview/browser/webview.js';
 import { asWebviewUri } from '../../../webview/common/webview.js';
-import { WebviewInput } from '../../../webviewPanel/browser/webviewEditorInput.js';
+import { MilkdownEditorInput } from './milkdownEditorInput.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
+import {
+	HostToWebviewMessage,
+	VSWORD_MILKDOWN_EDITOR_ID,
+	VSWORD_MILKDOWN_ORIGIN,
+	WebviewToHostMessage,
+} from './milkdownEditorProtocol.js';
 
-export const VSWORD_MILKDOWN_EDITOR_ID = 'vsword.markdown.milkdown';
-const VSWORD_MILKDOWN_ORIGIN = 'vsword-markdown-milkdown';
-
-interface MilkdownEditorEntry {
-	readonly input: WebviewInput;
-	readonly resource: URI;
-	readonly disposables: DisposableStore;
-	lastKnownMarkdown: string;
-	dirty: boolean;
-	saveTimer: any;
-}
-
-interface MilkdownWebviewResources {
+interface WebviewResources {
 	readonly vendorRoot: URI;
 	readonly scriptUri: URI;
 }
 
+/**
+ * Wires `.md` files to the Milkdown WYSIWYG editor and owns the per-input
+ * webview↔working-copy plumbing. The input itself (see
+ * {@link MilkdownEditorInput}) is instantiated by the resolver on demand and
+ * carries the working copy; this class only attaches the message pump and
+ * external-change dialog once the webview is live.
+ */
 export class VswordMilkdownEditorContribution extends Disposable implements IWorkbenchContribution {
+
 	static readonly ID = 'workbench.contrib.vsword.milkdownEditor';
 
-	private readonly entries = new Map<string, MilkdownEditorEntry>();
+	private readonly liveInputs = new Set<MilkdownEditorInput>();
 
 	constructor(
 		@IEditorResolverService editorResolverService: IEditorResolverService,
 		@IInstantiationService private readonly instantiationService: IInstantiationService,
 		@IWebviewService private readonly webviewService: IWebviewService,
-		@IFileService private readonly fileService: IFileService,
 		@IEditorService private readonly editorService: IEditorService,
+		@IDialogService private readonly dialogService: IDialogService,
 		@ILogService private readonly logService: ILogService,
 	) {
 		super();
@@ -67,159 +72,170 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			},
 			{
 				createEditorInput: (editorInput, group) => this.createEditorInput(editorInput.resource, group),
-			}
+			},
 		));
 	}
 
 	private createEditorInput(resource: URI, group: IEditorGroup): EditorInputWithOptions {
-		const key = resource.toString();
-		const existing = this.entries.get(key);
-		if (existing && !existing.input.isDisposed()) {
-			return { editor: existing.input };
-		}
-
-		const title = basename(resource);
 		const { vendorRoot, scriptUri } = getMilkdownWebviewResources();
 		const webview = this.webviewService.createWebviewOverlay({
 			providedViewType: VSWORD_MILKDOWN_EDITOR_ID,
 			extension: undefined,
 			origin: VSWORD_MILKDOWN_ORIGIN,
-			title,
+			title: basename(resource),
 			options: { enableFindWidget: true, retainContextWhenHidden: true },
 			contentOptions: {
 				allowScripts: true,
 				localResourceRoots: [vendorRoot, resource],
 			},
 		});
-		const input = this.instantiationService.createInstance(WebviewInput, {
-			viewType: VSWORD_MILKDOWN_EDITOR_ID,
-			providedId: VSWORD_MILKDOWN_EDITOR_ID,
-			name: title,
-			iconPath: undefined,
-		}, webview);
+		const input = this.instantiationService.createInstance(MilkdownEditorInput, resource, webview);
 		input.updateGroup(group.id);
-
-		const entry: MilkdownEditorEntry = {
-			input,
-			resource,
-			disposables: new DisposableStore(),
-			lastKnownMarkdown: '',
-			dirty: false,
-			saveTimer: undefined,
-		};
-		this.entries.set(key, entry);
-		entry.disposables.add(input.onWillDispose(() => {
-			this.clearSaveTimer(entry);
-			entry.disposables.dispose();
-			if (this.entries.get(key) === entry) {
-				this.entries.delete(key);
-			}
-		}));
-
-		this.attach(entry, scriptUri);
+		this.attach(input, scriptUri);
 		return { editor: input };
 	}
 
-	private attach(entry: MilkdownEditorEntry, scriptUri: URI): void {
-		const webview = entry.input.webview;
-		webview.setHtml(getMilkdownEditorHtml({
-			fileName: basename(entry.resource),
-			resourceUri: entry.resource.toString(),
+	private attach(input: MilkdownEditorInput, scriptUri: URI): void {
+		const disposables = new DisposableStore();
+		this.liveInputs.add(input);
+
+		input.webview.setHtml(getMilkdownEditorHtml({
+			fileName: basename(input.resource),
+			resourceUri: input.resource.toString(),
 			scriptUri: asWebviewUri(scriptUri).toString(true),
 		}));
-		entry.disposables.add(webview.onMessage(async e => {
+
+		disposables.add(input.webview.onMessage(async e => {
 			try {
-				await this.handleMessage(entry, e.message);
+				await this.handleWebviewMessage(input, e.message as WebviewToHostMessage);
 			} catch (err) {
 				this.logService.error('[VSWord Milkdown] message handler failed:', err);
-				webview.postMessage({ type: 'hostError', message: String(err) });
+				this.post(input, { type: 'hostError', message: String(err) });
 			}
+		}));
+
+		disposables.add(input.workingCopy.onDidChangeDirty(() => {
+			this.post(input, { type: 'dirtyChanged', dirty: input.workingCopy.isDirty() });
+		}));
+
+		disposables.add(input.workingCopy.onDidReload(payload => {
+			this.post(input, { type: 'reload', markdown: payload.markdown, reason: payload.reason });
+			this.post(input, { type: 'dirtyChanged', dirty: false });
+		}));
+
+		disposables.add(input.onDidRequestReload(() => {
+			this.post(input, { type: 'reload', markdown: input.workingCopy.getContent(), reason: 'revert' });
+		}));
+
+		disposables.add(input.workingCopy.onExternalChange(evt => this.onExternalChange(input, evt.changeType)));
+
+		disposables.add(input.onWillDispose(() => {
+			this.liveInputs.delete(input);
+			disposables.dispose();
 		}));
 	}
 
-	private async handleMessage(entry: MilkdownEditorEntry, msg: any): Promise<void> {
+	private async handleWebviewMessage(input: MilkdownEditorInput, msg: WebviewToHostMessage): Promise<void> {
 		if (!msg || typeof msg.type !== 'string') {
 			return;
 		}
-
 		switch (msg.type) {
 			case 'ready':
-				await this.postDocument(entry);
+				await this.postInit(input);
 				return;
 			case 'markdownUpdated':
-				this.handleMarkdownUpdated(entry, String(msg.markdown ?? ''));
+				input.workingCopy.updateContent(msg.markdown);
 				return;
-			case 'save':
-				await this.save(entry, String(msg.markdown ?? entry.lastKnownMarkdown), String(msg.requestId ?? ''));
+			case 'save': {
+				const ok = await input.workingCopy.save({ reason: SaveReason.EXPLICIT });
+				this.post(input, {
+					type: 'saved',
+					ok,
+					dirty: input.workingCopy.isDirty(),
+					requestId: msg.requestId,
+					message: ok ? undefined : 'save failed',
+				});
 				return;
+			}
 			case 'openAsText':
-				await this.openAsText(entry);
+				await this.openAsText(input);
 				return;
 			case 'webviewError':
-				this.logService.error('[VSWord Milkdown] webview error [' + String(msg.prefix || '?') + ']: ' + String(msg.message || ''));
+				this.logService.error('[VSWord Milkdown] webview error [' + String(msg.prefix || '?') + ']: ' + msg.message);
 				return;
 		}
 	}
 
-	private async postDocument(entry: MilkdownEditorEntry): Promise<void> {
-		const content = await this.fileService.readFile(entry.resource);
-		const markdown = content.value.toString();
-		entry.lastKnownMarkdown = markdown;
-		entry.dirty = false;
-		entry.input.webview.postMessage({
+	private async postInit(input: MilkdownEditorInput): Promise<void> {
+		// If the working copy has already been loaded (e.g. reopened tab from
+		// backup restore), push what we have instead of re-reading disk.
+		const markdown = input.workingCopy.isLoaded
+			? input.workingCopy.getContent()
+			: await input.workingCopy.load('initial');
+		this.post(input, {
 			type: 'init',
-			resourceUri: entry.resource.toString(),
-			fileName: basename(entry.resource),
+			resourceUri: input.resource.toString(),
+			fileName: basename(input.resource),
 			markdown,
 		});
+		this.post(input, { type: 'dirtyChanged', dirty: input.workingCopy.isDirty() });
 	}
 
-	private handleMarkdownUpdated(entry: MilkdownEditorEntry, markdown: string): void {
-		entry.lastKnownMarkdown = markdown;
-		entry.dirty = true;
-		this.scheduleSave(entry, markdown);
-	}
-
-	private scheduleSave(entry: MilkdownEditorEntry, markdown: string): void {
-		this.clearSaveTimer(entry);
-		entry.saveTimer = setTimeout(() => {
-			entry.saveTimer = undefined;
-			void this.save(entry, markdown, 'auto');
-		}, 700);
-		entry.input.webview.postMessage({ type: 'dirtyChanged', dirty: true });
-	}
-
-	private clearSaveTimer(entry: MilkdownEditorEntry): void {
-		if (entry.saveTimer !== undefined) {
-			clearTimeout(entry.saveTimer);
-			entry.saveTimer = undefined;
+	private async onExternalChange(input: MilkdownEditorInput, changeType: FileChangeType): Promise<void> {
+		if (changeType === FileChangeType.DELETED) {
+			this.post(input, { type: 'hostError', message: 'File was deleted on disk.' });
+			return;
+		}
+		if (!input.workingCopy.isDirty()) {
+			try {
+				await input.workingCopy.load('externalChange');
+			} catch (err) {
+				this.logService.error('[VSWord Milkdown] silent reload on external change failed:', err);
+			}
+			return;
+		}
+		const { confirmed } = await this.dialogService.confirm({
+			type: 'warning',
+			message: localize('vsword.milkdown.externalChange.title', 'This file has changed on disk.'),
+			detail: localize(
+				'vsword.milkdown.externalChange.detail',
+				"'{0}' was modified outside VSWord while you have unsaved changes. Reload from disk and discard your edits?",
+				basename(input.resource),
+			),
+			primaryButton: localize('vsword.milkdown.externalChange.reload', 'Reload from disk'),
+			cancelButton: localize('vsword.milkdown.externalChange.keep', 'Keep my edits'),
+		});
+		if (confirmed) {
+			try {
+				await input.workingCopy.load('externalChange');
+			} catch (err) {
+				this.logService.error('[VSWord Milkdown] external reload failed:', err);
+			}
 		}
 	}
 
-	private async save(entry: MilkdownEditorEntry, markdown: string, requestId: string): Promise<void> {
-		this.clearSaveTimer(entry);
+	private async openAsText(input: MilkdownEditorInput): Promise<void> {
 		try {
-			await this.fileService.writeFile(entry.resource, VSBuffer.fromString(markdown));
-			entry.lastKnownMarkdown = markdown;
-			entry.dirty = false;
-			entry.input.webview.postMessage({ type: 'saved', requestId, ok: true, dirty: false });
+			await this.editorService.openEditor(
+				{ resource: input.resource, options: { pinned: true, override: 'default' } },
+				input.group,
+			);
 		} catch (err) {
-			this.logService.error('[VSWord Milkdown] failed to save Markdown:', err);
-			entry.input.webview.postMessage({ type: 'saved', requestId, ok: false, dirty: true, message: String(err) });
+			this.logService.error('[VSWord Milkdown] openAsText failed:', err);
+			this.post(input, { type: 'hostError', message: String(err) });
 		}
 	}
 
-	private async openAsText(entry: MilkdownEditorEntry): Promise<void> {
+	private post(input: MilkdownEditorInput, msg: HostToWebviewMessage): void {
 		try {
-			await this.editorService.openEditor({ resource: entry.resource, options: { pinned: true, override: 'default' } }, entry.input.group);
-		} catch (err) {
-			this.logService.error('[VSWord Milkdown] failed to open Markdown as text:', err);
-			entry.input.webview.postMessage({ type: 'hostError', message: String(err) });
+			input.webview.postMessage(msg);
+		} catch {
+			// Webview was disposed underneath us; swallow.
 		}
 	}
 }
 
-function getMilkdownWebviewResources(): MilkdownWebviewResources {
+function getMilkdownWebviewResources(): WebviewResources {
 	const vendorRoot = FileAccess.asFileUri('vs/workbench/contrib/vsword/browser/milkdownEditor/vendor');
 	return {
 		vendorRoot,
