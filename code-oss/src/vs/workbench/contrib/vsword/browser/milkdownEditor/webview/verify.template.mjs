@@ -30,6 +30,8 @@ import { focusModePlugins } from './focus-mode.mjs';
 import { MODES, DEFAULT_MODE } from './mode-controller.mjs';
 import { VSWORD_MILKDOWN_THEME_IDS, VSWORD_MILKDOWN_DEFAULT_THEME, isValidTheme } from './themes.mjs';
 import { extractHeadings, findEnclosingHeadingId, slugify } from './outline-extractor.mjs';
+import { upload, uploadConfig, defaultUploader } from '@milkdown/plugin-upload';
+import { createHostImageUploader, imageUploadPlugins } from './image-upload.mjs';
 
 // Must match webview/entry.template.js — kept literally in sync for round-trip parity.
 const TYPORA_STRINGIFY_OPTIONS = {
@@ -48,7 +50,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -190,6 +192,23 @@ const checks = {
 		? findEnclosingHeadingId(outlineHeadingsFromMultiSource, -1) === null
 		: findEnclosingHeadingId(outlineHeadingsFromMultiSource, -1) === null,
 	outlineActiveIdEmptyReturnsNull: findEnclosingHeadingId([], 42) === null,
+	// T-3.5.1 image upload — plugin-upload shape + our host-backed integration.
+	uploadBundleIsTwoPlugins: Array.isArray(upload) && upload.length === 2,
+	uploadConfigHasKey: !!uploadConfig && !!uploadConfig.key && typeof uploadConfig.meta === 'object',
+	defaultUploaderIsFunction: typeof defaultUploader === 'function',
+	imageUploadPluginsExported: Array.isArray(imageUploadPlugins) && imageUploadPlugins.length === 2 && imageUploadPlugins === upload,
+	createHostImageUploaderReturnsFn: typeof createHostImageUploader(null) === 'function',
+	// Round-trip: relative + remote image links survive parse → serialize unchanged.
+	roundTripHasRelativeImage: output.includes('![截图](assets/screenshot-1.png)'),
+	roundTripHasRemoteImage: output.includes('![远程](https://example.com/pic.png)'),
+	// The uploader factory returns an async fn matching the plugin-upload contract.
+	uploaderContract: (async () => {
+		const fn = createHostImageUploader(null);
+		// Empty FileList — should resolve to empty array without touching vscode.
+		const emptyList = { length: 0, item: () => null };
+		const r = await fn(emptyList, { nodes: { image: { createAndFill: () => ({}) } } });
+		return Array.isArray(r) && r.length === 0;
+	})(),
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };

@@ -16,6 +16,11 @@ import {
 	VSWORD_THEME_CONFIG,
 	isValidTheme,
 } from './milkdownEditorThemes.js';
+import {
+	VSWORD_IMAGE_STRATEGIES,
+	VSWORD_IMAGE_STRATEGY_CONFIG,
+	VSWORD_IMAGE_STRATEGY_DEFAULT,
+} from './imageStorageStrategy.js';
 
 /**
  * T-3.3.1: register the Settings schema for the three theme-related keys.
@@ -25,6 +30,26 @@ import {
  * The contribution reads these + IStorageService lastTheme via readEffectiveTheme().
  */
 const selectableThemes = (VSWORD_MILKDOWN_THEME_IDS as readonly string[]).filter(id => id !== 'default');
+
+Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConfiguration({
+	id: 'vsword.markdown',
+	order: 210,
+	title: localize('vsword.markdown.title', 'VSWord Markdown'),
+	type: 'object',
+	properties: {
+		[VSWORD_IMAGE_STRATEGY_CONFIG]: {
+			type: 'string',
+			enum: [...VSWORD_IMAGE_STRATEGIES],
+			enumDescriptions: [
+				localize('vsword.markdown.imageStorage.assetsShared', 'Save into a shared `assets/` folder next to the Markdown file (default). Multiple .md files under the same folder share the folder.'),
+				localize('vsword.markdown.imageStorage.assetsPerFile', 'Save into a per-file `<name>.assets/` folder next to the Markdown file (Typora-compatible layout).'),
+				localize('vsword.markdown.imageStorage.sameFolder', 'Save directly into the same folder as the Markdown file (flat).'),
+			],
+			default: VSWORD_IMAGE_STRATEGY_DEFAULT,
+			description: localize('vsword.markdown.imageStorage.desc', 'Where pasted/dropped images get written on disk. All strategies produce relative paths inside the Markdown — external URLs pasted from browsers are left as-is (not downloaded).'),
+		},
+	},
+});
 
 Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConfiguration({
 	id: 'vsword.theme',

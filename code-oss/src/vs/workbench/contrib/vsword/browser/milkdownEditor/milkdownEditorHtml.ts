@@ -11,6 +11,11 @@ interface MilkdownEditorHtmlOptions {
 	readonly resourceUri: string;
 	readonly scriptUri: string;
 	readonly katexCssUri: string;
+	/** T-3.5.1: webview URI of the .md file's parent dir; used as `<base href>` so
+	 * relative image srcs written by the uploader (e.g. `assets/foo.png`) resolve
+	 * against `localResourceRoots`. Existing script/CSS URIs are absolute so this
+	 * only affects relative-path assets like inserted images. */
+	readonly documentBaseUri: string;
 	readonly cspSource?: string;
 	readonly initialTheme?: string;
 }
@@ -29,12 +34,14 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 	const resourceUri = escapeHtml(options.resourceUri);
 	const scriptUri = escapeHtml(options.scriptUri);
 	const katexCssUri = escapeHtml(options.katexCssUri);
+	const documentBaseUri = escapeHtml(options.documentBaseUri);
 	const cspSource = escapeHtml(options.cspSource ?? webviewGenericCspSource);
 
 	return `<!doctype html>
 <html lang="en">
 <head>
 	<meta charset="UTF-8">
+	<base href="${documentBaseUri}">
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data: blob:; font-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource};">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${fileName}</title>

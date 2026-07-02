@@ -29,6 +29,7 @@ const focusModePath = path.join(srcDir, 'focus-mode.mjs');
 const modeControllerPath = path.join(srcDir, 'mode-controller.mjs');
 const themesPath = path.join(srcDir, 'themes.mjs');
 const outlineExtractorPath = path.join(srcDir, 'outline-extractor.mjs');
+const imageUploadPath = path.join(srcDir, 'image-upload.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -49,6 +50,7 @@ const packages = [
 	'@milkdown/plugin-math@7.5.9',
 	'katex@0.16.11',
 	'@milkdown/plugin-slash@7.21.2',
+	'@milkdown/plugin-upload@7.21.2',
 	'unist-util-visit@5.1.0',
 	'@milkdown/transformer@7.21.2',
 	'@milkdown/prose@7.21.2',
@@ -95,6 +97,7 @@ fs.writeFileSync(focusModePath, fs.readFileSync(path.join(webviewSrcDir, 'focus-
 fs.writeFileSync(modeControllerPath, fs.readFileSync(path.join(webviewSrcDir, 'mode-controller.template.js'), 'utf8'));
 fs.writeFileSync(themesPath, fs.readFileSync(path.join(webviewSrcDir, 'themes.template.js'), 'utf8'));
 fs.writeFileSync(outlineExtractorPath, fs.readFileSync(path.join(webviewSrcDir, 'outline-extractor.template.js'), 'utf8'));
+fs.writeFileSync(imageUploadPath, fs.readFileSync(path.join(webviewSrcDir, 'image-upload.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

@@ -71,6 +71,20 @@ export interface WebviewOutlineChangedMessage {
 	readonly activeId: string | null;
 }
 
+/**
+ * T-3.5.1: webview asks the host to persist a pasted/dropped image to disk.
+ * `bytes` is a base64-encoded payload (webview↔host postMessage is JSON only).
+ * `requestId` is echoed back so the uploader Promise resolves against the
+ * correct pending call when multiple images are dropped at once.
+ */
+export interface WebviewImageUploadRequestMessage {
+	readonly type: 'imageUpload';
+	readonly requestId: string;
+	readonly bytesBase64: string;
+	readonly mime: string;
+	readonly suggestedName: string;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -80,7 +94,8 @@ export type WebviewToHostMessage =
 	| WebviewPreferenceRequestMessage
 	| WebviewPreferenceUpdateMessage
 	| WebviewThemeRequestMessage
-	| WebviewOutlineChangedMessage;
+	| WebviewOutlineChangedMessage
+	| WebviewImageUploadRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -140,6 +155,21 @@ export interface HostRevealHeadingMessage {
 	readonly pos: number;
 }
 
+/** T-3.5.1: host tells the webview the pasted image was persisted; provide the relative path to insert. */
+export interface HostImageUploadedMessage {
+	readonly type: 'imageUploaded';
+	readonly requestId: string;
+	readonly relativePath: string;
+	readonly alt: string;
+}
+
+/** T-3.5.1: host reports why the image save failed; the placeholder gets removed. */
+export interface HostImageUploadFailedMessage {
+	readonly type: 'imageUploadFailed';
+	readonly requestId: string;
+	readonly message: string;
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -148,7 +178,9 @@ export type HostToWebviewMessage =
 	| HostErrorMessage
 	| HostPreferenceResponseMessage
 	| HostThemeChangedMessage
-	| HostRevealHeadingMessage;
+	| HostRevealHeadingMessage
+	| HostImageUploadedMessage
+	| HostImageUploadFailedMessage;
 
 // ---------------------------------------------------------------------------
 // Constants

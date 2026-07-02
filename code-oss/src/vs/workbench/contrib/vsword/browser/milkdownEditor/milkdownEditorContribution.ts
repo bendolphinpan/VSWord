@@ -4,13 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
+import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { FileAccess } from '../../../../../base/common/network.js';
-import { basename } from '../../../../../base/common/resources.js';
+import { basename, dirname, joinPath } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { FileChangeType } from '../../../../../platform/files/common/files.js';
+import { FileChangeType, IFileService } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
@@ -36,6 +37,7 @@ import {
 	VSWORD_MILKDOWN_MODES,
 	VSWORD_MILKDOWN_ORIGIN,
 	VswordMilkdownMode,
+	WebviewImageUploadRequestMessage,
 	WebviewToHostMessage,
 } from './milkdownEditorProtocol.js';
 import {
@@ -45,6 +47,14 @@ import {
 	VswordMilkdownTheme,
 	isValidTheme,
 } from './milkdownEditorThemes.js';
+import {
+	VSWORD_IMAGE_STRATEGY_CONFIG,
+	VSWORD_IMAGE_STRATEGY_DEFAULT,
+	VswordImageStorageStrategy,
+	isValidImageStrategy,
+	resolveImageLocation,
+	resolveRelativeDirSegments,
+} from './imageStorageStrategy.js';
 
 interface WebviewResources {
 	readonly vendorRoot: URI;
@@ -75,6 +85,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IStorageService private readonly storageService: IStorageService,
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IThemeService private readonly themeService: IThemeService,
+		@IFileService private readonly fileService: IFileService,
 	) {
 		super();
 		this._register(editorResolverService.registerEditor(
@@ -124,7 +135,10 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			options: { enableFindWidget: true, retainContextWhenHidden: true },
 			contentOptions: {
 				allowScripts: true,
-				localResourceRoots: [vendorRoot, resource],
+				// T-3.5.1: parent dir instead of the .md file itself so images written
+				// under `assets/`, `<name>.assets/`, or same-folder are loadable via
+				// the webview URI scheme once inserted with a relative path.
+				localResourceRoots: [vendorRoot, dirname(resource)],
 			},
 		});
 		const input = this.instantiationService.createInstance(MilkdownEditorInput, resource, webview);
@@ -142,6 +156,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			resourceUri: input.resource.toString(),
 			scriptUri: asWebviewUri(scriptUri).toString(true),
 			katexCssUri: asWebviewUri(katexCssUri).toString(true),
+			documentBaseUri: asWebviewUri(dirname(input.resource)).toString(true) + '/',
 			initialTheme: this.readEffectiveTheme(),
 		}));
 
@@ -215,6 +230,9 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				return;
 			case 'outlineChanged':
 				input.updateOutlineData({ headings: msg.headings, activeId: msg.activeId });
+				return;
+			case 'imageUpload':
+				await this.handleImageUpload(input, msg);
 				return;
 			case 'webviewError':
 				this.logService.error('[VSWord Milkdown] webview error [' + String(msg.prefix || '?') + ']: ' + msg.message);
@@ -315,6 +333,80 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		const theme = this.readEffectiveTheme();
 		for (const input of this.liveInputs) {
 			this.post(input, { type: 'themeChanged', theme });
+		}
+	}
+
+	private readImageStrategy(): VswordImageStorageStrategy {
+		const raw = this.configurationService.getValue(VSWORD_IMAGE_STRATEGY_CONFIG);
+		return isValidImageStrategy(raw) ? raw : VSWORD_IMAGE_STRATEGY_DEFAULT;
+	}
+
+	/**
+	 * T-3.5.1: persist a pasted/dropped image next to the current .md file and
+	 * echo back the relative path. Errors get reported to the webview so the
+	 * uploading placeholder is cleared and the user sees a toast.
+	 *
+	 * Failure modes handled:
+	 *   - Bad base64 → imageUploadFailed (webview shows toast, removes widget).
+	 *   - IFileService.writeFile throws (permissions/disk) → imageUploadFailed.
+	 *   - Empty payload → imageUploadFailed.
+	 */
+	private async handleImageUpload(input: MilkdownEditorInput, msg: WebviewImageUploadRequestMessage): Promise<void> {
+		const respondFail = (message: string) => {
+			this.post(input, { type: 'imageUploadFailed', requestId: msg.requestId, message });
+		};
+		try {
+			if (!msg.bytesBase64) {
+				respondFail('Empty image payload.');
+				return;
+			}
+			// atob available in browser/renderer; the webview host runs in the workbench window.
+			const binary = atob(msg.bytesBase64);
+			if (!binary.length) {
+				respondFail('Empty image payload.');
+				return;
+			}
+			const bytes = new Uint8Array(binary.length);
+			for (let i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+
+			const strategy = this.readImageStrategy();
+			const mdParent = dirname(input.resource);
+			const mdName = basename(input.resource);
+			const mdStem = mdName.replace(/\.[^./\\]+$/, '');
+			const dirSegments = resolveRelativeDirSegments(strategy, mdStem);
+			const targetDir = dirSegments.length === 0 ? mdParent : joinPath(mdParent, ...dirSegments);
+
+			const location = await resolveImageLocation(
+				strategy,
+				mdStem,
+				msg.suggestedName,
+				msg.mime,
+				async fileName => {
+					try {
+						return await this.fileService.exists(joinPath(targetDir, fileName));
+					} catch {
+						return false;
+					}
+				},
+			);
+
+			const targetUri = joinPath(targetDir, location.fileName);
+			// Ensure the directory exists (writeFile on some providers only creates
+			// files, not intermediate dirs); createFolder is a no-op if present.
+			if (dirSegments.length > 0) {
+				try { await this.fileService.createFolder(targetDir); } catch { /* already exists */ }
+			}
+			await this.fileService.writeFile(targetUri, VSBuffer.wrap(bytes));
+
+			this.post(input, {
+				type: 'imageUploaded',
+				requestId: msg.requestId,
+				relativePath: location.markdownPath,
+				alt: mdStem, // stem-based default alt; user can retype
+			});
+		} catch (err) {
+			this.logService.error('[VSWord Milkdown] image upload failed', err);
+			respondFail(err instanceof Error ? err.message : String(err));
 		}
 	}
 

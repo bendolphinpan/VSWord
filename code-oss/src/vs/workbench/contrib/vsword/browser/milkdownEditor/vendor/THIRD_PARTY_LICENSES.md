@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-02T11:46:02.155Z
+Generated: 2026-07-02T15:23:23.558Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
@@ -95,6 +95,7 @@ Generated: 2026-07-02T11:46:02.155Z
 | @floating-ui/dom | 1.7.6 | MIT | https://registry.npmjs.org/@floating-ui/dom/-/dom-1.7.6.tgz |
 | @floating-ui/core | 1.7.5 | MIT | https://registry.npmjs.org/@floating-ui/core/-/core-1.7.5.tgz |
 | @floating-ui/utils | 0.2.11 | MIT | https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.11.tgz |
+| @milkdown/plugin-upload | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-upload/-/plugin-upload-7.21.2.tgz |
 | @milkdown/preset-commonmark | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/preset-commonmark/-/preset-commonmark-7.21.2.tgz |
 | remark-inline-links | 7.0.0 | MIT | https://registry.npmjs.org/remark-inline-links/-/remark-inline-links-7.0.0.tgz |
 | mdast-util-definitions | 6.0.0 | MIT | https://registry.npmjs.org/mdast-util-definitions/-/mdast-util-definitions-6.0.0.tgz |

@@ -33,6 +33,7 @@ import { inputRulePlugins } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
 import { createModeController } from './mode-controller.mjs';
 import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs';
+import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -55,6 +56,9 @@ const TYPORA_STRINGIFY_OPTIONS = {
 };
 
 const vscode = typeof acquireVsCodeApi === 'function' ? acquireVsCodeApi() : undefined;
+// T-3.5.1: wire the imageUpload* host messages into the pending uploader registry BEFORE
+// the editor is created so no message arrives ahead of the listener.
+installImageUploadMessageBridge();
 const shell = document.querySelector('.vsword-md-shell');
 const root = document.getElementById('milkdown-root');
 const status = document.getElementById('milkdown-status');
@@ -159,6 +163,8 @@ async function createEditor(markdown) {
 					};
 				},
 			});
+			// T-3.5.1: install the host-backed image uploader on top of plugin-upload's default.
+			configureImageUpload(ctx, vscode);
 		})
 		.use(listener)
 		.use(commonmark)
@@ -172,6 +178,7 @@ async function createEditor(markdown) {
 		.use(typoraShortcutPlugins)
 		.use(inputRulePlugins)
 		.use(focusModePlugins)
+		.use(imageUploadPlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
