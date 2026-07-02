@@ -1,28 +1,29 @@
 // @ts-nocheck
 /*---------------------------------------------------------------------------------------------
- *  T-3.5.2: image NodeView — 8-handle resize with aspect ratio locked.
+ *  T-3.5.2 + T-3.5.3: image NodeView — 8-handle resize (aspect locked) + caption
+ *  editor. Same wrapper, same chrome-visibility rules, so both features share a
+ *  single lifecycle.
  *
  *  Layout:
  *    <span.vsword-img-wrap[data-selected] contenteditable="false">
  *      <img>
- *      <span.vsword-img-handle[data-handle="nw"]>…</span>  (× 8)
+ *      <span.vsword-img-caption>alt text</span>       (T-3.5.3, only when alt !== '')
+ *      <button.vsword-img-edit-alt>改文字</button>    (T-3.5.3)
+ *      <span.vsword-img-handle[data-handle="…"]>…</span>  (× 8)
  *    </span>
  *
- *  Chrome (handles) is only visible when the wrap has `data-selected="true"`
- *  or the wrap is hovered — Q7=a. Selection sync piggybacks on ProseMirror's
- *  selectNode / deselectNode callbacks.
+ *  Chrome (handles + edit button + optional popover) is only visible when the
+ *  wrap has `data-selected="true"` or the wrap is hovered — Q7=a on both
+ *  features. The caption itself is ALWAYS visible (Q2=a for T-3.5.3) — it's
+ *  the reader's "alt as caption" surface.
  *
- *  Drag → commit contract (Q6=a):
- *    - mousedown on handle: snapshot startX / startWidth / handle id.
- *    - mousemove: mutate `img.style.width` only — no doc mutation, so it's
- *      free-form and instant.
- *    - mouseup: dispatch a single `setNodeMarkup` tr with the new `width`
- *      attr; one undo pops the whole resize.
+ *  Drag → commit contract (T-3.5.2 / Q6=a): mousedown snapshots startX,
+ *  mousemove mutates img.style.width live, mouseup dispatches a single
+ *  setNodeMarkup transaction — one undo pops the whole resize.
  *
- *  All eight handles collapse to a signed horizontal delta (see
- *  widthFromDrag in image-resize.mjs). n/s (top/bottom edge) handles are
- *  inert under aspect lock — they render for visual completeness but drag
- *  as no-ops.
+ *  Alt → commit contract (T-3.5.3 / Q3=a): "改文字" button opens a small
+ *  popover below the image with a plain <input>; Enter or "保存" dispatches
+ *  setNodeMarkup with the new alt, Escape or click-outside cancels.
  *--------------------------------------------------------------------------------------------*/
 
 import { $view } from '@milkdown/utils';
@@ -30,6 +31,12 @@ import { imageSchemaOverride } from './image-schema-override.mjs';
 import { HANDLE_DIRECTIONS, widthFromDrag } from './image-resize.mjs';
 
 const HANDLES = /** @type {const} */ (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']);
+
+/** Trim & collapse only outer whitespace; keep interior spaces (CJK / prose need them). */
+export function normalizeAlt(raw) {
+	if (raw == null) return '';
+	return String(raw).replace(/\r?\n/g, ' ').replace(/^\s+|\s+$/g, '');
+}
 
 export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, view, getPos) => {
 	const doc = view.dom.ownerDocument;
@@ -41,9 +48,24 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 	const img = doc.createElement('img');
 	wrap.appendChild(img);
 
-	// Handles: purely decorative until the wrap is [data-selected="true"]; CSS
-	// hides them by default and reveals on selection/hover so the reader view
-	// stays clean.
+	// T-3.5.3: caption (Q1=a: alt IS the caption, single source of truth).
+	// Rendered as a sibling so image + text stack cleanly and captions never
+	// participate in the image's intrinsic sizing.
+	const captionEl = doc.createElement('span');
+	captionEl.className = 'vsword-img-caption';
+	wrap.appendChild(captionEl);
+
+	// T-3.5.3: "改文字" trigger. Only surfaces when the wrap is selected/hovered
+	// (same rules as resize handles), sits at the bottom-right corner.
+	const editBtn = doc.createElement('button');
+	editBtn.type = 'button';
+	editBtn.className = 'vsword-img-edit-alt';
+	editBtn.textContent = '改文字';
+	editBtn.setAttribute('aria-label', 'Edit image alt text (caption)');
+	wrap.appendChild(editBtn);
+	editBtn.addEventListener('mousedown', ev => { ev.preventDefault(); ev.stopPropagation(); });
+	editBtn.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); openAltPopover(); });
+
 	const handleEls = HANDLES.map(h => {
 		const el = doc.createElement('span');
 		el.className = 'vsword-img-handle';
@@ -58,6 +80,8 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 
 	/** @type {{ handle: string, startX: number, startWidth: number, container: number } | null} */
 	let drag = null;
+	/** @type {HTMLElement | null} */
+	let popover = null;
 
 	function applyAttrs(n) {
 		img.src = n.attrs.src;
@@ -70,40 +94,88 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 			img.removeAttribute('width');
 			img.style.width = '';
 		}
-		// Height ALWAYS auto — aspect ratio comes from intrinsic pixels.
 		img.style.height = 'auto';
+		// Caption: only render text when alt is non-empty (Q5=a). Empty alt →
+		// zero-height caption so no ghost slot.
+		const alt = normalizeAlt(n.attrs.alt);
+		captionEl.textContent = alt;
+		wrap.dataset.hasCaption = alt ? 'true' : 'false';
+	}
+
+	function commitAlt(nextAlt) {
+		const pos = typeof getPos === 'function' ? getPos() : null;
+		if (typeof pos !== 'number') return;
+		const current = view.state.doc.nodeAt(pos);
+		if (!current || current.type.name !== 'image') return;
+		const normalized = normalizeAlt(nextAlt);
+		if (current.attrs.alt === normalized) return;
+		const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, alt: normalized });
+		view.dispatch(tr);
+	}
+
+	// T-3.5.3 popover: bare-DOM, no framework. Escape / click-outside cancels;
+	// Enter or Save commits. Only one popover at a time — reopen replaces.
+	function openAltPopover() {
+		closeAltPopover();
+		const pop = doc.createElement('div');
+		pop.className = 'vsword-img-alt-popover';
+		const input = doc.createElement('input');
+		input.type = 'text';
+		input.className = 'vsword-img-alt-input';
+		input.value = node.attrs.alt || '';
+		input.placeholder = '图注文本 (alt)';
+		const save = doc.createElement('button');
+		save.type = 'button';
+		save.className = 'vsword-img-alt-save';
+		save.textContent = '保存';
+		pop.appendChild(input);
+		pop.appendChild(save);
+		wrap.appendChild(pop);
+		popover = pop;
+
+		const commit = () => { commitAlt(input.value); closeAltPopover(); };
+		const cancel = () => closeAltPopover();
+		input.addEventListener('keydown', ev => {
+			if (ev.key === 'Enter') { ev.preventDefault(); commit(); }
+			else if (ev.key === 'Escape') { ev.preventDefault(); cancel(); }
+		});
+		save.addEventListener('mousedown', ev => { ev.preventDefault(); ev.stopPropagation(); });
+		save.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); commit(); });
+		// Swallow selection-losing events on the popover surface itself.
+		pop.addEventListener('mousedown', ev => ev.stopPropagation());
+		// Click outside → cancel. Bound on next tick so the opening click doesn't fire it.
+		setTimeout(() => doc.addEventListener('mousedown', outsideHandler, true), 0);
+
+		input.focus();
+		input.select();
+	}
+	function closeAltPopover() {
+		if (!popover) return;
+		popover.remove();
+		popover = null;
+		doc.removeEventListener('mousedown', outsideHandler, true);
+	}
+	function outsideHandler(ev) {
+		if (popover && !popover.contains(ev.target)) closeAltPopover();
 	}
 
 	function beginDrag(ev, handle) {
 		if (ev.button !== 0) return;
 		const dir = HANDLE_DIRECTIONS[handle];
-		if (!dir || dir.sign === 0) {
-			// n/s edge handles are inert (aspect-locked) — swallow the event
-			// so it doesn't fall through to text selection but do nothing.
-			ev.preventDefault();
-			return;
-		}
+		if (!dir || dir.sign === 0) { ev.preventDefault(); return; }
 		ev.preventDefault();
 		ev.stopPropagation();
 		const rect = img.getBoundingClientRect();
 		const container = wrap.parentElement?.getBoundingClientRect().width ?? rect.width * 4;
-		drag = {
-			handle,
-			startX: ev.clientX,
-			startWidth: rect.width,
-			container: Math.max(0, Math.floor(container)),
-		};
+		drag = { handle, startX: ev.clientX, startWidth: rect.width, container: Math.max(0, Math.floor(container)) };
 		wrap.dataset.resizing = 'true';
 		doc.addEventListener('mousemove', onMove, true);
 		doc.addEventListener('mouseup', onUp, true);
 	}
-
 	function onMove(ev) {
 		if (!drag) return;
-		const w = widthFromDrag(drag.handle, drag.startWidth, drag.startX, ev.clientX, drag.container);
-		img.style.width = w + 'px';
+		img.style.width = widthFromDrag(drag.handle, drag.startWidth, drag.startX, ev.clientX, drag.container) + 'px';
 	}
-
 	function onUp(ev) {
 		if (!drag) return;
 		const w = widthFromDrag(drag.handle, drag.startWidth, drag.startX, ev.clientX, drag.container);
@@ -116,8 +188,7 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 		const currentNode = view.state.doc.nodeAt(pos);
 		if (!currentNode || currentNode.type.name !== 'image') return;
 		if (currentNode.attrs.width === w) return;
-		const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...currentNode.attrs, width: w });
-		view.dispatch(tr);
+		view.dispatch(view.state.tr.setNodeMarkup(pos, undefined, { ...currentNode.attrs, width: w }));
 	}
 
 	return {
@@ -128,15 +199,20 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 			return true;
 		},
 		selectNode() { wrap.dataset.selected = 'true'; },
-		deselectNode() { wrap.dataset.selected = 'false'; },
+		deselectNode() { wrap.dataset.selected = 'false'; closeAltPopover(); },
 		stopEvent(ev) {
-			// Keep resize handle events out of ProseMirror's normal handling.
-			return ev.target instanceof HTMLElement && ev.target.classList.contains('vsword-img-handle');
+			// Keep chrome events out of PM's default handling: handles, edit
+			// button, and any popover contents.
+			if (!(ev.target instanceof HTMLElement)) return false;
+			if (ev.target.classList.contains('vsword-img-handle')) return true;
+			if (ev.target.closest('.vsword-img-edit-alt, .vsword-img-alt-popover')) return true;
+			return false;
 		},
 		ignoreMutation() { return true; },
 		destroy() {
 			doc.removeEventListener('mousemove', onMove, true);
 			doc.removeEventListener('mouseup', onUp, true);
+			closeAltPopover();
 			handleEls.forEach(el => el.remove());
 		},
 	};

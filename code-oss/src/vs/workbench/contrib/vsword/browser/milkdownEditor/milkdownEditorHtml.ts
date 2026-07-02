@@ -325,6 +325,81 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-img-handle[data-handle="s"]  { bottom: -4px; left: 50%;     transform: translateX(-50%); cursor: ns-resize; }
 		.vsword-img-handle[data-handle="sw"] { bottom: -4px; left: -4px;    cursor: nesw-resize; }
 		.vsword-img-handle[data-handle="w"]  { top: 50%;     left: -4px;    transform: translateY(-50%); cursor: ew-resize; }
+		/* T-3.5.3: caption (alt-as-caption) + inline "改文字" editor.
+		 * The caption itself is ALWAYS visible whenever alt is non-empty
+		 * (Q2=a) — that's the reader view. The edit button and popover only
+		 * surface on hover / selection, same rules as resize handles. */
+		.vsword-img-caption {
+			display: none;
+			text-align: center;
+			font-size: 0.9em;
+			line-height: 1.4;
+			color: var(--vsword-muted);
+			margin-top: 4px;
+			padding: 0 8px;
+			word-break: break-word;
+			white-space: normal;
+		}
+		.vsword-img-wrap[data-has-caption="true"] .vsword-img-caption { display: block; }
+		.vsword-img-edit-alt {
+			position: absolute;
+			right: 0;
+			bottom: -22px;
+			padding: 1px 8px;
+			font: inherit;
+			font-size: 11px;
+			line-height: 16px;
+			color: var(--vsword-bg);
+			background: var(--vsword-accent);
+			border: none;
+			border-radius: 3px;
+			cursor: pointer;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 80ms ease;
+		}
+		.vsword-img-wrap:hover .vsword-img-edit-alt,
+		.vsword-img-wrap[data-selected="true"] .vsword-img-edit-alt {
+			opacity: 1;
+			pointer-events: auto;
+		}
+		.vsword-img-alt-popover {
+			position: absolute;
+			left: 50%;
+			top: calc(100% + 4px);
+			transform: translateX(-50%);
+			display: flex;
+			gap: 4px;
+			padding: 4px 6px;
+			background: var(--vsword-bg);
+			border: 1px solid var(--vsword-border);
+			border-radius: 4px;
+			box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+			z-index: 20;
+			white-space: nowrap;
+		}
+		.vsword-img-alt-input {
+			min-width: 200px;
+			padding: 2px 6px;
+			font: inherit;
+			font-size: 13px;
+			color: var(--vsword-fg);
+			background: var(--vsword-bg);
+			border: 1px solid var(--vsword-border);
+			border-radius: 3px;
+			outline: none;
+		}
+		.vsword-img-alt-input:focus { border-color: var(--vsword-accent); }
+		.vsword-img-alt-save {
+			padding: 2px 10px;
+			font: inherit;
+			font-size: 12px;
+			color: var(--vsword-bg);
+			background: var(--vsword-accent);
+			border: none;
+			border-radius: 3px;
+			cursor: pointer;
+		}
 		${getThemesCss()}
 	</style>
 </head>
