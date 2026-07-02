@@ -16,6 +16,10 @@ import './vswordMindmapAction.js';
 import './spikes/reactflow/reactFlowCanvasAction.js';
 // Writer-mode defaults: register on import (no DI needed).
 import './vswordWriterModeDefaults.js';
+// T-3.3.1: register vsword.theme.* configuration schema + `VSWord: Select Markdown Theme` command.
+import './milkdownEditor/milkdownEditorThemeRegistrations.js';
+// T-3.4: register Outline creator so the built-in Outline pane populates for VSWord Markdown editors.
+import './milkdownEditor/milkdownEditorOutline.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);

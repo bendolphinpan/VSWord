@@ -40,12 +40,47 @@ export interface WebviewErrorMessage {
 	readonly message: string;
 }
 
+/** T-3.3.2: webview asks the host for the persisted global mode preference. */
+export interface WebviewPreferenceRequestMessage {
+	readonly type: 'preferenceRequest';
+}
+
+/** T-3.3.2: webview reports the user's latest mode selection so the host can persist it. */
+export interface WebviewPreferenceUpdateMessage {
+	readonly type: 'preferenceUpdate';
+	readonly mode: VswordMilkdownMode;
+}
+
+/** T-3.3.1: webview asks the host for the persisted theme (+ current workbench kind). */
+export interface WebviewThemeRequestMessage {
+	readonly type: 'themeRequest';
+}
+
+/** T-3.4: single heading entry reported by the webview outline extractor. */
+export interface WebviewHeading {
+	readonly id: string;
+	readonly text: string;
+	readonly level: number;
+	readonly pos: number;
+}
+
+/** T-3.4: webview pushes the full heading list + active id on every doc/selection change. */
+export interface WebviewOutlineChangedMessage {
+	readonly type: 'outlineChanged';
+	readonly headings: readonly WebviewHeading[];
+	readonly activeId: string | null;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
 	| WebviewSaveRequestMessage
 	| WebviewOpenAsTextMessage
-	| WebviewErrorMessage;
+	| WebviewErrorMessage
+	| WebviewPreferenceRequestMessage
+	| WebviewPreferenceUpdateMessage
+	| WebviewThemeRequestMessage
+	| WebviewOutlineChangedMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -87,12 +122,33 @@ export interface HostErrorMessage {
 	readonly message: string;
 }
 
+/** T-3.3.2: host replies to a preferenceRequest with the last persisted mode. */
+export interface HostPreferenceResponseMessage {
+	readonly type: 'preferenceResponse';
+	readonly mode: VswordMilkdownMode;
+}
+
+/** T-3.3.1: host pushes the effective theme id whenever it changes (initial + on selection). */
+export interface HostThemeChangedMessage {
+	readonly type: 'themeChanged';
+	readonly theme: string;
+}
+
+/** T-3.4: host asks the webview to move the cursor to a ProseMirror doc position. */
+export interface HostRevealHeadingMessage {
+	readonly type: 'revealHeading';
+	readonly pos: number;
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
 	| HostSavedMessage
 	| HostReloadMessage
-	| HostErrorMessage;
+	| HostErrorMessage
+	| HostPreferenceResponseMessage
+	| HostThemeChangedMessage
+	| HostRevealHeadingMessage;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -104,3 +160,10 @@ export const VSWORD_MILKDOWN_WORKING_COPY_TYPE_ID = 'vsword.markdown.milkdown';
 
 /** Debounce for webview→host auto-save while the user types. */
 export const VSWORD_MILKDOWN_AUTOSAVE_DEBOUNCE_MS = 700;
+
+/** T-3.3.2 three-mode switcher — value literals shared by both sides. */
+export type VswordMilkdownMode = 'realtime' | 'reading' | 'source';
+export const VSWORD_MILKDOWN_MODES: readonly VswordMilkdownMode[] = ['realtime', 'reading', 'source'];
+export const VSWORD_MILKDOWN_DEFAULT_MODE: VswordMilkdownMode = 'realtime';
+/** IStorageService key holding the last-selected mode (APPLICATION scope, per Q3=b). */
+export const VSWORD_MILKDOWN_MODE_STORAGE_KEY = 'vsword.milkdown.lastMode';

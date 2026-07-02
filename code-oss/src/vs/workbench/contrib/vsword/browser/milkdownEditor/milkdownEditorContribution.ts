@@ -8,10 +8,14 @@ import { FileAccess } from '../../../../../base/common/network.js';
 import { basename } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
+import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { FileChangeType } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
+import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
+import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
+import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { IWorkbenchContribution } from '../../../../common/contributions.js';
 import { EditorInputWithOptions, SaveReason } from '../../../../common/editor.js';
 import {
@@ -26,14 +30,26 @@ import { MilkdownEditorInput } from './milkdownEditorInput.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
 import {
 	HostToWebviewMessage,
+	VSWORD_MILKDOWN_DEFAULT_MODE,
 	VSWORD_MILKDOWN_EDITOR_ID,
+	VSWORD_MILKDOWN_MODE_STORAGE_KEY,
+	VSWORD_MILKDOWN_MODES,
 	VSWORD_MILKDOWN_ORIGIN,
+	VswordMilkdownMode,
 	WebviewToHostMessage,
 } from './milkdownEditorProtocol.js';
+import {
+	VSWORD_MILKDOWN_DEFAULT_THEME,
+	VSWORD_MILKDOWN_THEME_STORAGE_KEY,
+	VSWORD_THEME_CONFIG,
+	VswordMilkdownTheme,
+	isValidTheme,
+} from './milkdownEditorThemes.js';
 
 interface WebviewResources {
 	readonly vendorRoot: URI;
 	readonly scriptUri: URI;
+	readonly katexCssUri: URI;
 }
 
 /**
@@ -56,6 +72,9 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IEditorService private readonly editorService: IEditorService,
 		@IDialogService private readonly dialogService: IDialogService,
 		@ILogService private readonly logService: ILogService,
+		@IStorageService private readonly storageService: IStorageService,
+		@IConfigurationService private readonly configurationService: IConfigurationService,
+		@IThemeService private readonly themeService: IThemeService,
 	) {
 		super();
 		this._register(editorResolverService.registerEditor(
@@ -74,10 +93,29 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				createEditorInput: (editorInput, group) => this.createEditorInput(editorInput.resource, group),
 			},
 		));
+		// T-3.3.1: broadcast theme changes to every live webview.
+		this._register(this.configurationService.onDidChangeConfiguration(e => {
+			if (
+				e.affectsConfiguration(VSWORD_THEME_CONFIG.followWorkbench) ||
+				e.affectsConfiguration(VSWORD_THEME_CONFIG.light) ||
+				e.affectsConfiguration(VSWORD_THEME_CONFIG.dark)
+			) {
+				this.broadcastTheme();
+			}
+		}));
+		this._register(this.themeService.onDidColorThemeChange(() => {
+			if (this.configurationService.getValue<boolean>(VSWORD_THEME_CONFIG.followWorkbench)) {
+				this.broadcastTheme();
+			}
+		}));
+		// T-3.3.1: user picked a new theme via the command palette → rebroadcast.
+		this._register(this.storageService.onDidChangeValue(StorageScope.APPLICATION, VSWORD_MILKDOWN_THEME_STORAGE_KEY, this._store)(() => {
+			this.broadcastTheme();
+		}));
 	}
 
 	private createEditorInput(resource: URI, group: IEditorGroup): EditorInputWithOptions {
-		const { vendorRoot, scriptUri } = getMilkdownWebviewResources();
+		const { vendorRoot, scriptUri, katexCssUri } = getMilkdownWebviewResources();
 		const webview = this.webviewService.createWebviewOverlay({
 			providedViewType: VSWORD_MILKDOWN_EDITOR_ID,
 			extension: undefined,
@@ -91,11 +129,11 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		});
 		const input = this.instantiationService.createInstance(MilkdownEditorInput, resource, webview);
 		input.updateGroup(group.id);
-		this.attach(input, scriptUri);
+		this.attach(input, scriptUri, katexCssUri);
 		return { editor: input };
 	}
 
-	private attach(input: MilkdownEditorInput, scriptUri: URI): void {
+	private attach(input: MilkdownEditorInput, scriptUri: URI, katexCssUri: URI): void {
 		const disposables = new DisposableStore();
 		this.liveInputs.add(input);
 
@@ -103,6 +141,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			fileName: basename(input.resource),
 			resourceUri: input.resource.toString(),
 			scriptUri: asWebviewUri(scriptUri).toString(true),
+			katexCssUri: asWebviewUri(katexCssUri).toString(true),
+			initialTheme: this.readEffectiveTheme(),
 		}));
 
 		disposables.add(input.webview.onMessage(async e => {
@@ -128,6 +168,10 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		}));
 
 		disposables.add(input.workingCopy.onExternalChange(evt => this.onExternalChange(input, evt.changeType)));
+
+		disposables.add(input.onRevealHeadingRequested(pos => {
+			this.post(input, { type: 'revealHeading', pos });
+		}));
 
 		disposables.add(input.onWillDispose(() => {
 			this.liveInputs.delete(input);
@@ -160,6 +204,18 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'openAsText':
 				await this.openAsText(input);
 				return;
+			case 'preferenceRequest':
+				this.post(input, { type: 'preferenceResponse', mode: this.readMode() });
+				return;
+			case 'preferenceUpdate':
+				this.writeMode(msg.mode);
+				return;
+			case 'themeRequest':
+				this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme() });
+				return;
+			case 'outlineChanged':
+				input.updateOutlineData({ headings: msg.headings, activeId: msg.activeId });
+				return;
 			case 'webviewError':
 				this.logService.error('[VSWord Milkdown] webview error [' + String(msg.prefix || '?') + ']: ' + msg.message);
 				return;
@@ -179,6 +235,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			markdown,
 		});
 		this.post(input, { type: 'dirtyChanged', dirty: input.workingCopy.isDirty() });
+		this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme() });
 	}
 
 	private async onExternalChange(input: MilkdownEditorInput, changeType: FileChangeType): Promise<void> {
@@ -226,6 +283,41 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		}
 	}
 
+	private readMode(): VswordMilkdownMode {
+		const raw = this.storageService.get(VSWORD_MILKDOWN_MODE_STORAGE_KEY, StorageScope.APPLICATION, VSWORD_MILKDOWN_DEFAULT_MODE);
+		return (VSWORD_MILKDOWN_MODES as readonly string[]).includes(raw) ? raw as VswordMilkdownMode : VSWORD_MILKDOWN_DEFAULT_MODE;
+	}
+
+	private writeMode(mode: VswordMilkdownMode): void {
+		if (!(VSWORD_MILKDOWN_MODES as readonly string[]).includes(mode)) return;
+		this.storageService.store(VSWORD_MILKDOWN_MODE_STORAGE_KEY, mode, StorageScope.APPLICATION, StorageTarget.USER);
+	}
+
+	/**
+	 * T-3.3.1 effective theme resolution:
+	 *   - if followWorkbench=true → pick config.light or config.dark based on the workbench kind
+	 *   - else → return the last-selected theme from IStorageService (default 'default')
+	 */
+	private readEffectiveTheme(): VswordMilkdownTheme {
+		const follow = this.configurationService.getValue<boolean>(VSWORD_THEME_CONFIG.followWorkbench) === true;
+		if (follow) {
+			const kind = this.themeService.getColorTheme().type;
+			const isDark = kind === ColorScheme.DARK || kind === ColorScheme.HIGH_CONTRAST_DARK;
+			const key = isDark ? VSWORD_THEME_CONFIG.dark : VSWORD_THEME_CONFIG.light;
+			const raw = this.configurationService.getValue<string>(key);
+			return isValidTheme(raw) ? raw : (isDark ? 'night' : 'github');
+		}
+		const stored = this.storageService.get(VSWORD_MILKDOWN_THEME_STORAGE_KEY, StorageScope.APPLICATION, VSWORD_MILKDOWN_DEFAULT_THEME);
+		return isValidTheme(stored) ? stored : VSWORD_MILKDOWN_DEFAULT_THEME;
+	}
+
+	private broadcastTheme(): void {
+		const theme = this.readEffectiveTheme();
+		for (const input of this.liveInputs) {
+			this.post(input, { type: 'themeChanged', theme });
+		}
+	}
+
 	private post(input: MilkdownEditorInput, msg: HostToWebviewMessage): void {
 		try {
 			input.webview.postMessage(msg);
@@ -240,5 +332,6 @@ function getMilkdownWebviewResources(): WebviewResources {
 	return {
 		vendorRoot,
 		scriptUri: URI.joinPath(vendorRoot, 'index.js'),
+		katexCssUri: URI.joinPath(vendorRoot, 'katex', 'katex.min.css'),
 	};
 }

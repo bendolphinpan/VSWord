@@ -23,8 +23,15 @@ import { IOverlayWebview } from '../../../webview/browser/webview.js';
 import { WebviewInput } from '../../../webviewPanel/browser/webviewEditorInput.js';
 import {
 	VSWORD_MILKDOWN_EDITOR_ID,
+	type WebviewHeading,
 } from './milkdownEditorProtocol.js';
 import { MilkdownWorkingCopy } from './milkdownWorkingCopy.js';
+
+/** T-3.4: outline snapshot pushed by the webview and consumed by the Outline pane. */
+export interface MilkdownOutlineData {
+	readonly headings: readonly WebviewHeading[];
+	readonly activeId: string | null;
+}
 
 /**
  * Editor input for the Milkdown WYSIWYG editor.
@@ -63,6 +70,18 @@ export class MilkdownEditorInput extends WebviewInput {
 	private readonly _onDidRequestReload = this._register(new Emitter<void>());
 	/** Fires when the pane should force the webview to reload document content. */
 	readonly onDidRequestReload = this._onDidRequestReload.event;
+
+	// --- T-3.4: outline surface -------------------------------------------------
+
+	private _outlineSnapshot: MilkdownOutlineData | undefined;
+
+	private readonly _onOutlineDataChanged = this._register(new Emitter<MilkdownOutlineData>());
+	/** Fires when the webview pushes a new outline snapshot. */
+	readonly onOutlineDataChanged = this._onOutlineDataChanged.event;
+
+	private readonly _onRevealHeadingRequested = this._register(new Emitter<number>());
+	/** Contribution wires this to postMessage({ type: 'revealHeading', pos }). */
+	readonly onRevealHeadingRequested = this._onRevealHeadingRequested.event;
 
 	constructor(
 		resource: URI,
@@ -143,5 +162,20 @@ export class MilkdownEditorInput extends WebviewInput {
 		// Fall through to base implementation which compares resource + editorId
 		// (from `options.override`) for untyped resource editor inputs.
 		return super.matches(otherInput);
+	}
+
+	// --- T-3.4: outline surface ------------------------------------------------
+
+	public updateOutlineData(data: MilkdownOutlineData): void {
+		this._outlineSnapshot = data;
+		this._onOutlineDataChanged.fire(data);
+	}
+
+	public getOutlineSnapshot(): MilkdownOutlineData | undefined {
+		return this._outlineSnapshot;
+	}
+
+	public requestRevealHeading(pos: number): void {
+		this._onRevealHeadingRequested.fire(pos);
 	}
 }

@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-01T15:34:46.738Z
+Generated: 2026-07-02T11:46:02.155Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
@@ -11,8 +11,8 @@ Generated: 2026-07-01T15:34:46.738Z
 | @milkdown/transformer | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/transformer/-/transformer-7.21.2.tgz |
 | remark-parse | 11.0.0 | MIT | https://registry.npmjs.org/remark-parse/-/remark-parse-11.0.0.tgz |
 | @types/mdast | 4.0.4 | MIT | https://registry.npmjs.org/@types/mdast/-/mdast-4.0.4.tgz |
-| @types/unist | 3.0.3 | MIT | https://registry.npmjs.org/@types/unist/-/unist-3.0.3.tgz |
 | mdast-util-from-markdown | 2.0.3 | MIT | https://registry.npmjs.org/mdast-util-from-markdown/-/mdast-util-from-markdown-2.0.3.tgz |
+| @types/unist | 3.0.3 | MIT | https://registry.npmjs.org/@types/unist/-/unist-3.0.3.tgz |
 | decode-named-character-reference | 1.3.0 | MIT | https://registry.npmjs.org/decode-named-character-reference/-/decode-named-character-reference-1.3.0.tgz |
 | character-entities | 2.0.2 | MIT | https://registry.npmjs.org/character-entities/-/character-entities-2.0.2.tgz |
 | devlop | 1.1.0 | MIT | https://registry.npmjs.org/devlop/-/devlop-1.1.0.tgz |
@@ -21,8 +21,8 @@ Generated: 2026-07-01T15:34:46.738Z
 | micromark-util-symbol | 2.0.1 | MIT | https://registry.npmjs.org/micromark-util-symbol/-/micromark-util-symbol-2.0.1.tgz |
 | micromark-util-decode-string | 2.0.1 | MIT | https://registry.npmjs.org/micromark-util-decode-string/-/micromark-util-decode-string-2.0.1.tgz |
 | micromark-util-character | 2.1.1 | MIT | https://registry.npmjs.org/micromark-util-character/-/micromark-util-character-2.1.1.tgz |
-| micromark-util-types | 2.0.2 | MIT | https://registry.npmjs.org/micromark-util-types/-/micromark-util-types-2.0.2.tgz |
 | micromark-util-normalize-identifier | 2.0.1 | MIT | https://registry.npmjs.org/micromark-util-normalize-identifier/-/micromark-util-normalize-identifier-2.0.1.tgz |
+| micromark-util-types | 2.0.2 | MIT | https://registry.npmjs.org/micromark-util-types/-/micromark-util-types-2.0.2.tgz |
 | micromark | 4.0.2 | MIT | https://registry.npmjs.org/micromark/-/micromark-4.0.2.tgz |
 | @types/debug | 4.1.13 | MIT | https://registry.npmjs.org/@types/debug/-/debug-4.1.13.tgz |
 | @types/ms | 2.1.0 | MIT | https://registry.npmjs.org/@types/ms/-/ms-2.1.0.tgz |
@@ -64,6 +64,37 @@ Generated: 2026-07-01T15:34:46.738Z
 | @types/lodash-es | 4.17.12 | MIT | https://registry.npmjs.org/@types/lodash-es/-/lodash-es-4.17.12.tgz |
 | @types/lodash | 4.17.24 | MIT | https://registry.npmjs.org/@types/lodash/-/lodash-4.17.24.tgz |
 | lodash-es | 4.18.1 | MIT | https://registry.npmjs.org/lodash-es/-/lodash-es-4.18.1.tgz |
+| @milkdown/plugin-math | 7.5.9 | MIT | https://registry.npmjs.org/@milkdown/plugin-math/-/plugin-math-7.5.9.tgz |
+| @milkdown/exception | 7.5.9 | MIT | https://registry.npmjs.org/@milkdown/exception/-/exception-7.5.9.tgz |
+| tslib | 2.8.1 | 0BSD | https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz |
+| @milkdown/utils | 7.5.9 | MIT | https://registry.npmjs.org/@milkdown/utils/-/utils-7.5.9.tgz |
+| @types/katex | 0.16.8 | MIT | https://registry.npmjs.org/@types/katex/-/katex-0.16.8.tgz |
+| katex | 0.16.11 | MIT | https://registry.npmjs.org/katex/-/katex-0.16.11.tgz |
+| remark-math | 6.0.0 | MIT | https://registry.npmjs.org/remark-math/-/remark-math-6.0.0.tgz |
+| mdast-util-math | 3.0.0 | MIT | https://registry.npmjs.org/mdast-util-math/-/mdast-util-math-3.0.0.tgz |
+| @types/hast | 3.0.4 | MIT | https://registry.npmjs.org/@types/hast/-/hast-3.0.4.tgz |
+| unist-util-remove-position | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-remove-position/-/unist-util-remove-position-5.0.0.tgz |
+| micromark-extension-math | 3.1.0 | MIT | https://registry.npmjs.org/micromark-extension-math/-/micromark-extension-math-3.1.0.tgz |
+| @milkdown/plugin-prism | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-prism/-/plugin-prism-7.21.2.tgz |
+| refractor | 5.0.0 | MIT | https://registry.npmjs.org/refractor/-/refractor-5.0.0.tgz |
+| @types/prismjs | 1.26.6 | MIT | https://registry.npmjs.org/@types/prismjs/-/prismjs-1.26.6.tgz |
+| hastscript | 9.0.1 | MIT | https://registry.npmjs.org/hastscript/-/hastscript-9.0.1.tgz |
+| comma-separated-tokens | 2.0.3 | MIT | https://registry.npmjs.org/comma-separated-tokens/-/comma-separated-tokens-2.0.3.tgz |
+| hast-util-parse-selector | 4.0.0 | MIT | https://registry.npmjs.org/hast-util-parse-selector/-/hast-util-parse-selector-4.0.0.tgz |
+| property-information | 7.2.0 | MIT | https://registry.npmjs.org/property-information/-/property-information-7.2.0.tgz |
+| space-separated-tokens | 2.0.2 | MIT | https://registry.npmjs.org/space-separated-tokens/-/space-separated-tokens-2.0.2.tgz |
+| parse-entities | 4.0.2 | MIT | https://registry.npmjs.org/parse-entities/-/parse-entities-4.0.2.tgz |
+| @types/unist | 2.0.11 | MIT | https://registry.npmjs.org/@types/unist/-/unist-2.0.11.tgz |
+| character-entities-legacy | 3.0.0 | MIT | https://registry.npmjs.org/character-entities-legacy/-/character-entities-legacy-3.0.0.tgz |
+| character-reference-invalid | 2.0.1 | MIT | https://registry.npmjs.org/character-reference-invalid/-/character-reference-invalid-2.0.1.tgz |
+| is-alphanumerical | 2.0.1 | MIT | https://registry.npmjs.org/is-alphanumerical/-/is-alphanumerical-2.0.1.tgz |
+| is-alphabetical | 2.0.1 | MIT | https://registry.npmjs.org/is-alphabetical/-/is-alphabetical-2.0.1.tgz |
+| is-decimal | 2.0.1 | MIT | https://registry.npmjs.org/is-decimal/-/is-decimal-2.0.1.tgz |
+| is-hexadecimal | 2.0.1 | MIT | https://registry.npmjs.org/is-hexadecimal/-/is-hexadecimal-2.0.1.tgz |
+| @milkdown/plugin-slash | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-slash/-/plugin-slash-7.21.2.tgz |
+| @floating-ui/dom | 1.7.6 | MIT | https://registry.npmjs.org/@floating-ui/dom/-/dom-1.7.6.tgz |
+| @floating-ui/core | 1.7.5 | MIT | https://registry.npmjs.org/@floating-ui/core/-/core-1.7.5.tgz |
+| @floating-ui/utils | 0.2.11 | MIT | https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.11.tgz |
 | @milkdown/preset-commonmark | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/preset-commonmark/-/preset-commonmark-7.21.2.tgz |
 | remark-inline-links | 7.0.0 | MIT | https://registry.npmjs.org/remark-inline-links/-/remark-inline-links-7.0.0.tgz |
 | mdast-util-definitions | 6.0.0 | MIT | https://registry.npmjs.org/mdast-util-definitions/-/mdast-util-definitions-6.0.0.tgz |
@@ -181,3 +212,10 @@ Generated: 2026-07-01T15:34:46.738Z
 | ws | 8.21.0 | MIT | https://registry.npmjs.org/ws/-/ws-8.21.0.tgz |
 | bufferutil |  |  |  |
 | utf-8-validate |  |  |  |
+| commander | 8.3.0 | MIT | https://registry.npmjs.org/commander/-/commander-8.3.0.tgz |
+| remark-flexible-markers | 1.3.5 | MIT | https://registry.npmjs.org/remark-flexible-markers/-/remark-flexible-markers-1.3.5.tgz |
+| unist-builder | 4.0.0 | MIT | https://registry.npmjs.org/unist-builder/-/unist-builder-4.0.0.tgz |
+| unist-util-find-after | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-after/-/unist-util-find-after-5.0.0.tgz |
+| unist-util-find-all-after | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-all-after/-/unist-util-find-all-after-5.0.0.tgz |
+| unist-util-find-all-before | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-all-before/-/unist-util-find-all-before-5.0.0.tgz |
+| unist-util-find-between | 1.2.2 | MIT | https://registry.npmjs.org/unist-util-find-between/-/unist-util-find-between-1.2.2.tgz |
