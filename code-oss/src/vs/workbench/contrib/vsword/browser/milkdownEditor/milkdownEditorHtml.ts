@@ -288,6 +288,43 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			color: var(--vsword-muted);
 			font-size: 13px;
 		}
+		/* T-3.5.2: image resize NodeView. Chrome only when the wrap is hovered
+		 * or selected — Q7=a. Handles are 8 tiny squares at the wrapper corners
+		 * and edge midpoints; n/s ones are inert under aspect lock but shown
+		 * for visual completeness. */
+		.vsword-img-wrap {
+			position: relative;
+			display: inline-block;
+			max-width: 100%;
+			line-height: 0;
+		}
+		.vsword-img-wrap img { max-width: 100%; display: block; }
+		.vsword-img-wrap[data-resizing="true"] { user-select: none; }
+		.vsword-img-wrap[data-selected="true"] { outline: 1px solid var(--vsword-accent); outline-offset: 2px; }
+		.vsword-img-handle {
+			position: absolute;
+			width: 8px;
+			height: 8px;
+			background: var(--vsword-accent);
+			border: 1px solid var(--vsword-bg);
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 80ms ease;
+		}
+		.vsword-img-wrap:hover .vsword-img-handle,
+		.vsword-img-wrap[data-selected="true"] .vsword-img-handle,
+		.vsword-img-wrap[data-resizing="true"] .vsword-img-handle {
+			opacity: 1;
+			pointer-events: auto;
+		}
+		.vsword-img-handle[data-handle="nw"] { top: -4px;    left: -4px;    cursor: nwse-resize; }
+		.vsword-img-handle[data-handle="n"]  { top: -4px;    left: 50%;     transform: translateX(-50%); cursor: ns-resize; }
+		.vsword-img-handle[data-handle="ne"] { top: -4px;    right: -4px;   cursor: nesw-resize; }
+		.vsword-img-handle[data-handle="e"]  { top: 50%;     right: -4px;   transform: translateY(-50%); cursor: ew-resize; }
+		.vsword-img-handle[data-handle="se"] { bottom: -4px; right: -4px;   cursor: nwse-resize; }
+		.vsword-img-handle[data-handle="s"]  { bottom: -4px; left: 50%;     transform: translateX(-50%); cursor: ns-resize; }
+		.vsword-img-handle[data-handle="sw"] { bottom: -4px; left: -4px;    cursor: nesw-resize; }
+		.vsword-img-handle[data-handle="w"]  { top: 50%;     left: -4px;    transform: translateY(-50%); cursor: ew-resize; }
 		${getThemesCss()}
 	</style>
 </head>

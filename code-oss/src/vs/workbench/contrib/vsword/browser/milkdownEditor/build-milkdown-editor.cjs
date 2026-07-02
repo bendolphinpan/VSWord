@@ -30,6 +30,9 @@ const modeControllerPath = path.join(srcDir, 'mode-controller.mjs');
 const themesPath = path.join(srcDir, 'themes.mjs');
 const outlineExtractorPath = path.join(srcDir, 'outline-extractor.mjs');
 const imageUploadPath = path.join(srcDir, 'image-upload.mjs');
+const imageResizePath = path.join(srcDir, 'image-resize.mjs');
+const imageSchemaOverridePath = path.join(srcDir, 'image-schema-override.mjs');
+const imageNodeViewPath = path.join(srcDir, 'image-node-view.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -98,6 +101,9 @@ fs.writeFileSync(modeControllerPath, fs.readFileSync(path.join(webviewSrcDir, 'm
 fs.writeFileSync(themesPath, fs.readFileSync(path.join(webviewSrcDir, 'themes.template.js'), 'utf8'));
 fs.writeFileSync(outlineExtractorPath, fs.readFileSync(path.join(webviewSrcDir, 'outline-extractor.template.js'), 'utf8'));
 fs.writeFileSync(imageUploadPath, fs.readFileSync(path.join(webviewSrcDir, 'image-upload.template.js'), 'utf8'));
+fs.writeFileSync(imageResizePath, fs.readFileSync(path.join(webviewSrcDir, 'image-resize.template.js'), 'utf8'));
+fs.writeFileSync(imageSchemaOverridePath, fs.readFileSync(path.join(webviewSrcDir, 'image-schema-override.template.js'), 'utf8'));
+fs.writeFileSync(imageNodeViewPath, fs.readFileSync(path.join(webviewSrcDir, 'image-node-view.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

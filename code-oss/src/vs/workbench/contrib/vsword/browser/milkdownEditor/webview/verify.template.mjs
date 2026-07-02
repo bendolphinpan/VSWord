@@ -32,6 +32,9 @@ import { VSWORD_MILKDOWN_THEME_IDS, VSWORD_MILKDOWN_DEFAULT_THEME, isValidTheme 
 import { extractHeadings, findEnclosingHeadingId, slugify } from './outline-extractor.mjs';
 import { upload, uploadConfig, defaultUploader } from '@milkdown/plugin-upload';
 import { createHostImageUploader, imageUploadPlugins } from './image-upload.mjs';
+import { imageResizePlugins } from './image-node-view.mjs';
+import { remarkLiftImgHtmlPlugin, imageSchemaOverride } from './image-schema-override.mjs';
+import { clampWidth, widthFromDrag, parseImgTag, renderImgTag, IMAGE_RESIZE_MIN_PX, IMAGE_RESIZE_MAX_PX } from './image-resize.mjs';
 
 // Must match webview/entry.template.js — kept literally in sync for round-trip parity.
 const TYPORA_STRINGIFY_OPTIONS = {
@@ -50,7 +53,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -76,6 +79,8 @@ const editor = await Editor.make()
 	.use(highlightPlugins)
 	.use(underlinePlugins)
 	.use(focusModePlugins)
+	.use(remarkLiftImgHtmlPlugin)
+	.use(imageResizePlugins)
 	.create();
 const output = editor.action(ctx => ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc));
 const parserRoundTrip = editor.action(ctx => ctx.get(serializerCtx)(ctx.get(parserCtx)(source)));
@@ -209,6 +214,45 @@ const checks = {
 		const r = await fn(emptyList, { nodes: { image: { createAndFill: () => ({}) } } });
 		return Array.isArray(r) && r.length === 0;
 	})(),
+	// T-3.5.2 image resize — schema override + html-lift + resize math.
+	imageSchemaHasWidthAttr: !!imageSchemaOverride.node?.schema?.attrs && 'width' in imageSchemaOverride.node.schema.attrs,
+	imageResizePluginsExported: Array.isArray(imageResizePlugins) && imageResizePlugins.length === 2,
+	// Sized <img> HTML in source survives round-trip: html-lift → image node w/ width → html emit.
+	roundTripSizedImgHasSrc:   output.includes('<img src="assets/wide.png"'),
+	roundTripSizedImgHasWidth: /<img [^>]*width="640"[^>]*>/.test(output),
+	roundTripSizedImgHasAlt:   /<img [^>]*alt="宽图"[^>]*>/.test(output),
+	// Unsized images MUST NOT get rewritten to HTML — short syntax preserved.
+	roundTripKeepsShortRelative: output.includes('![截图](assets/screenshot-1.png)'),
+	roundTripKeepsShortRemote:   output.includes('![远程](https://example.com/pic.png)'),
+	// parseImgTag: attribute extraction is order-independent, CJK-safe, entity-decoding.
+	parseImgTagBasic: (() => {
+		const a = parseImgTag('<img src="a.png" width="800" alt="hi">');
+		return a && a.src === 'a.png' && a.width === 800 && a.alt === 'hi';
+	})(),
+	parseImgTagCjkAlt: (() => {
+		const a = parseImgTag('<img alt="宽图" src="assets/wide.png" width="640">');
+		return a && a.alt === '宽图' && a.width === 640;
+	})(),
+	parseImgTagSelfClose: (() => {
+		const a = parseImgTag('<img src="x.png" width="120" />');
+		return a && a.src === 'x.png' && a.width === 120;
+	})(),
+	parseImgTagRejectsNonImg: parseImgTag('<div>nope</div>') === null && parseImgTag('<img>') === null,
+	// renderImgTag: escapes attribute values, only emits width when > 0.
+	renderImgTagWithWidth:    renderImgTag({ src: 'a.png', alt: '', title: '', width: 300 }) === '<img src="a.png" width="300">',
+	renderImgTagWithoutWidth: renderImgTag({ src: 'a.png', alt: '', title: '', width: 0 })   === '<img src="a.png">',
+	renderImgTagEscapes:      renderImgTag({ src: 'a"b.png', alt: '<x>', title: '', width: 0 }) === '<img src="a&quot;b.png" alt="&lt;x&gt;">',
+	// clampWidth: bounded [MIN, min(MAX, container)]; fractional rounded.
+	clampBelowMinRaisesToMin: clampWidth(10, 1000) === IMAGE_RESIZE_MIN_PX,
+	clampAboveContainerCaps:  clampWidth(9999, 800) === 800,
+	clampFloatingRounded:     clampWidth(123.7, 1000) === 124,
+	clampAbsoluteMax:         clampWidth(999999, 0) === IMAGE_RESIZE_MAX_PX,
+	// widthFromDrag: e/se/ne/sw/w/nw all fold to signed dx; n/s inert.
+	dragEastGrows:  widthFromDrag('e',  200, 100, 150, 1000) === 250,
+	dragWestGrows:  widthFromDrag('w',  200, 100, 50,  1000) === 250,
+	dragSEmatchesE: widthFromDrag('se', 200, 100, 150, 1000) === widthFromDrag('e', 200, 100, 150, 1000),
+	dragNorthNoop:  widthFromDrag('n',  200, 100, 500, 1000) === 200,
+	dragSouthNoop:  widthFromDrag('s',  200, 100, 500, 1000) === 200,
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };
