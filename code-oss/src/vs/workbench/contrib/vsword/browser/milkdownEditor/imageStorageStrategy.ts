@@ -96,7 +96,7 @@ export async function resolveUniqueFileName(
 	fileExists: (fileName: string) => Promise<boolean>,
 	maxAttempts = 1000,
 ): Promise<string> {
-	const _ = relativeDirSegments; // dir is baked into the predicate by the caller
+	void relativeDirSegments; // dir is baked into the predicate by the caller
 	const first = `${base}.${ext}`;
 	if (!(await fileExists(first))) return first;
 	for (let i = 1; i < maxAttempts; i++) {

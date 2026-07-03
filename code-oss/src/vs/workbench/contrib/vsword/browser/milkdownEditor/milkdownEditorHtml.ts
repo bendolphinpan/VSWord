@@ -486,7 +486,7 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		}
 
 		/* ---- T-3.6 Table chrome ------------------------------------------------
-		   The `.vsword-table-wrap` is a $view NodeView wrapping the native <table>
+		   The '.vsword-table-wrap' is a $view NodeView wrapping the native <table>
 		   with sibling chrome containers (corner / col-bar / row-bar). Chrome is
 		   hidden by default and revealed on hover or when the caret is inside the
 		   table. Layout uses grid: the wrap sits inline-block so col-bar can be

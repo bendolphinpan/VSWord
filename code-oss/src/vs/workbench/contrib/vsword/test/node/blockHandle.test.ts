@@ -37,7 +37,7 @@ suite('T-3.8 · block-handle catalogue', () => {
 	test('heading entries carry their level in `arg` (used by wrapInHeadingCommand)', () => {
 		for (let level = 1; level <= 4; level++) {
 			const h = TRANSFORM_ITEMS.find(i => i.id === `h${level}`);
-			assert.strictEqual(h.arg, level);
+			assert.strictEqual(h!.arg, level);
 		}
 	});
 
@@ -71,8 +71,8 @@ suite('T-3.8 · shouldShowHandle', () => {
 	});
 
 	test('null / undefined node → false (defensive)', () => {
-		assert.strictEqual(shouldShowHandle(null, []), false);
-		assert.strictEqual(shouldShowHandle(undefined, []), false);
+		assert.strictEqual(shouldShowHandle(null as any, []), false);
+		assert.strictEqual(shouldShowHandle(undefined as any, []), false);
 	});
 });
 
@@ -96,7 +96,7 @@ suite('T-3.8 · nodeTypeLabel', () => {
 });
 
 suite('T-3.8 · isTransformEnabled', () => {
-	const item = (id) => TRANSFORM_ITEMS.find(i => i.id === id);
+	const item = (id: string) => TRANSFORM_ITEMS.find((i: { id: string }) => i.id === id);
 
 	test('same-shape transforms are disabled (no-op safety)', () => {
 		assert.strictEqual(isTransformEnabled(item('paragraph'), { typeName: 'paragraph' }), false);
@@ -126,10 +126,10 @@ suite('T-3.8 · buildMenuGroups', () => {
 
 	test('h2 group flags h2 as disabled but others enabled', () => {
 		const g = buildMenuGroups({ typeName: 'heading', attrs: { level: 2 } });
-		const h2 = g.transforms.find(t => t.id === 'h2');
-		const h3 = g.transforms.find(t => t.id === 'h3');
-		assert.strictEqual(h2.enabled, false);
-		assert.strictEqual(h3.enabled, true);
+		const h2 = g.transforms.find((t: { id: string }) => t.id === 'h2');
+		const h3 = g.transforms.find((t: { id: string }) => t.id === 'h3');
+		assert.strictEqual(h2!.enabled, false);
+		assert.strictEqual(h3!.enabled, true);
 	});
 
 	test('actions are always enabled (host commands decide the rest)', () => {
