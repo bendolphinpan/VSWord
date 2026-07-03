@@ -32,6 +32,8 @@ import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
 import {
 	HostToWebviewMessage,
 	VSWORD_MILKDOWN_DEFAULT_MODE,
+	VSWORD_MILKDOWN_FOCUS_STORAGE_KEY,
+	VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY,
 	VSWORD_MILKDOWN_EDITOR_ID,
 	VSWORD_MILKDOWN_MODE_STORAGE_KEY,
 	VSWORD_MILKDOWN_MODES,
@@ -220,10 +222,17 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				await this.openAsText(input);
 				return;
 			case 'preferenceRequest':
-				this.post(input, { type: 'preferenceResponse', mode: this.readMode() });
+				this.post(input, {
+					type: 'preferenceResponse',
+					mode: this.readMode(),
+					focus: this.readToggle(VSWORD_MILKDOWN_FOCUS_STORAGE_KEY),
+					typewriter: this.readToggle(VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY),
+				});
 				return;
 			case 'preferenceUpdate':
-				this.writeMode(msg.mode);
+				if (msg.mode !== undefined) this.writeMode(msg.mode);
+				if (msg.focus !== undefined) this.writeToggle(VSWORD_MILKDOWN_FOCUS_STORAGE_KEY, msg.focus);
+				if (msg.typewriter !== undefined) this.writeToggle(VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY, msg.typewriter);
 				return;
 			case 'themeRequest':
 				this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme() });
@@ -309,6 +318,15 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	private writeMode(mode: VswordMilkdownMode): void {
 		if (!(VSWORD_MILKDOWN_MODES as readonly string[]).includes(mode)) return;
 		this.storageService.store(VSWORD_MILKDOWN_MODE_STORAGE_KEY, mode, StorageScope.APPLICATION, StorageTarget.USER);
+	}
+
+	private readToggle(key: string): 'on' | 'off' {
+		return this.storageService.get(key, StorageScope.APPLICATION, 'off') === 'on' ? 'on' : 'off';
+	}
+
+	private writeToggle(key: string, value: 'on' | 'off'): void {
+		const v = value === 'on' ? 'on' : 'off';
+		this.storageService.store(key, v, StorageScope.APPLICATION, StorageTarget.USER);
 	}
 
 	/**

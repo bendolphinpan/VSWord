@@ -71,6 +71,7 @@ const status = document.getElementById('milkdown-status');
 const saveButton = document.getElementById('milkdown-save');
 const sourceTextarea = document.getElementById('milkdown-source');
 const modeButtons = document.querySelectorAll('#milkdown-mode-switch .vsword-md-mode-btn');
+const toggleButtons = document.querySelectorAll('#milkdown-toggle-group .vsword-md-toggle-btn');
 
 let editor;
 let currentMarkdown = '';
@@ -310,7 +311,12 @@ window.addEventListener('message', event => {
 		return;
 	}
 	if (msg.type === 'preferenceResponse') {
-		modeController?.applyPersistedMode(String(msg.mode || 'realtime'));
+		// Backward compatible: older hosts only send `mode`, newer ones may include focus/typewriter.
+		modeController?.applyPersistedPreference({
+			mode: msg.mode,
+			focus: msg.focus,
+			typewriter: msg.typewriter,
+		});
 		return;
 	}
 	if (msg.type === 'themeChanged') {
@@ -352,6 +358,7 @@ window.addEventListener('message', event => {
 modeController = createModeController({
 	shell,
 	buttons: modeButtons,
+	toggleButtons,
 	sourceTextarea,
 	getMarkdown: () => serialize(),
 	setMarkdown: (md, reason) => reloadEditorFromMarkdown(md, reason),
@@ -364,4 +371,8 @@ window.__vswordMilkdown = {
 	isDirty: () => dirty,
 	getMode: () => modeController?.getMode(),
 	switchMode: m => modeController?.switchTo(m),
+	isFocusOn: () => modeController?.isFocusOn(),
+	isTypewriterOn: () => modeController?.isTypewriterOn(),
+	setFocus: on => modeController?.setFocus(on),
+	setTypewriter: on => modeController?.setTypewriter(on),
 };

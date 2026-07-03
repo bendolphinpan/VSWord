@@ -45,10 +45,13 @@ export interface WebviewPreferenceRequestMessage {
 	readonly type: 'preferenceRequest';
 }
 
-/** T-3.3.2: webview reports the user's latest mode selection so the host can persist it. */
+/** T-3.3.2 + T-3.10: webview reports the user's latest preference so the host can persist it.
+ *  Any field may be omitted — the host only updates the fields that were provided. */
 export interface WebviewPreferenceUpdateMessage {
 	readonly type: 'preferenceUpdate';
-	readonly mode: VswordMilkdownMode;
+	readonly mode?: VswordMilkdownMode;
+	readonly focus?: 'on' | 'off';
+	readonly typewriter?: 'on' | 'off';
 }
 
 /** T-3.3.1: webview asks the host for the persisted theme (+ current workbench kind). */
@@ -137,10 +140,12 @@ export interface HostErrorMessage {
 	readonly message: string;
 }
 
-/** T-3.3.2: host replies to a preferenceRequest with the last persisted mode. */
+/** T-3.3.2 + T-3.10: host replies to a preferenceRequest with all persisted view preferences. */
 export interface HostPreferenceResponseMessage {
 	readonly type: 'preferenceResponse';
 	readonly mode: VswordMilkdownMode;
+	readonly focus: 'on' | 'off';
+	readonly typewriter: 'on' | 'off';
 }
 
 /** T-3.3.1: host pushes the effective theme id whenever it changes (initial + on selection). */
@@ -199,3 +204,6 @@ export const VSWORD_MILKDOWN_MODES: readonly VswordMilkdownMode[] = ['realtime',
 export const VSWORD_MILKDOWN_DEFAULT_MODE: VswordMilkdownMode = 'realtime';
 /** IStorageService key holding the last-selected mode (APPLICATION scope, per Q3=b). */
 export const VSWORD_MILKDOWN_MODE_STORAGE_KEY = 'vsword.milkdown.lastMode';
+/** T-3.10: focus / typewriter toggle preferences (APPLICATION scope, boolean-as-'on'|'off'). */
+export const VSWORD_MILKDOWN_FOCUS_STORAGE_KEY = 'vsword.milkdown.focus';
+export const VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY = 'vsword.milkdown.typewriter';

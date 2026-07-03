@@ -1,23 +1,23 @@
 // @ts-nocheck
 /*---------------------------------------------------------------------------------------------
- *  VSWord Milkdown focus / edit-context feedback (T-3.3.2 Q2=b+c).
+ *  VSWord Milkdown focus / typewriter / edit-context plugin.
  *
- *  This module wires two things:
+ *  T-3.10 rewrite: Focus and Typewriter are now INDEPENDENT toggles, no longer
+ *  bolted to reading mode.
  *
- *  (1) Focus/typewriter mode for reading mode:
- *      In reading mode the shell CSS dims all top-level PM children to opacity 0.35.
- *      This plugin adds `.vsword-focus-active` to the block that contains the current
- *      selection, restoring it to full opacity. When the cursor moves the class hops.
- *      Additionally, when the shell is in reading mode we scroll the active block to
- *      the vertical center of the viewport (typewriter mode).
+ *  Shell attributes drive rendering (CSS gates on them, this plugin obeys them):
+ *    data-mode        = realtime | reading | source
+ *    data-focus       = on | off       (dims other blocks)
+ *    data-typewriter  = on | off       (recenters active block on line change · Q2=c)
  *
- *  (2) Edit-context visual feedback for every mode:
- *      Adds `.vsword-edit-context` to the block containing the cursor. CSS renders a
- *      left color bar + tinted background. This gives the "I'm editing this block"
- *      cue Q2=b asked for.
- *
- *  Both are Milkdown $prose plugins driven by the same selection observer, so they
- *  cost a single DOM traversal per selection change.
+ *  What this plugin still owns:
+ *    (1) Decoration: `.vsword-focus-active vsword-edit-context` on the top-level
+ *        block containing the selection. CSS lights it up when data-focus=on OR
+ *        when data-mode=reading (reading always dims peers).
+ *    (2) Typewriter re-scroll: when data-typewriter=on AND the cursor's viewport
+ *        Y coordinate crossed a line boundary since last centering, scroll the
+ *        active block to viewport center. Line-change (not selection-change)
+ *        avoids the "jitter every keystroke" failure mode Q2=a would have.
  *--------------------------------------------------------------------------------------------*/
 
 import { $prose } from '@milkdown/utils';
@@ -30,9 +30,7 @@ function computeActiveTopLevelBlock(state) {
 	const sel = state.selection;
 	if (!sel || !sel.$from) return null;
 	const doc = state.doc;
-	// Walk up from the selection anchor to a direct child of the doc.
-	const depth = sel.$from.depth;
-	if (depth === 0) return { pos: 0, node: doc.firstChild };
+	if (sel.$from.depth === 0) return { pos: 0, node: doc.firstChild };
 	const topPos = sel.$from.before(1);
 	const topNode = doc.nodeAt(topPos);
 	if (!topNode) return null;
@@ -48,6 +46,16 @@ function buildDecorations(state) {
 	]);
 }
 
+/** True when the shell wants the typewriter recenter behaviour right now. */
+function typewriterEnabled(shell) {
+	if (!shell) return false;
+	if (shell.getAttribute('data-typewriter') === 'on') return true;
+	// Reading mode used to auto-typewriter; keep that legacy behaviour so an
+	// existing user's muscle memory doesn't regress.
+	if (shell.getAttribute('data-mode') === 'reading') return true;
+	return false;
+}
+
 export const focusAndContextPlugin = $prose(() => {
 	return new Plugin({
 		key: KEY,
@@ -61,23 +69,51 @@ export const focusAndContextPlugin = $prose(() => {
 			},
 		},
 		view(view) {
+			const shell = view.dom.closest('.vsword-md-shell');
 			let rafId = 0;
-			function centerActive() {
+			let lastCenterY = -1; // viewport-Y of the caret at last recenter (Q2=c line-change gate)
+
+			function currentCaretY() {
+				try {
+					const { from } = view.state.selection;
+					const coords = view.coordsAtPos(from);
+					return coords.top;
+				} catch { return null; }
+			}
+
+			function maybeRecenter(force) {
+				if (!typewriterEnabled(shell)) { lastCenterY = -1; return; }
 				if (rafId) cancelAnimationFrame(rafId);
 				rafId = requestAnimationFrame(() => {
 					rafId = 0;
-					const shell = view.dom.closest('.vsword-md-shell');
-					if (!shell || shell.getAttribute('data-mode') !== 'reading') return;
+					const y = currentCaretY();
+					if (y == null) return;
+					// Q2=c: only recenter on line boundary crossings. 8px = ~half of a
+					// typical line-height; anything less is intra-line micro-movement.
+					if (!force && lastCenterY >= 0 && Math.abs(y - lastCenterY) < 8) return;
 					const active = view.dom.querySelector('.vsword-focus-active');
 					if (!active) return;
 					active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+					lastCenterY = y;
 				});
 			}
-			// Center once on install so that entering reading mode lands nicely.
-			centerActive();
+
+			// Recenter once on install so entering typewriter/reading lands nicely.
+			maybeRecenter(true);
+
+			// Observe shell attribute flips so switching typewriter on triggers an
+			// immediate center (otherwise the user has to type a char first).
+			const attrObserver = shell ? new MutationObserver(() => maybeRecenter(true)) : null;
+			if (attrObserver && shell) {
+				attrObserver.observe(shell, { attributes: true, attributeFilter: ['data-typewriter', 'data-mode'] });
+			}
+
 			return {
-				update(_v, _prev) { centerActive(); },
-				destroy() { if (rafId) cancelAnimationFrame(rafId); },
+				update() { maybeRecenter(false); },
+				destroy() {
+					if (rafId) cancelAnimationFrame(rafId);
+					attrObserver?.disconnect();
+				},
 			};
 		},
 	});

@@ -1,51 +1,75 @@
 // @ts-nocheck
 /*---------------------------------------------------------------------------------------------
- *  VSWord Milkdown mode controller (T-3.3.2).
+ *  VSWord Milkdown mode controller (T-3.3.2 + T-3.10).
  *
- *  Owns the three-mode state machine:
- *    - realtime  → Milkdown WYSIWYG editing (default)
- *    - reading   → non-editable, focus mode active, layout unchanged (Q2=a+c)
- *    - source    → raw markdown textarea, byte-identical round-trip
+ *  Owns the three-mode state machine plus two independent visual toggles:
+ *    mode:        realtime | reading | source
+ *    focus:       on | off        (dim non-active blocks; independent of mode · T-3.10 Q1=a)
+ *    typewriter:  on | off        (recenter active block on line change · T-3.10 Q2=c)
  *
- *  Contract with the host:
- *    - On boot: post {preferenceRequest} → receive {preferenceResponse, mode}
- *    - On user switch: post {preferenceUpdate, mode}   (fire-and-forget global preference)
+ *  Shell attributes reflect state so CSS + plugins can gate off them:
+ *    .vsword-md-shell[data-mode="…"] [data-focus="on"] [data-typewriter="on"]
  *
- *  Multi-window independence: mode state is per-webview memory. Two windows on the same file
- *  can hold different modes; only the "last window that switched" bumps the global default
- *  for future opens. Content synchronization goes through WorkingCopy and is orthogonal.
+ *  Contract with the host (backward compatible):
+ *    Boot:   post {preferenceRequest} → receive {preferenceResponse, mode, focus?, typewriter?}
+ *    Change: post {preferenceUpdate, mode?, focus?, typewriter?}   fire-and-forget partials
  *
- *  Ctrl+/ cycles: realtime → reading → source → realtime.
+ *  Keys:
+ *    Ctrl+/           cycle mode      (realtime → reading → source → realtime)
+ *    Ctrl+Shift+F     toggle focus
+ *    Ctrl+Shift+T     toggle typewriter
+ *
+ *  Source mode disables focus/typewriter visually (there's no selection in a
+ *  <textarea> to anchor them to) but does NOT flip the stored preference — it
+ *  is restored the moment the user leaves source mode.
  *--------------------------------------------------------------------------------------------*/
 
 export const MODES = ['realtime', 'reading', 'source'];
 export const DEFAULT_MODE = 'realtime';
 
-function isValidMode(m) {
-	return MODES.indexOf(m) !== -1;
+function isValidMode(m) { return MODES.indexOf(m) !== -1; }
+function coerceBool(v, fallback) {
+	if (typeof v === 'boolean') return v;
+	if (v === 'on'  || v === 'true'  || v === 1) return true;
+	if (v === 'off' || v === 'false' || v === 0) return false;
+	return fallback;
 }
 
 export function createModeController(opts) {
 	const {
-		shell,          // .vsword-md-shell root element
-		buttons,        // NodeList of .vsword-md-mode-btn
-		sourceTextarea, // #milkdown-source
-		getMarkdown,    // () => string (serialize from editor)
-		setMarkdown,    // (md, reason) => void (recreate editor with new md)
-		vscode,         // acquireVsCodeApi() result or undefined
-		onModeChange,   // optional (mode, prevMode) => void hook (focus-mode uses it)
+		shell,                 // .vsword-md-shell root
+		buttons,               // NodeList of mode buttons (data-mode=realtime|reading|source)
+		toggleButtons,         // NodeList of toggle buttons (data-toggle=focus|typewriter) — optional
+		sourceTextarea,
+		getMarkdown,
+		setMarkdown,
+		vscode,
+		onModeChange,          // (mode, prevMode) => void
 	} = opts;
 
 	let currentMode = DEFAULT_MODE;
+	let focusOn = false;
+	let typewriterOn = false;
 	let switching = false;
-	// Guard against typing-driven autosaves for the very first paint after mode entry.
 	let sourceInitialized = false;
 
-	function applyDom(mode) {
-		if (shell) shell.setAttribute('data-mode', mode);
-		buttons.forEach(btn => {
-			const isActive = btn.getAttribute('data-mode') === mode;
+	function applyDom() {
+		if (!shell) return;
+		shell.setAttribute('data-mode', currentMode);
+		// Source mode blanks out focus/typewriter visuals but keeps the stored bit intact.
+		const visualFocus = focusOn && currentMode !== 'source';
+		const visualTypewriter = typewriterOn && currentMode !== 'source';
+		shell.setAttribute('data-focus', visualFocus ? 'on' : 'off');
+		shell.setAttribute('data-typewriter', visualTypewriter ? 'on' : 'off');
+		buttons?.forEach(btn => {
+			const isActive = btn.getAttribute('data-mode') === currentMode;
 			btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+		});
+		toggleButtons?.forEach(btn => {
+			const kind = btn.getAttribute('data-toggle');
+			const on = (kind === 'focus') ? focusOn : (kind === 'typewriter') ? typewriterOn : false;
+			btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+			btn.toggleAttribute('disabled', currentMode === 'source');
 		});
 	}
 
@@ -55,35 +79,46 @@ export function createModeController(opts) {
 		switching = true;
 		const prevMode = currentMode;
 		try {
-			// realtime → source : flush current editor markdown into textarea
 			if (nextMode === 'source') {
-				const md = getMarkdown();
-				sourceTextarea.value = md;
+				sourceTextarea.value = getMarkdown();
 				sourceInitialized = true;
 			}
-			// source → any : pull textarea back into editor if content changed
 			if (prevMode === 'source' && sourceInitialized) {
-				const md = sourceTextarea.value;
-				setMarkdown(md, 'source-exit');
+				setMarkdown(sourceTextarea.value, 'source-exit');
 			}
 			currentMode = nextMode;
-			applyDom(nextMode);
+			applyDom();
 			if (typeof onModeChange === 'function') onModeChange(nextMode, prevMode);
-			// Persist unless this switch came from the initial preferenceResponse.
 			if (!opts2.silent && vscode) {
 				vscode.postMessage({ type: 'preferenceUpdate', mode: nextMode });
 			}
-			// Give focus to the appropriate surface.
 			if (nextMode === 'source') {
 				requestAnimationFrame(() => sourceTextarea.focus());
 			} else if (nextMode === 'realtime') {
-				requestAnimationFrame(() => {
-					const pm = shell.querySelector('.ProseMirror');
-					pm?.focus?.();
-				});
+				requestAnimationFrame(() => shell?.querySelector('.ProseMirror')?.focus?.());
 			}
 		} finally {
 			switching = false;
+		}
+	}
+
+	function setToggle(kind, next, opts2) {
+		opts2 = opts2 || {};
+		const wanted = !!next;
+		if (kind === 'focus') {
+			if (focusOn === wanted) return;
+			focusOn = wanted;
+		} else if (kind === 'typewriter') {
+			if (typewriterOn === wanted) return;
+			typewriterOn = wanted;
+		} else {
+			return;
+		}
+		applyDom();
+		if (!opts2.silent && vscode) {
+			const payload = { type: 'preferenceUpdate' };
+			payload[kind] = wanted ? 'on' : 'off';
+			vscode.postMessage(payload);
 		}
 	}
 
@@ -92,32 +127,69 @@ export function createModeController(opts) {
 		switchTo(MODES[(idx + 1) % MODES.length]);
 	}
 
-	// Wire button clicks.
-	buttons.forEach(btn => {
+	// Wire mode buttons.
+	buttons?.forEach(btn => {
 		btn.addEventListener('click', () => {
 			const m = btn.getAttribute('data-mode');
 			if (isValidMode(m)) switchTo(m);
 		});
 	});
 
-	// Keyboard: Ctrl+/ (or Cmd+/) cycles modes.
+	// Wire toggle buttons.
+	toggleButtons?.forEach(btn => {
+		btn.addEventListener('click', () => {
+			if (currentMode === 'source') return;
+			const kind = btn.getAttribute('data-toggle');
+			if (kind === 'focus') setToggle('focus', !focusOn);
+			else if (kind === 'typewriter') setToggle('typewriter', !typewriterOn);
+		});
+	});
+
+	// Keyboard shortcuts. Ctrl+/ cycles mode (existing). Ctrl+Shift+F / T flip toggles.
 	window.addEventListener('keydown', event => {
-		if ((event.ctrlKey || event.metaKey) && event.key === '/' && !event.shiftKey && !event.altKey) {
-			event.preventDefault();
-			event.stopPropagation();
-			cycle();
+		if (!(event.ctrlKey || event.metaKey)) return;
+		if (event.key === '/' && !event.shiftKey && !event.altKey) {
+			event.preventDefault(); event.stopPropagation(); cycle(); return;
+		}
+		if (event.shiftKey && !event.altKey) {
+			// Use event.code so it survives layout-dependent .key values.
+			if (event.code === 'KeyF') {
+				event.preventDefault(); event.stopPropagation();
+				if (currentMode !== 'source') setToggle('focus', !focusOn);
+				return;
+			}
+			if (event.code === 'KeyT') {
+				event.preventDefault(); event.stopPropagation();
+				if (currentMode !== 'source') setToggle('typewriter', !typewriterOn);
+				return;
+			}
 		}
 	}, true);
 
+	applyDom();
+
 	return {
 		getMode: () => currentMode,
+		isFocusOn: () => focusOn,
+		isTypewriterOn: () => typewriterOn,
 		switchTo,
 		cycle,
-		applyPersistedMode(mode) {
-			// Called after preferenceResponse arrives. Skip persistence write.
-			if (isValidMode(mode) && mode !== currentMode) {
-				switchTo(mode, { silent: true });
+		setFocus: (on) => setToggle('focus', on),
+		setTypewriter: (on) => setToggle('typewriter', on),
+		/** Apply the persisted preference bag. Silent — no host round-trip. */
+		applyPersistedPreference(pref) {
+			if (!pref || typeof pref !== 'object') return;
+			if (typeof pref.mode === 'string' && isValidMode(pref.mode) && pref.mode !== currentMode) {
+				switchTo(pref.mode, { silent: true });
 			}
+			const nextFocus = coerceBool(pref.focus, focusOn);
+			if (nextFocus !== focusOn) setToggle('focus', nextFocus, { silent: true });
+			const nextTypewriter = coerceBool(pref.typewriter, typewriterOn);
+			if (nextTypewriter !== typewriterOn) setToggle('typewriter', nextTypewriter, { silent: true });
+		},
+		/** Back-compat shim: older host payload was `{ mode }`. */
+		applyPersistedMode(mode) {
+			this.applyPersistedPreference({ mode });
 		},
 		getSourceValue: () => sourceTextarea.value,
 		isSourceMode: () => currentMode === 'source',

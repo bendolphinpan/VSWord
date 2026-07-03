@@ -141,11 +141,45 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		}
 		.vsword-md-shell[data-mode="source"] #milkdown-root { display: none; }
 		.vsword-md-shell[data-mode="source"] #milkdown-source { display: block; }
-		/* Reading mode (Q2=a+c): keep layout, dim non-active paragraphs + typewriter re-centering. */
+		/* Reading mode: hide caret + slash menu, otherwise keeps layout. */
 		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror { caret-color: transparent; }
 		.vsword-md-shell[data-mode="reading"] .vsword-slash-menu { display: none !important; }
-		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > * { transition: opacity 180ms ease; opacity: 0.35; }
-		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > .vsword-focus-active { opacity: 1; }
+		/* T-3.10 Q1=a: focus dimming — active when EITHER reading mode or explicit focus toggle. */
+		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > *,
+		.vsword-md-shell[data-focus="on"] #milkdown-root .ProseMirror > * {
+			transition: opacity 180ms ease;
+			opacity: 0.35;
+		}
+		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > .vsword-focus-active,
+		.vsword-md-shell[data-focus="on"] #milkdown-root .ProseMirror > .vsword-focus-active {
+			opacity: 1;
+		}
+		/* T-3.10: toggle buttons live to the right of the mode switch and share styling. */
+		.vsword-md-toggle-group {
+			display: inline-flex;
+			margin-left: 6px;
+			border: 1px solid var(--vsword-border);
+			border-radius: 4px;
+			overflow: hidden;
+			flex-shrink: 0;
+		}
+		.vsword-md-toggle-btn {
+			border: 0;
+			background: transparent;
+			color: var(--vsword-fg);
+			font: inherit;
+			padding: 3px 10px;
+			cursor: pointer;
+			white-space: nowrap;
+			border-left: 1px solid var(--vsword-border);
+		}
+		.vsword-md-toggle-btn:first-child { border-left: 0; }
+		.vsword-md-toggle-btn:hover:not([disabled]) { background: color-mix(in srgb, var(--vsword-fg) 8%, transparent); }
+		.vsword-md-toggle-btn[aria-pressed="true"] {
+			background: var(--vsword-accent);
+			color: var(--vscode-button-foreground, #fff);
+		}
+		.vsword-md-toggle-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 		/* Edit-context visual feedback (Q2=b): left bar + tinted background on the block containing the cursor. */
 		#milkdown-root .ProseMirror .vsword-edit-context {
 			position: relative;
@@ -937,6 +971,10 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 				<button class="vsword-md-mode-btn" data-mode="realtime" type="button" aria-pressed="true">实时渲染</button>
 				<button class="vsword-md-mode-btn" data-mode="reading" type="button" aria-pressed="false">阅读模式</button>
 				<button class="vsword-md-mode-btn" data-mode="source" type="button" aria-pressed="false">源码模式</button>
+			</div>
+			<div id="milkdown-toggle-group" class="vsword-md-toggle-group" role="group" aria-label="View toggles">
+				<button class="vsword-md-toggle-btn" data-toggle="focus" type="button" aria-pressed="false" title="专注模式 (Ctrl+Shift+F)">☀ Focus</button>
+				<button class="vsword-md-toggle-btn" data-toggle="typewriter" type="button" aria-pressed="false" title="打字机模式 (Ctrl+Shift+T)">⌨ Typewriter</button>
 			</div>
 		</header>
 		<main id="milkdown-root" aria-label="Markdown WYSIWYG editor"><div class="milkdown-empty">Loading Milkdown…</div></main>
