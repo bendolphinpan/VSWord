@@ -839,6 +839,90 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-md-shell[data-mode="reading"] .vsword-block-handle,
 		.vsword-md-shell[data-mode="reading"] .vsword-block-menu { display: none !important; }
 
+		/* ==== T-3.9: math NodeView edit chrome ==== */
+		.vsword-math-block {
+			display: block;
+			margin: 1em 0;
+			border-radius: 6px;
+			transition: background 0.12s ease;
+		}
+		.vsword-math-block:hover:not(.is-editing) { background: var(--vscode-editor-hoverHighlightBackground, rgba(120,120,120,0.06)); }
+		.vsword-math-block.is-editing { background: var(--vscode-editor-background, transparent); box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007acc); }
+		.vsword-math-block.has-error:not(.is-editing) { box-shadow: 0 0 0 1px #cc0000; }
+		.vsword-math-block.is-selected { outline: 2px solid var(--vscode-focusBorder, #007acc); outline-offset: 2px; }
+		.vsword-math-preview {
+			display: block;
+			text-align: center;
+			padding: 0.5em 0;
+			overflow-x: auto;
+			cursor: text;
+		}
+		.vsword-math-editor {
+			display: block;
+			padding: 6px 8px 8px;
+			border-top: 1px dashed var(--vscode-widget-border, rgba(120,120,120,0.3));
+		}
+		.vsword-math-source {
+			display: block;
+			width: 100%;
+			min-height: 44px;
+			padding: 6px 8px;
+			background: var(--vscode-input-background, #1e1e1e);
+			color: var(--vscode-input-foreground, #cccccc);
+			border: 1px solid var(--vscode-input-border, transparent);
+			border-radius: 4px;
+			font-family: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Consolas, monospace);
+			font-size: var(--vscode-editor-font-size, 13px);
+			line-height: 1.5;
+			resize: vertical;
+			outline: none;
+		}
+		.vsword-math-source:focus { border-color: var(--vscode-focusBorder, #007acc); }
+		.vsword-math-error {
+			margin-top: 4px;
+			padding: 4px 8px;
+			background: rgba(204, 0, 0, 0.08);
+			color: #cc4040;
+			font-size: 12px;
+			font-family: var(--vscode-editor-font-family, monospace);
+			border-radius: 3px;
+			white-space: pre-wrap;
+		}
+		.vsword-math-placeholder {
+			color: var(--vscode-descriptionForeground, #888);
+			font-style: italic;
+			font-size: 13px;
+		}
+
+		.vsword-math-inline {
+			display: inline;
+			border-radius: 3px;
+			padding: 0 2px;
+			cursor: text;
+			transition: background 0.12s ease;
+		}
+		.vsword-math-inline:hover:not(.is-editing) { background: var(--vscode-editor-hoverHighlightBackground, rgba(120,120,120,0.06)); }
+		.vsword-math-inline.is-editing { background: var(--vscode-input-background, #1e1e1e); box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007acc); }
+		.vsword-math-inline.has-error:not(.is-editing) { box-shadow: 0 0 0 1px #cc0000; }
+		.vsword-math-inline.is-selected { outline: 2px solid var(--vscode-focusBorder, #007acc); outline-offset: 1px; }
+		.vsword-math-inline-preview { display: inline; }
+		.vsword-math-inline-source {
+			display: inline-block;
+			min-width: 4ch;
+			padding: 0 4px;
+			background: transparent;
+			color: var(--vscode-input-foreground, #cccccc);
+			border: 0;
+			outline: none;
+			font-family: var(--vscode-editor-font-family, ui-monospace, "SF Mono", Consolas, monospace);
+			font-size: inherit;
+			line-height: inherit;
+		}
+		.vsword-md-shell[data-mode="reading"] .vsword-math-editor,
+		.vsword-md-shell[data-mode="reading"] .vsword-math-inline-source { display: none !important; }
+		.vsword-md-shell[data-mode="reading"] .vsword-math-block,
+		.vsword-md-shell[data-mode="reading"] .vsword-math-inline { cursor: default; box-shadow: none; }
+
 		${getThemesCss()}
 	</style>
 </head>

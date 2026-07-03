@@ -39,6 +39,7 @@ import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
+import { mathViewPlugins, configureMathKatex } from './math-view.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -151,6 +152,7 @@ async function createEditor(markdown) {
 			ctx.set(remarkStringifyOptionsCtx, TYPORA_STRINGIFY_OPTIONS);
 			configureCodeBlockCtx(ctx);
 			configureBlockHandle(ctx);
+			configureMathKatex(ctx);
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -197,6 +199,7 @@ async function createEditor(markdown) {
 		.use(columnResizingPlugin)
 		.use(codeBlockChromePlugins)
 		.use(blockHandlePlugins)
+		.use(mathViewPlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;

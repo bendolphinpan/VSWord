@@ -40,6 +40,8 @@ const codeBlockHelpersPath = path.join(srcDir, 'code-block-helpers.mjs');
 const blockHandlePath = path.join(srcDir, 'block-handle.mjs');
 const blockHandleMenuPath = path.join(srcDir, 'block-handle-menu.mjs');
 const blockHandleHelpersPath = path.join(srcDir, 'block-handle-helpers.mjs');
+const mathViewPath = path.join(srcDir, 'math-view.mjs');
+const mathViewHelpersPath = path.join(srcDir, 'math-view-helpers.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -119,6 +121,8 @@ fs.writeFileSync(codeBlockHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 
 fs.writeFileSync(blockHandlePath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle.template.js'), 'utf8'));
 fs.writeFileSync(blockHandleMenuPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-menu.template.js'), 'utf8'));
 fs.writeFileSync(blockHandleHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-helpers.template.js'), 'utf8'));
+fs.writeFileSync(mathViewPath, fs.readFileSync(path.join(webviewSrcDir, 'math-view.template.js'), 'utf8'));
+fs.writeFileSync(mathViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'math-view-helpers.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);
