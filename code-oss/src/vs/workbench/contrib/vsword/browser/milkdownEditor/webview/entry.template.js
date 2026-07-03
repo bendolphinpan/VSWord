@@ -20,7 +20,7 @@ import {
 	remarkStringifyOptionsCtx,
 } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
-import { gfm } from '@milkdown/preset-gfm';
+import { gfm, columnResizingPlugin } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { prism } from '@milkdown/plugin-prism';
@@ -36,6 +36,7 @@ import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs
 import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
 import { imageResizePlugins } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
+import { tableChromeView } from './table-chrome.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -183,6 +184,8 @@ async function createEditor(markdown) {
 		.use(imageUploadPlugins)
 		.use(remarkLiftImgHtmlPlugin)
 		.use(imageResizePlugins)
+		.use(tableChromeView)
+		.use(columnResizingPlugin)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;

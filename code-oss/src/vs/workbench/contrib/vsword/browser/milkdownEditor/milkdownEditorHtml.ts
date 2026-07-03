@@ -450,6 +450,161 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			background: var(--vsword-accent);
 			border-color: var(--vsword-accent);
 		}
+
+		/* ---- T-3.6 Table chrome ------------------------------------------------
+		   The `.vsword-table-wrap` is a $view NodeView wrapping the native <table>
+		   with sibling chrome containers (corner / col-bar / row-bar). Chrome is
+		   hidden by default and revealed on hover or when the caret is inside the
+		   table. Layout uses grid: the wrap sits inline-block so col-bar can be
+		   absolutely positioned above the table and row-bar to its left. Column
+		   resize is a separate concern (columnResizingPlugin) — this only styles
+		   the resize handle so it's discoverable.  */
+		.vsword-table-wrap {
+			position: relative;
+			display: inline-block;
+			max-width: 100%;
+			margin: 12px 0;
+			padding: 24px 0 0 32px;      /* Reserve space for row-bar + col-bar. */
+		}
+		.vsword-table {
+			border-collapse: collapse;
+			table-layout: fixed;
+		}
+		.vsword-table td, .vsword-table th {
+			border: 1px solid var(--vsword-border, #d0d0d0);
+			padding: 4px 8px;
+			vertical-align: top;
+			position: relative;
+		}
+		.vsword-table th { background: var(--vsword-muted-bg, rgba(0,0,0,0.04)); font-weight: 600; }
+		.vsword-table td[data-alignment="center"], .vsword-table th[data-alignment="center"] { text-align: center; }
+		.vsword-table td[data-alignment="right"],  .vsword-table th[data-alignment="right"]  { text-align: right;  }
+
+		.vsword-table-corner,
+		.vsword-table-col-bar,
+		.vsword-table-row-bar {
+			position: absolute;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 120ms ease;
+		}
+		.vsword-table-wrap:hover .vsword-table-corner,
+		.vsword-table-wrap:hover .vsword-table-col-bar,
+		.vsword-table-wrap:hover .vsword-table-row-bar,
+		.vsword-table-wrap:focus-within .vsword-table-corner,
+		.vsword-table-wrap:focus-within .vsword-table-col-bar,
+		.vsword-table-wrap:focus-within .vsword-table-row-bar {
+			opacity: 1;
+			pointer-events: auto;
+		}
+
+		.vsword-table-corner {
+			top: 0; left: 0;
+			width: 28px; height: 20px;
+			display: flex; align-items: center; justify-content: center;
+		}
+		.vsword-table-corner-btn {
+			all: unset;
+			width: 20px; height: 18px;
+			display: inline-flex; align-items: center; justify-content: center;
+			font: inherit; font-size: 14px; line-height: 1;
+			color: var(--vsword-fg, #333);
+			background: var(--vsword-bg, #fff);
+			border: 1px solid var(--vsword-border, #ccc);
+			border-radius: 3px;
+			cursor: pointer;
+		}
+		.vsword-table-corner-btn:hover { border-color: var(--vsword-accent, #007acc); }
+		.vsword-table-corner-pop {
+			display: none;
+			position: absolute;
+			top: 22px; left: 0;
+			padding: 4px;
+			background: var(--vsword-bg, #fff);
+			border: 1px solid var(--vsword-border, #ccc);
+			border-radius: 4px;
+			box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+			z-index: 3;
+		}
+		.vsword-table-corner[data-open="true"] .vsword-table-corner-pop { display: flex; }
+
+		.vsword-table-col-bar {
+			top: 0; left: 32px; right: 0;
+			height: 20px;
+			display: grid;
+			grid-auto-flow: column;
+			grid-auto-columns: 1fr;
+			gap: 0;
+		}
+		.vsword-table-row-bar {
+			top: 24px; left: 0;
+			width: 28px; bottom: 0;
+			display: grid;
+			grid-auto-flow: row;
+			grid-auto-rows: 1fr;
+			gap: 0;
+		}
+		.vsword-table-col-menu,
+		.vsword-table-row-menu {
+			position: relative;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			gap: 2px;
+		}
+		.vsword-table-col-menu {
+			flex-direction: column;
+		}
+		.vsword-table-btn-group {
+			display: inline-flex;
+			gap: 1px;
+			background: var(--vsword-bg, #fff);
+			border: 1px solid var(--vsword-border, #ccc);
+			border-radius: 3px;
+			padding: 1px;
+		}
+		.vsword-table-col-menu .vsword-table-btn-group {
+			/* Col bar sits above the header row; group is small + horizontal. */
+		}
+		.vsword-table-align-group {
+			margin-top: 2px;
+		}
+		.vsword-table-btn {
+			all: unset;
+			min-width: 20px;
+			padding: 1px 5px;
+			font: inherit; font-size: 11px; line-height: 1.3;
+			color: var(--vsword-fg, #333);
+			background: transparent;
+			border-radius: 2px;
+			cursor: pointer;
+			text-align: center;
+		}
+		.vsword-table-btn:hover { background: var(--vsword-muted-bg, rgba(0,0,0,0.06)); }
+		.vsword-table-btn[data-active="true"] {
+			color: var(--vsword-bg, #fff);
+			background: var(--vsword-accent, #007acc);
+		}
+
+		/* Column-resize handle from preset-gfm's columnResizingPlugin.
+		   Draw a subtle vertical bar on the right edge; brighten on hover/drag. */
+		.vsword-table .column-resize-handle {
+			position: absolute;
+			right: -2px;
+			top: 0;
+			bottom: 0;
+			width: 4px;
+			background: transparent;
+			cursor: col-resize;
+			z-index: 2;
+		}
+		.vsword-table-wrap:hover .vsword-table .column-resize-handle:hover,
+		.vsword-table .column-resize-handle.dragging {
+			background: var(--vsword-accent, #007acc);
+			opacity: 0.6;
+		}
+		.ProseMirror.resize-cursor { cursor: col-resize; }
+
 		${getThemesCss()}
 	</style>
 </head>

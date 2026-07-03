@@ -33,6 +33,7 @@ const imageUploadPath = path.join(srcDir, 'image-upload.mjs');
 const imageResizePath = path.join(srcDir, 'image-resize.mjs');
 const imageSchemaOverridePath = path.join(srcDir, 'image-schema-override.mjs');
 const imageNodeViewPath = path.join(srcDir, 'image-node-view.mjs');
+const tableChromePath = path.join(srcDir, 'table-chrome.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -104,6 +105,7 @@ fs.writeFileSync(imageUploadPath, fs.readFileSync(path.join(webviewSrcDir, 'imag
 fs.writeFileSync(imageResizePath, fs.readFileSync(path.join(webviewSrcDir, 'image-resize.template.js'), 'utf8'));
 fs.writeFileSync(imageSchemaOverridePath, fs.readFileSync(path.join(webviewSrcDir, 'image-schema-override.template.js'), 'utf8'));
 fs.writeFileSync(imageNodeViewPath, fs.readFileSync(path.join(webviewSrcDir, 'image-node-view.template.js'), 'utf8'));
+fs.writeFileSync(tableChromePath, fs.readFileSync(path.join(webviewSrcDir, 'table-chrome.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);
