@@ -984,6 +984,55 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-wikilink.vsword-wikilink-selected { outline: 1px solid var(--vscode-focusBorder, #007acc); outline-offset: 1px; }
 		.vsword-md-shell[data-mode="reading"] .vsword-wikilink { cursor: pointer; }
 
+		/* T-3.11.2 · autocomplete popover */
+		.vsword-wikilink-popover {
+			position: fixed;
+			z-index: 10000;
+			min-width: 220px;
+			max-width: 420px;
+			max-height: 300px;
+			overflow-y: auto;
+			background: var(--vscode-editorSuggestWidget-background, #252526);
+			color: var(--vscode-editorSuggestWidget-foreground, #cccccc);
+			border: 1px solid var(--vscode-editorSuggestWidget-border, #454545);
+			border-radius: 4px;
+			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+			font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+			font-size: 13px;
+			padding: 2px 0;
+		}
+		.vsword-wikilink-popover-row {
+			display: flex;
+			align-items: baseline;
+			gap: 8px;
+			padding: 4px 10px;
+			cursor: pointer;
+			white-space: nowrap;
+		}
+		.vsword-wikilink-popover-row:hover {
+			background: var(--vscode-editorSuggestWidget-focusHighlightForeground, #04395e33);
+		}
+		.vsword-wikilink-popover-row.is-selected {
+			background: var(--vscode-editorSuggestWidget-selectedBackground, #062f4a);
+			color: var(--vscode-editorSuggestWidget-selectedForeground, #ffffff);
+		}
+		.vsword-wikilink-popover-name {
+			flex: 0 0 auto;
+			font-weight: 500;
+		}
+		.vsword-wikilink-popover-path {
+			flex: 1 1 auto;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			font-size: 11px;
+			color: var(--vscode-descriptionForeground, #999);
+		}
+		.vsword-wikilink-popover-empty {
+			padding: 8px 10px;
+			color: var(--vscode-descriptionForeground, #999);
+			font-style: italic;
+		}
+
 		${getThemesCss()}
 	</style>
 </head>

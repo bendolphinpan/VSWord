@@ -132,3 +132,98 @@ export function titleForStatus(status, target, file) {
 	if (file && file.path)      return file.path;
 	return target;
 }
+
+// ---------------------------------------------------------------------------
+// T-3.11.2 — autocomplete: prefix detection + fuzzy ranking
+// ---------------------------------------------------------------------------
+
+/**
+ * Find an open `[[…` prefix ending at `caret` inside `text`.
+ * Returns `{ from, query }` where `from` is the offset of the `[[` opener
+ * (so the caller can replace `text.slice(from, caret)` on accept), or `null`.
+ *
+ * Rules:
+ *   • No closing `]]` between the opener and the caret.
+ *   • No newline inside the query (kills wandering triggers across paragraphs).
+ *   • Escaped `\[[` doesn't trigger.
+ */
+export function findWikilinkTrigger(text, caret) {
+	if (typeof text !== 'string' || caret <= 1) return null;
+	const scan = text.slice(0, caret);
+	const open = scan.lastIndexOf('[[');
+	if (open < 0) return null;
+	// Escaped `\[[` — bail.
+	if (open > 0 && scan.charCodeAt(open - 1) === 0x5c /* \\ */) return null;
+	const between = scan.slice(open + 2);
+	if (between.indexOf(']]') !== -1) return null;
+	if (between.indexOf('\n') !== -1) return null;
+	return { from: open, query: between };
+}
+
+/**
+ * Fuzzy-score a candidate against a query. Higher = better. Zero = no match.
+ * Tuned for note-name UX: prefix/exact wins, then substring, then subsequence.
+ * Case-insensitive; also considers path so `folder/note` queries work.
+ */
+export function fuzzyScore(query, entry) {
+	if (!query) return 1; // empty query — everything ranks equally (order preserved)
+	const q = String(query).toLowerCase();
+	const name = String(entry.name || '').toLowerCase();
+	const path = String(entry.path || '').toLowerCase();
+	// Exact name match — top.
+	if (name === q) return 1000;
+	// Name prefix — very strong.
+	if (name.startsWith(q)) return 800 - (name.length - q.length);
+	// Path prefix (folder-qualified search).
+	if (path.startsWith(q)) return 700 - (path.length - q.length);
+	// Substring in name.
+	const nameIdx = name.indexOf(q);
+	if (nameIdx >= 0) return 500 - nameIdx - (name.length - q.length) * 0.1;
+	// Substring in path.
+	const pathIdx = path.indexOf(q);
+	if (pathIdx >= 0) return 300 - pathIdx - (path.length - q.length) * 0.1;
+	// Subsequence match — chars appear in order.
+	let qi = 0;
+	for (let i = 0; i < name.length && qi < q.length; i++) {
+		if (name.charCodeAt(i) === q.charCodeAt(qi)) qi++;
+	}
+	if (qi === q.length) return 100 - (name.length - q.length) * 0.5;
+	return 0;
+}
+
+/**
+ * Rank an index against `query`, returning the top `limit` matches.
+ * Pure function: same input → same output; safe to call on every keystroke.
+ */
+export function rankCandidates(query, index, limit = 8) {
+	if (!Array.isArray(index) || index.length === 0) return [];
+	const scored = [];
+	for (const entry of index) {
+		const score = fuzzyScore(query, entry);
+		if (score > 0) scored.push({ entry, score });
+	}
+	scored.sort((a, b) => b.score - a.score || a.entry.path.localeCompare(b.entry.path));
+	return scored.slice(0, limit).map(s => s.entry);
+}
+
+/**
+ * Decide the target string to emit when the user picks `entry` from the popover.
+ * Uses the folder-qualified form when the entry name is duplicated in the index
+ * (avoids the `ambiguous` broken state at insertion time). Otherwise uses the
+ * short name.
+ */
+export function pickTargetFor(entry, index) {
+	if (!entry) return '';
+	const name = String(entry.name || '');
+	if (!name) return String(entry.path || '').replace(/\.md$/i, '');
+	let dupes = 0;
+	for (const e of index) {
+		if (String(e.name || '').toLowerCase() === name.toLowerCase()) {
+			dupes++;
+			if (dupes > 1) break;
+		}
+	}
+	if (dupes > 1) return String(entry.path || '').replace(/\.md$/i, '');
+	return name;
+}
+

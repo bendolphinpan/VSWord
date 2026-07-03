@@ -103,6 +103,11 @@ export interface WebviewWikilinkResolveRequestMessage {
 	readonly target: string;
 }
 
+/** T-3.11.2: webview asks for the full workspace file index (for autocomplete). */
+export interface WebviewWikilinkIndexRequestMessage {
+	readonly type: 'wikilinkIndexRequest';
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -115,7 +120,8 @@ export type WebviewToHostMessage =
 	| WebviewOutlineChangedMessage
 	| WebviewImageUploadRequestMessage
 	| WebviewOpenWikilinkMessage
-	| WebviewWikilinkResolveRequestMessage;
+	| WebviewWikilinkResolveRequestMessage
+	| WebviewWikilinkIndexRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -212,6 +218,19 @@ export interface HostWorkspaceIndexChangedMessage {
 	readonly type: 'workspaceIndexChanged';
 }
 
+/** T-3.11.2 — a single indexed markdown file (workspace-relative POSIX). */
+export interface WikilinkIndexEntry {
+	readonly name: string;
+	readonly path: string;
+	readonly dir: string;
+}
+
+/** T-3.11.2: full workspace file index (for autocomplete). */
+export interface HostWikilinkIndexResponseMessage {
+	readonly type: 'wikilinkIndexResponse';
+	readonly entries: readonly WikilinkIndexEntry[];
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -224,7 +243,8 @@ export type HostToWebviewMessage =
 	| HostImageUploadedMessage
 	| HostImageUploadFailedMessage
 	| HostWikilinkResolveResponseMessage
-	| HostWorkspaceIndexChangedMessage;
+	| HostWorkspaceIndexChangedMessage
+	| HostWikilinkIndexResponseMessage;
 
 // ---------------------------------------------------------------------------
 // Constants

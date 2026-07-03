@@ -16,6 +16,10 @@ import {
 	resolveTarget,
 	classForStatus,
 	titleForStatus,
+	findWikilinkTrigger,
+	fuzzyScore,
+	rankCandidates,
+	pickTargetFor,
 } from '../../browser/milkdownEditor/webview/wikilink-helpers.template.js';
 import {
 	resolveWikilink,
@@ -225,5 +229,127 @@ suite('T-3.11.1 · classForStatus / titleForStatus', () => {
 		const t = titleForStatus('ambiguous', 'Dup');
 		assert.ok(typeof t === 'string' && t.length > 0);
 		assert.ok(String(t).includes('Dup') || String(t).toLowerCase().includes('dup'));
+	});
+});
+
+// ===========================================================================
+// T-3.11.2 · autocomplete: prefix detection + fuzzy ranking
+// ===========================================================================
+
+suite('T-3.11.2 · findWikilinkTrigger', () => {
+	test('returns null when no [[ opener before caret', () => {
+		assert.strictEqual(findWikilinkTrigger('plain text', 10), null);
+	});
+	test('detects an open prefix', () => {
+		const src = 'see [[not';
+		const t = findWikilinkTrigger(src, src.length);
+		assert.ok(t);
+		assert.strictEqual(t!.from, 4);
+		assert.strictEqual(t!.query, 'not');
+	});
+	test('empty query at caret directly after [[', () => {
+		const src = 'see [[';
+		const t = findWikilinkTrigger(src, src.length);
+		assert.ok(t);
+		assert.strictEqual(t!.query, '');
+	});
+	test('closes on ]] — no trigger past a completed link', () => {
+		const src = '[[done]] and now [[open';
+		const t = findWikilinkTrigger(src, src.length);
+		assert.ok(t);
+		assert.strictEqual(t!.query, 'open');
+	});
+	test('ignores escaped \\[[', () => {
+		const src = 'see \\[[not';
+		assert.strictEqual(findWikilinkTrigger(src, src.length), null);
+	});
+	test('does not span a newline', () => {
+		const src = '[[start\nmid';
+		assert.strictEqual(findWikilinkTrigger(src, src.length), null);
+	});
+	test('does not fire before caret >= 2', () => {
+		assert.strictEqual(findWikilinkTrigger('[[', 1), null);
+		assert.strictEqual(findWikilinkTrigger('[[', 0), null);
+	});
+});
+
+suite('T-3.11.2 · fuzzyScore', () => {
+	const idx = { name: 'MeetingNotes', path: 'meetings/MeetingNotes.md', dir: 'meetings' };
+	test('exact-name beats prefix', () => {
+		const other = { name: 'MeetingNotesArchive', path: 'a/MeetingNotesArchive.md', dir: 'a' };
+		assert.ok(fuzzyScore('MeetingNotes', idx) > fuzzyScore('MeetingNotes', other));
+	});
+	test('is case-insensitive', () => {
+		assert.strictEqual(fuzzyScore('MEETING', idx), fuzzyScore('meeting', idx));
+	});
+	test('empty query scores everything non-zero', () => {
+		assert.ok(fuzzyScore('', idx) > 0);
+	});
+	test('no match returns 0', () => {
+		assert.strictEqual(fuzzyScore('zzz-nowhere', idx), 0);
+	});
+	test('path prefix ranks below name prefix', () => {
+		const nameHit = { name: 'meet-agenda', path: 'x/meet-agenda.md', dir: 'x' };
+		const pathHit = { name: 'notes', path: 'meet/notes.md', dir: 'meet' };
+		assert.ok(fuzzyScore('meet', nameHit) > fuzzyScore('meet', pathHit));
+	});
+	test('subsequence match ranks lowest but non-zero', () => {
+		// 'mtng' is a subsequence of 'meetingnotes' (m…t…n…g? no g in MeetingNotes)
+		// use 'mn' → subseq of MeetingNotes
+		const s = fuzzyScore('mn', idx);
+		assert.ok(s > 0 && s < 300);
+	});
+});
+
+suite('T-3.11.2 · rankCandidates', () => {
+	const idx = [
+		{ name: 'Alpha', path: 'Alpha.md', dir: '' },
+		{ name: 'AlphaBeta', path: 'AlphaBeta.md', dir: '' },
+		{ name: 'Gamma', path: 'g/Gamma.md', dir: 'g' },
+		{ name: 'AlphaCentauri', path: 'space/AlphaCentauri.md', dir: 'space' },
+	];
+	test('ranks exact name at top', () => {
+		const out = rankCandidates('Alpha', idx, 4);
+		assert.strictEqual(out[0].name, 'Alpha');
+	});
+	test('filters out non-matches', () => {
+		const out = rankCandidates('Alpha', idx, 10);
+		assert.strictEqual(out.length, 3); // Alpha, AlphaBeta, AlphaCentauri (Gamma dropped)
+	});
+	test('respects limit', () => {
+		const out = rankCandidates('Alpha', idx, 2);
+		assert.strictEqual(out.length, 2);
+	});
+	test('empty query returns first N in stable-ish order', () => {
+		const out = rankCandidates('', idx, 3);
+		assert.strictEqual(out.length, 3);
+	});
+	test('non-array index returns []', () => {
+		assert.deepStrictEqual(rankCandidates('x', null as any, 8), []);
+	});
+});
+
+suite('T-3.11.2 · pickTargetFor', () => {
+	test('emits short name when unique', () => {
+		const idx = [{ name: 'Solo', path: 'Solo.md', dir: '' }];
+		assert.strictEqual(pickTargetFor(idx[0], idx), 'Solo');
+	});
+	test('emits folder-qualified path when name is duplicated', () => {
+		const idx = [
+			{ name: 'Notes', path: 'a/Notes.md', dir: 'a' },
+			{ name: 'Notes', path: 'b/Notes.md', dir: 'b' },
+		];
+		assert.strictEqual(pickTargetFor(idx[0], idx), 'a/Notes');
+		assert.strictEqual(pickTargetFor(idx[1], idx), 'b/Notes');
+	});
+	test('returns empty string for null entry', () => {
+		assert.strictEqual(pickTargetFor(null as any, []), '');
+	});
+	test('is case-insensitive when detecting dupes', () => {
+		const idx = [
+			{ name: 'Notes', path: 'a/Notes.md', dir: 'a' },
+			{ name: 'notes', path: 'b/notes.md', dir: 'b' },
+		];
+		assert.strictEqual(pickTargetFor(idx[0], idx), 'a/Notes');
 	});
 });

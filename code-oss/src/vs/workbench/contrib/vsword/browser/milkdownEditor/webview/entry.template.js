@@ -41,6 +41,12 @@ import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chro
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
 import { mathViewPlugins, configureMathKatex } from './math-view.mjs';
 import { wikilinkPlugins, configureWikilinkHost, ingestResolutions, invalidateWikilinkCache } from './wikilink.mjs';
+import {
+	wikilinkAutocompletePlugins,
+	configureWikilinkAutocomplete,
+	ingestWikilinkIndex,
+	invalidateWikilinkIndex,
+} from './wikilink-autocomplete.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -156,6 +162,9 @@ async function createEditor(markdown) {
 			configureBlockHandle(ctx);
 			configureMathKatex(ctx);
 			configureWikilinkHost(ctx, vscode);
+			configureWikilinkAutocomplete({
+				postToHost: (m) => { try { vscode.postMessage(m); } catch { /* ignore */ } },
+			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -204,6 +213,7 @@ async function createEditor(markdown) {
 		.use(blockHandlePlugins)
 		.use(mathViewPlugins)
 		.use(wikilinkPlugins)
+		.use(wikilinkAutocompletePlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
@@ -328,9 +338,15 @@ window.addEventListener('message', event => {
 		ingestResolutions(msg.results);
 		return;
 	}
+	if (msg.type === 'wikilinkIndexResponse') {
+		// T-3.11.2: full workspace file index for the autocomplete popover.
+		ingestWikilinkIndex(msg.entries);
+		return;
+	}
 	if (msg.type === 'workspaceIndexChanged') {
-		// T-3.11.1: host tells us a .md was added/removed/renamed — flush the cache.
+		// T-3.11.1/.2: host tells us a .md was added/removed/renamed — flush both caches.
 		invalidateWikilinkCache();
+		invalidateWikilinkIndex();
 		return;
 	}
 	if (msg.type === 'themeChanged') {

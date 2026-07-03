@@ -44,6 +44,7 @@ const mathViewPath = path.join(srcDir, 'math-view.mjs');
 const mathViewHelpersPath = path.join(srcDir, 'math-view-helpers.mjs');
 const wikilinkPath = path.join(srcDir, 'wikilink.mjs');
 const wikilinkHelpersPath = path.join(srcDir, 'wikilink-helpers.mjs');
+const wikilinkAutocompletePath = path.join(srcDir, 'wikilink-autocomplete.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -127,6 +128,7 @@ fs.writeFileSync(mathViewPath, fs.readFileSync(path.join(webviewSrcDir, 'math-vi
 fs.writeFileSync(mathViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'math-view-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-helpers.template.js'), 'utf8'));
+fs.writeFileSync(wikilinkAutocompletePath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-autocomplete.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

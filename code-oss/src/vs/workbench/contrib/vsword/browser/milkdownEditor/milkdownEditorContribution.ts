@@ -284,6 +284,9 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'wikilinkResolveRequest':
 				await this.handleWikilinkResolveRequest(input, msg.target);
 				return;
+			case 'wikilinkIndexRequest':
+				await this.handleWikilinkIndexRequest(input);
+				return;
 			case 'openWikilink':
 				await this.handleOpenWikilink(input, msg.target, msg.newSplit);
 				return;
@@ -551,6 +554,11 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		const index = await this.ensureWikilinkIndex();
 		const wire: WikilinkResolveResult = resolutionToWireResult(target, resolveWikilink(target, index));
 		this.post(input, { type: 'wikilinkResolveResponse', results: [wire] });
+	}
+
+	private async handleWikilinkIndexRequest(input: MilkdownEditorInput): Promise<void> {
+		const index = await this.ensureWikilinkIndex();
+		this.post(input, { type: 'wikilinkIndexResponse', entries: index });
 	}
 
 	private async handleOpenWikilink(input: MilkdownEditorInput, target: string, newSplit: boolean): Promise<void> {
