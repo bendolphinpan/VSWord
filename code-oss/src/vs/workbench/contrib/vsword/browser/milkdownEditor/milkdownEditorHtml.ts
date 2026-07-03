@@ -605,6 +605,156 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		}
 		.ProseMirror.resize-cursor { cursor: col-resize; }
 
+		/* ---- T-3.7 Code block chrome ------------------------------------------------ */
+		.vsword-code-wrap {
+			position: relative;
+			margin: 12px 0;
+		}
+		.vsword-code-wrap .vsword-code-pre {
+			margin: 0;
+			padding: 12px 16px;
+			background: var(--vsword-code-bg, #1e1e1e);
+			color: var(--vsword-code-fg, #d4d4d4);
+			border-radius: 4px;
+			overflow-x: auto;
+			font-family: var(--vsword-code-font, 'Cascadia Code', 'Consolas', monospace);
+			font-size: 13px;
+			line-height: 1.5;
+			white-space: pre;
+			tab-size: 4;
+		}
+		.vsword-code-wrap .vsword-code-pre code {
+			background: transparent;
+			padding: 0;
+			font-family: inherit;
+			font-size: inherit;
+			color: inherit;
+			white-space: inherit;
+		}
+		.vsword-code-chrome {
+			position: absolute;
+			top: 6px;
+			right: 6px;
+			display: none;
+			gap: 4px;
+			z-index: 4;
+		}
+		.vsword-code-wrap:hover > .vsword-code-chrome,
+		.vsword-code-chrome:focus-within {
+			display: flex;
+		}
+		.vsword-code-lang-btn,
+		.vsword-code-copy-btn {
+			font-size: 11px;
+			padding: 2px 8px;
+			background: rgba(255,255,255,0.08);
+			color: var(--vsword-code-fg, #d4d4d4);
+			border: 1px solid rgba(255,255,255,0.15);
+			border-radius: 3px;
+			cursor: pointer;
+			font-family: inherit;
+			line-height: 1.4;
+			user-select: none;
+		}
+		.vsword-code-lang-btn:hover,
+		.vsword-code-copy-btn:hover {
+			background: rgba(255,255,255,0.15);
+			border-color: rgba(255,255,255,0.3);
+		}
+		.vsword-code-copy-btn[data-state="ok"] {
+			background: rgba(80,180,80,0.25);
+			border-color: rgba(80,180,80,0.5);
+		}
+		.vsword-code-copy-btn[data-state="error"] {
+			background: rgba(220,80,80,0.25);
+			border-color: rgba(220,80,80,0.5);
+		}
+		.vsword-code-lang-pop {
+			position: absolute;
+			top: 100%;
+			right: 0;
+			margin-top: 4px;
+			width: 220px;
+			max-height: 300px;
+			display: flex;
+			flex-direction: column;
+			background: var(--vsword-bg, #1e1e1e);
+			color: var(--vsword-fg, #d4d4d4);
+			border: 1px solid rgba(255,255,255,0.2);
+			border-radius: 4px;
+			box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+			z-index: 20;
+		}
+		.vsword-code-lang-input {
+			flex: 0 0 auto;
+			margin: 4px;
+			padding: 4px 8px;
+			background: rgba(255,255,255,0.05);
+			color: inherit;
+			border: 1px solid rgba(255,255,255,0.15);
+			border-radius: 3px;
+			font-family: inherit;
+			font-size: 12px;
+			outline: none;
+		}
+		.vsword-code-lang-input:focus {
+			border-color: var(--vsword-accent, #4090f0);
+		}
+		.vsword-code-lang-list {
+			flex: 1 1 auto;
+			overflow-y: auto;
+			padding: 2px 0;
+		}
+		.vsword-code-lang-item {
+			padding: 4px 12px;
+			font-size: 12px;
+			cursor: pointer;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		.vsword-code-lang-item:hover,
+		.vsword-code-lang-item[data-highlight="true"] {
+			background: rgba(255,255,255,0.1);
+		}
+		.vsword-code-lang-item[data-current="true"] {
+			font-weight: 600;
+			color: var(--vsword-accent, #4090f0);
+		}
+
+		/* Prism token colors — VS Code dark defaults. */
+		.vsword-code-pre .token.comment,
+		.vsword-code-pre .token.prolog,
+		.vsword-code-pre .token.doctype,
+		.vsword-code-pre .token.cdata { color: #6a9955; font-style: italic; }
+		.vsword-code-pre .token.punctuation { color: #d4d4d4; }
+		.vsword-code-pre .token.property,
+		.vsword-code-pre .token.tag,
+		.vsword-code-pre .token.boolean,
+		.vsword-code-pre .token.number,
+		.vsword-code-pre .token.constant,
+		.vsword-code-pre .token.symbol,
+		.vsword-code-pre .token.deleted { color: #b5cea8; }
+		.vsword-code-pre .token.selector,
+		.vsword-code-pre .token.attr-name,
+		.vsword-code-pre .token.string,
+		.vsword-code-pre .token.char,
+		.vsword-code-pre .token.builtin,
+		.vsword-code-pre .token.inserted { color: #ce9178; }
+		.vsword-code-pre .token.operator,
+		.vsword-code-pre .token.entity,
+		.vsword-code-pre .token.url,
+		.vsword-code-pre .token.variable { color: #d4d4d4; }
+		.vsword-code-pre .token.atrule,
+		.vsword-code-pre .token.attr-value,
+		.vsword-code-pre .token.function,
+		.vsword-code-pre .token.class-name { color: #dcdcaa; }
+		.vsword-code-pre .token.keyword { color: #569cd6; }
+		.vsword-code-pre .token.regex,
+		.vsword-code-pre .token.important { color: #d16969; }
+		.vsword-code-pre .token.bold { font-weight: bold; }
+		.vsword-code-pre .token.italic { font-style: italic; }
+
 		${getThemesCss()}
 	</style>
 </head>

@@ -34,6 +34,9 @@ const imageResizePath = path.join(srcDir, 'image-resize.mjs');
 const imageSchemaOverridePath = path.join(srcDir, 'image-schema-override.mjs');
 const imageNodeViewPath = path.join(srcDir, 'image-node-view.mjs');
 const tableChromePath = path.join(srcDir, 'table-chrome.mjs');
+const tableChromeHelpersPath = path.join(srcDir, 'table-chrome-helpers.mjs');
+const codeBlockChromePath = path.join(srcDir, 'code-block-chrome.mjs');
+const codeBlockHelpersPath = path.join(srcDir, 'code-block-helpers.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -106,6 +109,9 @@ fs.writeFileSync(imageResizePath, fs.readFileSync(path.join(webviewSrcDir, 'imag
 fs.writeFileSync(imageSchemaOverridePath, fs.readFileSync(path.join(webviewSrcDir, 'image-schema-override.template.js'), 'utf8'));
 fs.writeFileSync(imageNodeViewPath, fs.readFileSync(path.join(webviewSrcDir, 'image-node-view.template.js'), 'utf8'));
 fs.writeFileSync(tableChromePath, fs.readFileSync(path.join(webviewSrcDir, 'table-chrome.template.js'), 'utf8'));
+fs.writeFileSync(tableChromeHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'table-chrome-helpers.template.js'), 'utf8'));
+fs.writeFileSync(codeBlockChromePath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-chrome.template.js'), 'utf8'));
+fs.writeFileSync(codeBlockHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-helpers.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

@@ -54,7 +54,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -295,6 +295,14 @@ const checks = {
 	tableAlignSyntaxRight:    /\|\s*-+:\s*\|/.test(output),
 	tableBodyPreserved:       output.includes('张三') && output.includes('北京') && output.includes('李四'),
 	tableNoChromeLeak:        !output.includes('vsword-table-wrap') && !output.includes('data-action'),
+
+	// T-3.7 code block: fence + language + tab + custom-language passthrough.
+	codeBlockFencePython:     /```python\n[\s\S]*?```/.test(output),
+	codeBlockBodyPreserved:   output.includes('def greet(name):') && output.includes('return f"你好, {name}"'),
+	codeBlockNoLangFence:     /```\nno language here/.test(output),
+	codeBlockTabPreserved:    output.includes('	tab-indented line'),
+	codeBlockCustomLangKept:  /```mermaid\n/.test(output),
+	codeBlockNoChromeLeak:    !output.includes('vsword-code-wrap') && !output.includes('vsword-code-chrome'),
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };

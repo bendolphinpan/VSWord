@@ -37,6 +37,7 @@ import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBrid
 import { imageResizePlugins } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
 import { tableChromeView } from './table-chrome.mjs';
+import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -142,6 +143,7 @@ async function createEditor(markdown) {
 			ctx.set(rootCtx, root);
 			ctx.set(defaultValueCtx, markdown);
 			ctx.set(remarkStringifyOptionsCtx, TYPORA_STRINGIFY_OPTIONS);
+			configureCodeBlockCtx(ctx);
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -186,6 +188,7 @@ async function createEditor(markdown) {
 		.use(imageResizePlugins)
 		.use(tableChromeView)
 		.use(columnResizingPlugin)
+		.use(codeBlockChromePlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
