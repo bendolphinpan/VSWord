@@ -47,6 +47,11 @@ import {
 	ingestWikilinkIndex,
 	invalidateWikilinkIndex,
 } from './wikilink-autocomplete.mjs';
+import {
+	configureWikilinkPreview,
+	ingestPreviewResponse,
+	_resetWikilinkPreview,
+} from './wikilink-preview.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -163,6 +168,9 @@ async function createEditor(markdown) {
 			configureMathKatex(ctx);
 			configureWikilinkHost(ctx, vscode);
 			configureWikilinkAutocomplete({
+				postToHost: (m) => { try { vscode.postMessage(m); } catch { /* ignore */ } },
+			});
+			configureWikilinkPreview({
 				postToHost: (m) => { try { vscode.postMessage(m); } catch { /* ignore */ } },
 			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
@@ -343,10 +351,16 @@ window.addEventListener('message', event => {
 		ingestWikilinkIndex(msg.entries);
 		return;
 	}
+	if (msg.type === 'wikilinkPreviewResponse') {
+		// T-3.11.3: host answered a hover-preview request.
+		ingestPreviewResponse(msg);
+		return;
+	}
 	if (msg.type === 'workspaceIndexChanged') {
-		// T-3.11.1/.2: host tells us a .md was added/removed/renamed — flush both caches.
+		// T-3.11.1/.2/.3: host tells us a .md was added/removed/renamed — flush all wiki-link caches.
 		invalidateWikilinkCache();
 		invalidateWikilinkIndex();
+		_resetWikilinkPreview();
 		return;
 	}
 	if (msg.type === 'themeChanged') {

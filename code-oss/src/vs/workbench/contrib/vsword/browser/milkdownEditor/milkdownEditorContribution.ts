@@ -30,7 +30,7 @@ import { asWebviewUri } from '../../../webview/common/webview.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
-import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult } from './milkdownWikilinkResolver.js';
+import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle } from './milkdownWikilinkResolver.js';
 import {
 	HostToWebviewMessage,
 	VSWORD_MILKDOWN_DEFAULT_MODE,
@@ -286,6 +286,9 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				return;
 			case 'wikilinkIndexRequest':
 				await this.handleWikilinkIndexRequest(input);
+				return;
+			case 'wikilinkPreviewRequest':
+				await this.handleWikilinkPreviewRequest(input, msg.requestId, msg.target);
 				return;
 			case 'openWikilink':
 				await this.handleOpenWikilink(input, msg.target, msg.newSplit);
@@ -559,6 +562,41 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	private async handleWikilinkIndexRequest(input: MilkdownEditorInput): Promise<void> {
 		const index = await this.ensureWikilinkIndex();
 		this.post(input, { type: 'wikilinkIndexResponse', entries: index });
+	}
+
+	private async handleWikilinkPreviewRequest(input: MilkdownEditorInput, requestId: number, target: string): Promise<void> {
+		const index = await this.ensureWikilinkIndex();
+		const resolution = resolveWikilink(target, index);
+		const roots = this.workspaceService.getWorkspace().folders;
+		const root = roots[0]?.uri;
+		const file = resolution.status === 'found'
+			? resolution.file
+			: resolution.status === 'ambiguous' && resolution.candidates
+				? resolution.candidates[0]
+				: undefined;
+		if (!root || !file) {
+			this.post(input, { type: 'wikilinkPreviewResponse', requestId, target, status: 'missing' });
+			return;
+		}
+		try {
+			const uri = joinPath(root, file.path);
+			// Cap read at 8 KB — plenty for a 320-char snippet, cheap on big files.
+			const raw = await this.fileService.readFile(uri, { position: 0, length: 8192 });
+			const text = raw.value.toString();
+			const title = extractPreviewTitle(text, file.name);
+			const snippet = extractPreviewSnippet(text);
+			this.post(input, {
+				type: 'wikilinkPreviewResponse',
+				requestId,
+				target,
+				status: 'ok',
+				title,
+				snippet,
+				path: file.path,
+			});
+		} catch {
+			this.post(input, { type: 'wikilinkPreviewResponse', requestId, target, status: 'error' });
+		}
 	}
 
 	private async handleOpenWikilink(input: MilkdownEditorInput, target: string, newSplit: boolean): Promise<void> {

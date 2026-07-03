@@ -20,11 +20,20 @@ import {
 	fuzzyScore,
 	rankCandidates,
 	pickTargetFor,
+	extractPreviewSnippet,
+	extractPreviewTitle,
 } from '../../browser/milkdownEditor/webview/wikilink-helpers.template.js';
+import {
+	HoverIntent,
+	OPEN_DELAY_MS,
+	CLOSE_DELAY_MS,
+} from '../../browser/milkdownEditor/webview/wikilink-preview.template.js';
 import {
 	resolveWikilink,
 	resolutionToWireResult,
 	normalizeTarget as hostNormalizeTarget,
+	extractPreviewSnippet as hostExtractPreviewSnippet,
+	extractPreviewTitle as hostExtractPreviewTitle,
 } from '../../browser/milkdownEditor/milkdownWikilinkResolver.js';
 
 // ---- Regex + parseAll -------------------------------------------------------
@@ -351,5 +360,154 @@ suite('T-3.11.2 · pickTargetFor', () => {
 			{ name: 'notes', path: 'b/notes.md', dir: 'b' },
 		];
 		assert.strictEqual(pickTargetFor(idx[0], idx), 'a/Notes');
+	});
+});
+
+// ===========================================================================
+// T-3.11.3 · hover preview: snippet extractor + hover-intent state machine
+// ===========================================================================
+
+suite('T-3.11.3 · extractPreviewTitle', () => {
+	test('returns first heading text', () => {
+		assert.strictEqual(extractPreviewTitle('# Hello\n\nbody'), 'Hello');
+	});
+	test('handles h2..h6 too', () => {
+		assert.strictEqual(extractPreviewTitle('### Sub\n\nbody'), 'Sub');
+	});
+	test('returns fallback when no heading', () => {
+		assert.strictEqual(extractPreviewTitle('just text', 'Fallback'), 'Fallback');
+	});
+	test('empty input returns fallback', () => {
+		assert.strictEqual(extractPreviewTitle('', 'F'), 'F');
+	});
+	test('skips YAML frontmatter', () => {
+		const md = '---\ntitle: skipped\n---\n# Real Title\n\nbody';
+		assert.strictEqual(extractPreviewTitle(md), 'Real Title');
+	});
+	test('host mirror agrees with webview helper', () => {
+		const md = '# Hello\n\nbody';
+		assert.strictEqual(hostExtractPreviewTitle(md), extractPreviewTitle(md));
+	});
+});
+
+suite('T-3.11.3 · extractPreviewSnippet', () => {
+	test('returns body without the leading heading', () => {
+		const s = extractPreviewSnippet('# Title\n\nBody line.');
+		assert.ok(!s.startsWith('#'));
+		assert.ok(s.includes('Body line.'));
+	});
+	test('strips YAML frontmatter', () => {
+		const md = '---\nfoo: bar\n---\nSome body';
+		assert.strictEqual(extractPreviewSnippet(md), 'Some body');
+	});
+	test('collapses excessive blank lines', () => {
+		const md = 'A\n\n\n\nB';
+		assert.strictEqual(extractPreviewSnippet(md), 'A\n\nB');
+	});
+	test('truncates at word boundary and appends …', () => {
+		const long = 'word '.repeat(200); // 1000 chars
+		const s = extractPreviewSnippet(long, 100);
+		assert.ok(s.endsWith('…'));
+		assert.ok(s.length <= 101);
+		assert.ok(!/\s…$/.test(s)); // no trailing whitespace before ellipsis
+	});
+	test('does not truncate when body fits', () => {
+		assert.strictEqual(extractPreviewSnippet('short body', 100), 'short body');
+	});
+	test('empty input returns empty string', () => {
+		assert.strictEqual(extractPreviewSnippet(''), '');
+		assert.strictEqual(extractPreviewSnippet(null as any), '');
+	});
+	test('host mirror produces identical output', () => {
+		const md = '---\nk: v\n---\n# T\n\nAlpha beta gamma delta epsilon.';
+		assert.strictEqual(hostExtractPreviewSnippet(md), extractPreviewSnippet(md));
+	});
+	test('handles unterminated frontmatter gracefully', () => {
+		const md = '---\nno-close\ncontent';
+		// No closing --- → treat as raw body.
+		assert.ok(extractPreviewSnippet(md).includes('no-close'));
+	});
+});
+
+suite('T-3.11.3 · HoverIntent (fake clock)', () => {
+	function makeIntent() {
+		let now = 1000;
+		const intent = new HoverIntent(() => now);
+		const tick = (ms: number) => { now += ms; };
+		return { intent, tick };
+	}
+	const T = { target: 'Foo', alias: null };
+
+	test('idle → pending on enterAnchor, schedules open at now+OPEN_DELAY', () => {
+		const { intent } = makeIntent();
+		const r = intent.enterAnchor(T);
+		assert.strictEqual(intent.state, 'pending');
+		assert.strictEqual(r.action, 'schedule-open');
+		assert.strictEqual(r.at, 1000 + OPEN_DELAY_MS);
+	});
+	test('pending → idle on leaveAnchor (cancel-open)', () => {
+		const { intent } = makeIntent();
+		intent.enterAnchor(T);
+		const r = intent.leaveAnchor();
+		assert.strictEqual(r.action, 'cancel-open');
+		assert.strictEqual(intent.state, 'idle');
+	});
+	test('pending → shown on fireOpen; returns target', () => {
+		const { intent } = makeIntent();
+		intent.enterAnchor(T);
+		const r = intent.fireOpen();
+		assert.strictEqual(r.action, 'open');
+		assert.strictEqual((r.target as any).target, 'Foo');
+		assert.strictEqual(intent.state, 'shown');
+	});
+	test('shown → closing on leaveAnchor with CLOSE_DELAY', () => {
+		const { intent, tick } = makeIntent();
+		intent.enterAnchor(T); intent.fireOpen();
+		tick(500);
+		const r = intent.leaveAnchor();
+		assert.strictEqual(r.action, 'schedule-close');
+		assert.strictEqual(r.at, 1500 + CLOSE_DELAY_MS);
+	});
+	test('closing → shown when mouse enters popover (cancel-close)', () => {
+		const { intent } = makeIntent();
+		intent.enterAnchor(T); intent.fireOpen(); intent.leaveAnchor();
+		assert.strictEqual(intent.state, 'closing');
+		const r = intent.enterPopover();
+		assert.strictEqual(r.action, 'cancel-close');
+		assert.strictEqual(intent.state, 'shown');
+	});
+	test('closing → shown when mouse re-enters anchor (cancel-close)', () => {
+		const { intent } = makeIntent();
+		intent.enterAnchor(T); intent.fireOpen(); intent.leaveAnchor();
+		const r = intent.enterAnchor(T);
+		assert.strictEqual(r.action, 'cancel-close');
+		assert.strictEqual(intent.state, 'shown');
+	});
+	test('closing → idle on fireClose', () => {
+		const { intent } = makeIntent();
+		intent.enterAnchor(T); intent.fireOpen(); intent.leaveAnchor();
+		const r = intent.fireClose();
+		assert.strictEqual(r.action, 'close');
+		assert.strictEqual(intent.state, 'idle');
+		assert.strictEqual(intent.target, null);
+	});
+	test('fireOpen on non-pending state is noop', () => {
+		const { intent } = makeIntent();
+		assert.strictEqual(intent.fireOpen().action, 'noop');
+	});
+	test('fireClose on non-closing state is noop', () => {
+		const { intent } = makeIntent();
+		assert.strictEqual(intent.fireClose().action, 'noop');
+	});
+	test('reset() returns to idle', () => {
+		const { intent } = makeIntent();
+		intent.enterAnchor(T); intent.fireOpen();
+		intent.reset();
+		assert.strictEqual(intent.state, 'idle');
+		assert.strictEqual(intent.target, null);
+	});
+	test('leaveAnchor while idle is a noop', () => {
+		const { intent } = makeIntent();
+		assert.strictEqual(intent.leaveAnchor().action, 'noop');
 	});
 });

@@ -227,3 +227,59 @@ export function pickTargetFor(entry, index) {
 	return name;
 }
 
+// ---------------------------------------------------------------------------
+// T-3.11.3 · hover preview snippet extraction (pure, shared by host + tests).
+// ---------------------------------------------------------------------------
+
+const PREVIEW_DEFAULT_MAX = 320;
+
+/**
+ * Given raw markdown, produce a short plain-text-ish preview:
+ *   1. strip YAML frontmatter (leading `---\n…\n---\n`),
+ *   2. drop lines that are just a heading marker (`# `) — the caller uses
+ *      the top-level heading separately as a title,
+ *   3. collapse consecutive blank lines,
+ *   4. truncate to `max` chars at a word/space boundary and append `…`.
+ * Never throws; falsy input returns ''.
+ */
+export function extractPreviewSnippet(md, max = PREVIEW_DEFAULT_MAX) {
+	if (typeof md !== 'string' || md.length === 0) return '';
+	let body = md;
+	// Strip YAML frontmatter.
+	if (body.startsWith('---\n') || body.startsWith('---\r\n')) {
+		const end = body.indexOf('\n---', 3);
+		if (end !== -1) {
+			const after = body.indexOf('\n', end + 4);
+			body = after === -1 ? '' : body.slice(after + 1);
+		}
+	}
+	// Drop the first ATX heading line if it opens the doc (we surface it as title).
+	body = body.replace(/^\s*#{1,6}\s+[^\n]*\n?/, '');
+	// Collapse blank runs.
+	body = body.replace(/\n{3,}/g, '\n\n').trim();
+	if (body.length <= max) return body;
+	// Truncate at nearest whitespace before `max`.
+	const slice = body.slice(0, max);
+	const lastWs = slice.lastIndexOf(' ');
+	const cut = lastWs > max * 0.6 ? lastWs : max;
+	return body.slice(0, cut).trimEnd() + '…';
+}
+
+/**
+ * Extract the document title: the text of the first ATX heading, or the file
+ * basename if none. Pure; never throws.
+ */
+export function extractPreviewTitle(md, fallback = '') {
+	if (typeof md !== 'string' || md.length === 0) return fallback;
+	let body = md;
+	if (body.startsWith('---\n') || body.startsWith('---\r\n')) {
+		const end = body.indexOf('\n---', 3);
+		if (end !== -1) {
+			const after = body.indexOf('\n', end + 4);
+			body = after === -1 ? '' : body.slice(after + 1);
+		}
+	}
+	const m = body.match(/^\s*#{1,6}\s+([^\n]+)/);
+	return m ? m[1].trim() : fallback;
+}
+

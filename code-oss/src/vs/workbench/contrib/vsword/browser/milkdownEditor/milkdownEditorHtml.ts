@@ -1033,6 +1033,48 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			font-style: italic;
 		}
 
+		/* T-3.11.3 · hover preview popover */
+		.vsword-wikilink-preview {
+			position: fixed;
+			z-index: 10000;
+			min-width: 260px;
+			max-width: 440px;
+			background: var(--vscode-editorHoverWidget-background, #252526);
+			color: var(--vscode-editorHoverWidget-foreground, #cccccc);
+			border: 1px solid var(--vscode-editorHoverWidget-border, #454545);
+			border-radius: 4px;
+			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
+			font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+			font-size: 13px;
+			padding: 8px 12px;
+			line-height: 1.45;
+			pointer-events: auto;
+		}
+		.vsword-wikilink-preview-title {
+			font-weight: 600;
+			margin-bottom: 4px;
+			word-break: break-word;
+		}
+		.vsword-wikilink-preview-body {
+			white-space: pre-wrap;
+			word-break: break-word;
+			max-height: 220px;
+			overflow: hidden;
+			color: var(--vscode-descriptionForeground, #a0a0a0);
+		}
+		.vsword-wikilink-preview-body.is-loading { font-style: italic; opacity: 0.7; }
+		.vsword-wikilink-preview-body.is-missing { color: var(--vscode-errorForeground, #f48771); font-style: italic; }
+		.vsword-wikilink-preview-body.is-error   { color: var(--vscode-errorForeground, #f48771); font-style: italic; }
+		.vsword-wikilink-preview-path {
+			margin-top: 6px;
+			font-size: 11px;
+			font-family: var(--vscode-editor-font-family, monospace);
+			color: var(--vscode-descriptionForeground, #808080);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
 		${getThemesCss()}
 	</style>
 </head>

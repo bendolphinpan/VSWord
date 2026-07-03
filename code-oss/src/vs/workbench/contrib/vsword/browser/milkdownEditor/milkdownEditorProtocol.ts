@@ -108,6 +108,13 @@ export interface WebviewWikilinkIndexRequestMessage {
 	readonly type: 'wikilinkIndexRequest';
 }
 
+/** T-3.11.3: webview asks the host for a hover-preview snippet of one wiki-link target. */
+export interface WebviewWikilinkPreviewRequestMessage {
+	readonly type: 'wikilinkPreviewRequest';
+	readonly requestId: number;
+	readonly target: string;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -121,7 +128,8 @@ export type WebviewToHostMessage =
 	| WebviewImageUploadRequestMessage
 	| WebviewOpenWikilinkMessage
 	| WebviewWikilinkResolveRequestMessage
-	| WebviewWikilinkIndexRequestMessage;
+	| WebviewWikilinkIndexRequestMessage
+	| WebviewWikilinkPreviewRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -231,6 +239,18 @@ export interface HostWikilinkIndexResponseMessage {
 	readonly entries: readonly WikilinkIndexEntry[];
 }
 
+/** T-3.11.3: host answers one preview request with a snippet (or an error status). */
+export interface HostWikilinkPreviewResponseMessage {
+	readonly type: 'wikilinkPreviewResponse';
+	readonly requestId: number;
+	readonly target: string;
+	/** 'ok' when snippet is populated; 'missing' or 'error' when not. */
+	readonly status: 'ok' | 'missing' | 'error';
+	readonly title?: string;
+	readonly snippet?: string;
+	readonly path?: string;
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -244,7 +264,8 @@ export type HostToWebviewMessage =
 	| HostImageUploadFailedMessage
 	| HostWikilinkResolveResponseMessage
 	| HostWorkspaceIndexChangedMessage
-	| HostWikilinkIndexResponseMessage;
+	| HostWikilinkIndexResponseMessage
+	| HostWikilinkPreviewResponseMessage;
 
 // ---------------------------------------------------------------------------
 // Constants

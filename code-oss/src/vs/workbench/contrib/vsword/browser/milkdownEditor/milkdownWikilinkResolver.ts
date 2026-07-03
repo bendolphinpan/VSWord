@@ -76,3 +76,43 @@ export function resolutionToWireResult(target: string, r: WikilinkResolution): {
 	// and (in T-3.11.2) can pop up a disambiguation menu.
 	return { target, status: r.status };
 }
+
+// ---------------------------------------------------------------------------
+// T-3.11.3 · preview snippet extractor (host mirror of the webview helper).
+// ---------------------------------------------------------------------------
+
+const PREVIEW_DEFAULT_MAX = 320;
+
+/** Strip a leading YAML frontmatter block; returns body if present, else input. */
+function stripFrontmatter(md: string): string {
+	if (!md.startsWith('---\n') && !md.startsWith('---\r\n')) return md;
+	const end = md.indexOf('\n---', 3);
+	if (end === -1) return md;
+	const after = md.indexOf('\n', end + 4);
+	return after === -1 ? '' : md.slice(after + 1);
+}
+
+/**
+ * Extract a plain snippet from markdown for hover preview. Mirrors the pure
+ * JS version in `webview/wikilink-helpers.template.js` so tests can pin both
+ * paths to the same fixtures.
+ */
+export function extractPreviewSnippet(md: string, max: number = PREVIEW_DEFAULT_MAX): string {
+	if (typeof md !== 'string' || md.length === 0) return '';
+	let body = stripFrontmatter(md);
+	body = body.replace(/^\s*#{1,6}\s+[^\n]*\n?/, '');
+	body = body.replace(/\n{3,}/g, '\n\n').trim();
+	if (body.length <= max) return body;
+	const slice = body.slice(0, max);
+	const lastWs = slice.lastIndexOf(' ');
+	const cut = lastWs > max * 0.6 ? lastWs : max;
+	return body.slice(0, cut).trimEnd() + '…';
+}
+
+/** Extract the first heading text as title, else return `fallback`. */
+export function extractPreviewTitle(md: string, fallback: string = ''): string {
+	if (typeof md !== 'string' || md.length === 0) return fallback;
+	const body = stripFrontmatter(md);
+	const m = body.match(/^\s*#{1,6}\s+([^\n]+)/);
+	return m ? m[1].trim() : fallback;
+}

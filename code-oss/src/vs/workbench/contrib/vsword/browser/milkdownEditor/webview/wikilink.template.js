@@ -21,6 +21,7 @@
 import { $nodeSchema, $remark, $inputRule } from '@milkdown/utils';
 import { InputRule } from '@milkdown/prose/inputrules';
 import { visit } from 'unist-util-visit';
+import { onWikilinkHoverEnter, onWikilinkHoverLeave } from './wikilink-preview.mjs';
 import {
 	WIKILINK_RE,
 	parseAll,
@@ -203,6 +204,17 @@ function createWikilinkNodeView(vscode) {
 				alias: node.attrs.alias || null,
 				newSplit: !!(ev.ctrlKey || ev.metaKey),
 			});
+		});
+
+		// T-3.11.3 · hover preview intent. Only fire for resolved (found) links —
+		// pending/missing/ambiguous have nothing worth showing.
+		dom.addEventListener('mouseenter', () => {
+			const cached = cacheGet(currentTarget);
+			if (!cached || cached.status !== 'found') return;
+			onWikilinkHoverEnter({ target: currentTarget, alias: node.attrs.alias || null });
+		});
+		dom.addEventListener('mouseleave', () => {
+			onWikilinkHoverLeave();
 		});
 
 		return {
