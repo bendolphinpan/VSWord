@@ -11,7 +11,7 @@ import { URI } from '../../../../../base/common/uri.js';
 import { localize } from '../../../../../nls.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
-import { FileChangeType, IFileService } from '../../../../../platform/files/common/files.js';
+import { FileChangeType, IFileService, IFileStat } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
@@ -23,17 +23,20 @@ import {
 	IEditorResolverService,
 	RegisteredEditorPriority,
 } from '../../../../services/editor/common/editorResolverService.js';
-import { IEditorService } from '../../../../services/editor/common/editorService.js';
+import { IEditorService, SIDE_GROUP } from '../../../../services/editor/common/editorService.js';
 import { IEditorGroup } from '../../../../services/editor/common/editorGroupsService.js';
 import { IWebviewService } from '../../../webview/browser/webview.js';
 import { asWebviewUri } from '../../../webview/common/webview.js';
+import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
+import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult } from './milkdownWikilinkResolver.js';
 import {
 	HostToWebviewMessage,
 	VSWORD_MILKDOWN_DEFAULT_MODE,
 	VSWORD_MILKDOWN_FOCUS_STORAGE_KEY,
 	VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY,
+	WikilinkResolveResult,
 	VSWORD_MILKDOWN_EDITOR_ID,
 	VSWORD_MILKDOWN_MODE_STORAGE_KEY,
 	VSWORD_MILKDOWN_MODES,
@@ -88,6 +91,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IConfigurationService private readonly configurationService: IConfigurationService,
 		@IThemeService private readonly themeService: IThemeService,
 		@IFileService private readonly fileService: IFileService,
+		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
 	) {
 		super();
 		this._register(editorResolverService.registerEditor(
@@ -125,7 +129,38 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		this._register(this.storageService.onDidChangeValue(StorageScope.APPLICATION, VSWORD_MILKDOWN_THEME_STORAGE_KEY, this._store)(() => {
 			this.broadcastTheme();
 		}));
+		// T-3.11.1: invalidate wiki-link file index on any .md workspace change.
+		this._register(this.fileService.onDidFilesChange(e => {
+			if (this.wikilinkIndex === null && this.wikilinkIndexPromise === null) return;
+			const roots = this.workspaceService.getWorkspace().folders;
+			const affectsMd = (u: URI): boolean => {
+				if (u.scheme !== 'file' || !u.path.toLowerCase().endsWith('.md')) return false;
+				return roots.some(f => u.path.toLowerCase().startsWith(f.uri.path.toLowerCase() + '/'));
+			};
+			const dirty =
+				e.rawAdded.some(affectsMd) ||
+				e.rawUpdated.some(affectsMd) ||
+				e.rawDeleted.some(affectsMd);
+			if (!dirty) return;
+			this.wikilinkIndex = null;
+			this.wikilinkIndexPromise = null;
+			for (const input of this.liveInputs) {
+				this.post(input, { type: 'workspaceIndexChanged' });
+			}
+		}));
+		// T-3.11.1: root list changed → same story.
+		this._register(this.workspaceService.onDidChangeWorkspaceFolders(() => {
+			this.wikilinkIndex = null;
+			this.wikilinkIndexPromise = null;
+			for (const input of this.liveInputs) {
+				this.post(input, { type: 'workspaceIndexChanged' });
+			}
+		}));
 	}
+
+	// ---- T-3.11.1 wiki-link file index -------------------------------------
+	private wikilinkIndex: WikilinkIndexEntry[] | null = null;
+	private wikilinkIndexPromise: Promise<WikilinkIndexEntry[]> | null = null;
 
 	private createEditorInput(resource: URI, group: IEditorGroup): EditorInputWithOptions {
 		const { vendorRoot, scriptUri, katexCssUri } = getMilkdownWebviewResources();
@@ -245,6 +280,12 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				return;
 			case 'webviewError':
 				this.logService.error('[VSWord Milkdown] webview error [' + String(msg.prefix || '?') + ']: ' + msg.message);
+				return;
+			case 'wikilinkResolveRequest':
+				await this.handleWikilinkResolveRequest(input, msg.target);
+				return;
+			case 'openWikilink':
+				await this.handleOpenWikilink(input, msg.target, msg.newSplit);
 				return;
 		}
 	}
@@ -433,6 +474,153 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			input.webview.postMessage(msg);
 		} catch {
 			// Webview was disposed underneath us; swallow.
+		}
+	}
+
+	// ---- T-3.11.1 wiki-link handlers ---------------------------------------
+
+	/** Lazy build/refresh the workspace-wide `.md` index. */
+	private ensureWikilinkIndex(): Promise<WikilinkIndexEntry[]> {
+		if (this.wikilinkIndex) return Promise.resolve(this.wikilinkIndex);
+		if (this.wikilinkIndexPromise) return this.wikilinkIndexPromise;
+		this.wikilinkIndexPromise = this.buildWikilinkIndex().then(idx => {
+			this.wikilinkIndex = idx;
+			this.wikilinkIndexPromise = null;
+			return idx;
+		}, err => {
+			this.logService.error('[VSWord Milkdown] wikilink index build failed', err);
+			this.wikilinkIndexPromise = null;
+			this.wikilinkIndex = [];
+			return [];
+		});
+		return this.wikilinkIndexPromise;
+	}
+
+	private async buildWikilinkIndex(): Promise<WikilinkIndexEntry[]> {
+		const roots = this.workspaceService.getWorkspace().folders;
+		if (roots.length === 0) return [];
+		const out: WikilinkIndexEntry[] = [];
+		// Depth budget guards against pathological symlink cycles. Typical note
+		// vaults are <10 deep; 24 is generous but bounded.
+		const MAX_DEPTH = 24;
+		// File-count cap so a wrong-workspace-open (opening `/`) never freezes.
+		const MAX_FILES = 20000;
+		for (const folder of roots) {
+			try {
+				const stat = await this.fileService.resolve(folder.uri, { resolveMetadata: false });
+				this.walkForMd(stat, folder.uri.path, out, 0, MAX_DEPTH, MAX_FILES);
+			} catch (err) {
+				this.logService.debug('[VSWord Milkdown] wikilink scan root failed: ' + String(err));
+			}
+			if (out.length >= MAX_FILES) break;
+		}
+		return out;
+	}
+
+	private walkForMd(stat: IFileStat, rootPath: string, out: WikilinkIndexEntry[], depth: number, maxDepth: number, maxFiles: number): void {
+		if (out.length >= maxFiles || depth > maxDepth) return;
+		if (stat.isFile) {
+			if (!stat.name.toLowerCase().endsWith('.md')) return;
+			// Skip hidden files (leading dot).
+			if (stat.name.startsWith('.')) return;
+			const abs = stat.resource.path;
+			// rootPath is the workspace-folder path (POSIX). Compute relative.
+			let rel = abs;
+			if (abs.toLowerCase().startsWith(rootPath.toLowerCase() + '/')) {
+				rel = abs.slice(rootPath.length + 1);
+			} else if (abs.toLowerCase() === rootPath.toLowerCase()) {
+				rel = stat.name;
+			}
+			const lastSlash = rel.lastIndexOf('/');
+			const dir = lastSlash >= 0 ? rel.slice(0, lastSlash) : '';
+			const base = lastSlash >= 0 ? rel.slice(lastSlash + 1) : rel;
+			const nameNoExt = base.replace(/\.md$/i, '');
+			out.push({ name: nameNoExt, path: rel, dir });
+			return;
+		}
+		// Directory: skip hidden and common noise dirs.
+		if (stat.name.startsWith('.')) return;
+		if (stat.name === 'node_modules' || stat.name === 'dist' || stat.name === 'out' || stat.name === '.git') return;
+		for (const child of stat.children ?? []) {
+			if (out.length >= maxFiles) break;
+			this.walkForMd(child, rootPath, out, depth + 1, maxDepth, maxFiles);
+		}
+	}
+
+	private async handleWikilinkResolveRequest(input: MilkdownEditorInput, target: string): Promise<void> {
+		const index = await this.ensureWikilinkIndex();
+		const wire: WikilinkResolveResult = resolutionToWireResult(target, resolveWikilink(target, index));
+		this.post(input, { type: 'wikilinkResolveResponse', results: [wire] });
+	}
+
+	private async handleOpenWikilink(input: MilkdownEditorInput, target: string, newSplit: boolean): Promise<void> {
+		const index = await this.ensureWikilinkIndex();
+		const resolution = resolveWikilink(target, index);
+		const roots = this.workspaceService.getWorkspace().folders;
+		if (resolution.status === 'found' && resolution.file) {
+			const root = roots[0]?.uri;
+			if (!root) return;
+			const resource = URI.joinPath(root, resolution.file.path);
+			try {
+				await this.editorService.openEditor(
+					{ resource, options: { pinned: true } },
+					newSplit ? SIDE_GROUP : input.group,
+				);
+			} catch (err) {
+				this.logService.error('[VSWord Milkdown] openWikilink failed:', err);
+			}
+			return;
+		}
+		if (resolution.status === 'ambiguous' && resolution.candidates && resolution.candidates.length > 0) {
+			// T-3.11.1: minimal disambiguation — open first, warn. Rich picker lands in T-3.11.2.
+			const root = roots[0]?.uri;
+			if (!root) return;
+			const first = resolution.candidates[0];
+			try {
+				await this.editorService.openEditor(
+					{ resource: URI.joinPath(root, first.path), options: { pinned: true } },
+					newSplit ? SIDE_GROUP : input.group,
+				);
+				this.dialogService.info(
+					localize('vsword.milkdown.wikilink.ambiguous.title', "'{0}' matches multiple notes.", target),
+					localize('vsword.milkdown.wikilink.ambiguous.detail',
+						"Opened the first match; other candidates: {0}. Use a folder-qualified target like [[folder/{1}]] to disambiguate.",
+						resolution.candidates.slice(1).map(c => c.path).join(', '),
+						first.name,
+					),
+				);
+			} catch (err) {
+				this.logService.error('[VSWord Milkdown] openWikilink ambiguous open failed:', err);
+			}
+			return;
+		}
+		// status === 'missing': offer to create in the current file's folder.
+		const currentFolder = input.resource.with({ path: input.resource.path.replace(/[^/]+$/, '') });
+		const safeName = target.replace(/[\\/:*?"<>|]/g, '_').replace(/\.md$/i, '') + '.md';
+		const targetUri = URI.joinPath(currentFolder, safeName);
+		const { confirmed } = await this.dialogService.confirm({
+			type: 'question',
+			message: localize('vsword.milkdown.wikilink.create.title', "'{0}' doesn't exist yet.", target),
+			detail: localize('vsword.milkdown.wikilink.create.detail', 'Create a new note at {0} and open it?', targetUri.path),
+			primaryButton: localize('vsword.milkdown.wikilink.create.confirm', 'Create and open'),
+			cancelButton: localize('vsword.milkdown.wikilink.create.cancel', 'Cancel'),
+		});
+		if (!confirmed) return;
+		try {
+			const seed = '# ' + target.replace(/\.md$/i, '') + '\n\n';
+			await this.fileService.writeFile(targetUri, VSBuffer.fromString(seed));
+			await this.editorService.openEditor(
+				{ resource: targetUri, options: { pinned: true } },
+				newSplit ? SIDE_GROUP : input.group,
+			);
+			// Index will pick it up via onDidFilesChange; broadcast now so webview
+			// stops showing the ✎ badge immediately.
+			this.wikilinkIndex = null;
+			for (const live of this.liveInputs) {
+				this.post(live, { type: 'workspaceIndexChanged' });
+			}
+		} catch (err) {
+			this.logService.error('[VSWord Milkdown] wikilink create failed:', err);
 		}
 	}
 }

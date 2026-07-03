@@ -40,6 +40,7 @@ import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
 import { mathViewPlugins, configureMathKatex } from './math-view.mjs';
+import { wikilinkPlugins, configureWikilinkHost, ingestResolutions, invalidateWikilinkCache } from './wikilink.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -154,6 +155,7 @@ async function createEditor(markdown) {
 			configureCodeBlockCtx(ctx);
 			configureBlockHandle(ctx);
 			configureMathKatex(ctx);
+			configureWikilinkHost(ctx, vscode);
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -201,6 +203,7 @@ async function createEditor(markdown) {
 		.use(codeBlockChromePlugins)
 		.use(blockHandlePlugins)
 		.use(mathViewPlugins)
+		.use(wikilinkPlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
@@ -317,6 +320,17 @@ window.addEventListener('message', event => {
 			focus: msg.focus,
 			typewriter: msg.typewriter,
 		});
+		return;
+	}
+	if (msg.type === 'wikilinkResolveResponse') {
+		// T-3.11.1: host answered one or more resolve requests. `results` is an array
+		// of { target, status, file? } entries; ingest & repaint every live NodeView.
+		ingestResolutions(msg.results);
+		return;
+	}
+	if (msg.type === 'workspaceIndexChanged') {
+		// T-3.11.1: host tells us a .md was added/removed/renamed — flush the cache.
+		invalidateWikilinkCache();
 		return;
 	}
 	if (msg.type === 'themeChanged') {

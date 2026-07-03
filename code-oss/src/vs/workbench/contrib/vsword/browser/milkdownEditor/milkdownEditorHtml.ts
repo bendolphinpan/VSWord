@@ -957,6 +957,33 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-md-shell[data-mode="reading"] .vsword-math-block,
 		.vsword-md-shell[data-mode="reading"] .vsword-math-inline { cursor: default; box-shadow: none; }
 
+		/* T-3.11.1 · wiki-link inline atoms */
+		.vsword-wikilink {
+			color: var(--vscode-textLink-foreground, #7267ef);
+			text-decoration: none;
+			border-bottom: 1px dashed currentColor;
+			padding: 0 1px;
+			border-radius: 2px;
+			cursor: pointer;
+			transition: background-color 90ms ease, color 90ms ease;
+		}
+		.vsword-wikilink:hover { background: var(--vscode-textLink-activeForeground, #7267ef22); text-decoration: none; }
+		.vsword-wikilink.vsword-wikilink-pending { color: var(--vscode-descriptionForeground, #888); border-bottom-style: dotted; }
+		.vsword-wikilink.vsword-wikilink-missing { color: #cc0000; border-bottom-color: #cc0000; }
+		.vsword-wikilink.vsword-wikilink-missing::after {
+			content: " ✎";
+			font-size: 0.85em;
+			opacity: 0.7;
+		}
+		.vsword-wikilink.vsword-wikilink-ambiguous { color: #b58900; border-bottom-color: #b58900; }
+		.vsword-wikilink.vsword-wikilink-ambiguous::after {
+			content: " ⚠";
+			font-size: 0.85em;
+			margin-left: 1px;
+		}
+		.vsword-wikilink.vsword-wikilink-selected { outline: 1px solid var(--vscode-focusBorder, #007acc); outline-offset: 1px; }
+		.vsword-md-shell[data-mode="reading"] .vsword-wikilink { cursor: pointer; }
+
 		${getThemesCss()}
 	</style>
 </head>

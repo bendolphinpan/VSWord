@@ -88,6 +88,21 @@ export interface WebviewImageUploadRequestMessage {
 	readonly suggestedName: string;
 }
 
+/** T-3.11.1: user clicked a wiki-link — host resolves + opens (or offers to create). */
+export interface WebviewOpenWikilinkMessage {
+	readonly type: 'openWikilink';
+	readonly target: string;
+	readonly alias: string | null;
+	/** Ctrl/Cmd-click → open in side group. */
+	readonly newSplit: boolean;
+}
+
+/** T-3.11.1: webview asks the host to resolve one wiki-link target against the workspace. */
+export interface WebviewWikilinkResolveRequestMessage {
+	readonly type: 'wikilinkResolveRequest';
+	readonly target: string;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -98,7 +113,9 @@ export type WebviewToHostMessage =
 	| WebviewPreferenceUpdateMessage
 	| WebviewThemeRequestMessage
 	| WebviewOutlineChangedMessage
-	| WebviewImageUploadRequestMessage;
+	| WebviewImageUploadRequestMessage
+	| WebviewOpenWikilinkMessage
+	| WebviewWikilinkResolveRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -175,6 +192,26 @@ export interface HostImageUploadFailedMessage {
 	readonly message: string;
 }
 
+/** T-3.11.1 — a single wiki-link resolution result. */
+export interface WikilinkResolveResult {
+	readonly target: string;
+	/** 'found' | 'missing' | 'ambiguous' */
+	readonly status: 'found' | 'missing' | 'ambiguous';
+	/** Present when status='found'. Path is workspace-relative POSIX. */
+	readonly file?: { readonly name: string; readonly path: string; readonly dir: string };
+}
+
+/** T-3.11.1: batched response to one or more `wikilinkResolveRequest`s. */
+export interface HostWikilinkResolveResponseMessage {
+	readonly type: 'wikilinkResolveResponse';
+	readonly results: readonly WikilinkResolveResult[];
+}
+
+/** T-3.11.1: host observed a workspace change — webview should flush its resolve cache. */
+export interface HostWorkspaceIndexChangedMessage {
+	readonly type: 'workspaceIndexChanged';
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -185,7 +222,9 @@ export type HostToWebviewMessage =
 	| HostThemeChangedMessage
 	| HostRevealHeadingMessage
 	| HostImageUploadedMessage
-	| HostImageUploadFailedMessage;
+	| HostImageUploadFailedMessage
+	| HostWikilinkResolveResponseMessage
+	| HostWorkspaceIndexChangedMessage;
 
 // ---------------------------------------------------------------------------
 // Constants
