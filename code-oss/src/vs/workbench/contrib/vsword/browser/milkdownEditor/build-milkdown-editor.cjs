@@ -37,6 +37,9 @@ const tableChromePath = path.join(srcDir, 'table-chrome.mjs');
 const tableChromeHelpersPath = path.join(srcDir, 'table-chrome-helpers.mjs');
 const codeBlockChromePath = path.join(srcDir, 'code-block-chrome.mjs');
 const codeBlockHelpersPath = path.join(srcDir, 'code-block-helpers.mjs');
+const blockHandlePath = path.join(srcDir, 'block-handle.mjs');
+const blockHandleMenuPath = path.join(srcDir, 'block-handle-menu.mjs');
+const blockHandleHelpersPath = path.join(srcDir, 'block-handle-helpers.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -58,6 +61,7 @@ const packages = [
 	'katex@0.16.11',
 	'@milkdown/plugin-slash@7.21.2',
 	'@milkdown/plugin-upload@7.21.2',
+	'@milkdown/plugin-block@7.21.2',
 	'unist-util-visit@5.1.0',
 	'@milkdown/transformer@7.21.2',
 	'@milkdown/prose@7.21.2',
@@ -112,6 +116,9 @@ fs.writeFileSync(tableChromePath, fs.readFileSync(path.join(webviewSrcDir, 'tabl
 fs.writeFileSync(tableChromeHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'table-chrome-helpers.template.js'), 'utf8'));
 fs.writeFileSync(codeBlockChromePath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-chrome.template.js'), 'utf8'));
 fs.writeFileSync(codeBlockHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-helpers.template.js'), 'utf8'));
+fs.writeFileSync(blockHandlePath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle.template.js'), 'utf8'));
+fs.writeFileSync(blockHandleMenuPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-menu.template.js'), 'utf8'));
+fs.writeFileSync(blockHandleHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-helpers.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

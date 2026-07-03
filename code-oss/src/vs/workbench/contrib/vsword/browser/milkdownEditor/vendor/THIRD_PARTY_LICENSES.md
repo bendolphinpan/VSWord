@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-03T07:22:02.982Z
+Generated: 2026-07-03T09:26:41.560Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
@@ -57,13 +57,17 @@ Generated: 2026-07-03T07:22:02.982Z
 | trough | 2.2.0 | MIT | https://registry.npmjs.org/trough/-/trough-2.2.0.tgz |
 | vfile | 6.0.3 | MIT | https://registry.npmjs.org/vfile/-/vfile-6.0.3.tgz |
 | vfile-message | 4.0.3 | MIT | https://registry.npmjs.org/vfile-message/-/vfile-message-4.0.3.tgz |
-| @milkdown/plugin-history | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-history/-/plugin-history-7.21.2.tgz |
+| @milkdown/plugin-block | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-block/-/plugin-block-7.21.2.tgz |
+| @floating-ui/dom | 1.7.6 | MIT | https://registry.npmjs.org/@floating-ui/dom/-/dom-1.7.6.tgz |
+| @floating-ui/core | 1.7.5 | MIT | https://registry.npmjs.org/@floating-ui/core/-/core-1.7.5.tgz |
+| @floating-ui/utils | 0.2.11 | MIT | https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.11.tgz |
 | @milkdown/utils | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/utils/-/utils-7.21.2.tgz |
 | nanoid | 5.1.15 | MIT | https://registry.npmjs.org/nanoid/-/nanoid-5.1.15.tgz |
-| @milkdown/plugin-listener | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-listener/-/plugin-listener-7.21.2.tgz |
 | @types/lodash-es | 4.17.12 | MIT | https://registry.npmjs.org/@types/lodash-es/-/lodash-es-4.17.12.tgz |
 | @types/lodash | 4.17.24 | MIT | https://registry.npmjs.org/@types/lodash/-/lodash-4.17.24.tgz |
 | lodash-es | 4.18.1 | MIT | https://registry.npmjs.org/lodash-es/-/lodash-es-4.18.1.tgz |
+| @milkdown/plugin-history | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-history/-/plugin-history-7.21.2.tgz |
+| @milkdown/plugin-listener | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-listener/-/plugin-listener-7.21.2.tgz |
 | @milkdown/plugin-math | 7.5.9 | MIT | https://registry.npmjs.org/@milkdown/plugin-math/-/plugin-math-7.5.9.tgz |
 | @milkdown/exception | 7.5.9 | MIT | https://registry.npmjs.org/@milkdown/exception/-/exception-7.5.9.tgz |
 | tslib | 2.8.1 | 0BSD | https://registry.npmjs.org/tslib/-/tslib-2.8.1.tgz |
@@ -92,9 +96,6 @@ Generated: 2026-07-03T07:22:02.982Z
 | is-decimal | 2.0.1 | MIT | https://registry.npmjs.org/is-decimal/-/is-decimal-2.0.1.tgz |
 | is-hexadecimal | 2.0.1 | MIT | https://registry.npmjs.org/is-hexadecimal/-/is-hexadecimal-2.0.1.tgz |
 | @milkdown/plugin-slash | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-slash/-/plugin-slash-7.21.2.tgz |
-| @floating-ui/dom | 1.7.6 | MIT | https://registry.npmjs.org/@floating-ui/dom/-/dom-1.7.6.tgz |
-| @floating-ui/core | 1.7.5 | MIT | https://registry.npmjs.org/@floating-ui/core/-/core-1.7.5.tgz |
-| @floating-ui/utils | 0.2.11 | MIT | https://registry.npmjs.org/@floating-ui/utils/-/utils-0.2.11.tgz |
 | @milkdown/plugin-upload | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/plugin-upload/-/plugin-upload-7.21.2.tgz |
 | @milkdown/preset-commonmark | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/preset-commonmark/-/preset-commonmark-7.21.2.tgz |
 | remark-inline-links | 7.0.0 | MIT | https://registry.npmjs.org/remark-inline-links/-/remark-inline-links-7.0.0.tgz |

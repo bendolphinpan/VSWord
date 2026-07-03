@@ -38,6 +38,7 @@ import { imageResizePlugins } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
+import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -76,6 +77,7 @@ let dirty = false;
 let initialized = false;
 let saveSeq = 0;
 let slashController;
+let blockHandleController;
 let modeController;
 // Debounce timer for source-mode textarea → host autosave (mirrors WYSIWYG behaviour).
 let sourceDebounce = 0;
@@ -138,12 +140,17 @@ async function createEditor(markdown) {
 		slashController.destroy();
 		slashController = undefined;
 	}
+	if (blockHandleController) {
+		blockHandleController.destroy();
+		blockHandleController = undefined;
+	}
 	editor = await Editor.make()
 		.config(ctx => {
 			ctx.set(rootCtx, root);
 			ctx.set(defaultValueCtx, markdown);
 			ctx.set(remarkStringifyOptionsCtx, TYPORA_STRINGIFY_OPTIONS);
 			configureCodeBlockCtx(ctx);
+			configureBlockHandle(ctx);
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -189,10 +196,18 @@ async function createEditor(markdown) {
 		.use(tableChromeView)
 		.use(columnResizingPlugin)
 		.use(codeBlockChromePlugins)
+		.use(blockHandlePlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
 	setStatus('Ready', 'ok');
+	// T-3.8: mount the hover block handle. Kept separate from `.use()` because
+	// the handle DOM listens on the editor root, which only exists post-create.
+	try {
+		editor.action(ctx => { blockHandleController = installBlockHandle(ctx, root); });
+	} catch (err) {
+		reportError('block-handle-mount', err);
+	}
 	// T-3.4: seed the initial outline snapshot so the Outline pane fills as soon as it opens.
 	try {
 		editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));

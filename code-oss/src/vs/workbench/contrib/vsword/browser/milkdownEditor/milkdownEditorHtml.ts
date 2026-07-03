@@ -755,6 +755,90 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-code-pre .token.bold { font-weight: bold; }
 		.vsword-code-pre .token.italic { font-style: italic; }
 
+		/* ==== T-3.8: block hover handle ==== */
+		.vsword-block-handle {
+			position: absolute;
+			z-index: 20;
+			width: 20px;
+			height: 22px;
+			padding: 0;
+			display: inline-flex;
+			align-items: center;
+			justify-content: center;
+			background: transparent;
+			border: 0;
+			border-radius: 4px;
+			color: var(--vscode-descriptionForeground, #888);
+			font-size: 13px;
+			line-height: 1;
+			cursor: grab;
+			opacity: 0;
+			transition: opacity 0.12s ease, background 0.12s ease;
+			user-select: none;
+		}
+		.vsword-block-handle:hover { background: var(--vscode-toolbar-hoverBackground, rgba(120,120,120,0.15)); opacity: 1; }
+		.vsword-block-handle:active { cursor: grabbing; }
+		.vsword-block-handle[data-show="true"], #milkdown-root:hover .vsword-block-handle { opacity: 0.7; }
+		.vsword-block-handle > span { display: inline-block; letter-spacing: -2px; }
+
+		.vsword-block-menu {
+			position: absolute;
+			z-index: 40;
+			min-width: 220px;
+			padding: 6px 0;
+			background: var(--vscode-menu-background, #252526);
+			color: var(--vscode-menu-foreground, #cccccc);
+			border: 1px solid var(--vscode-menu-border, var(--vscode-widget-border, #454545));
+			border-radius: 6px;
+			box-shadow: 0 6px 20px rgba(0,0,0,0.35);
+			font-size: 13px;
+			font-family: var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif);
+		}
+		.vsword-block-menu-title {
+			padding: 4px 12px 6px;
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 0.5px;
+			color: var(--vscode-descriptionForeground, #888);
+		}
+		.vsword-block-menu-group { display: flex; flex-direction: column; }
+		.vsword-block-menu-group-label {
+			padding: 4px 12px 2px;
+			font-size: 10px;
+			text-transform: uppercase;
+			color: var(--vscode-descriptionForeground, #888);
+			opacity: 0.75;
+		}
+		.vsword-block-menu-row {
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			padding: 4px 12px;
+			cursor: pointer;
+			gap: 12px;
+		}
+		.vsword-block-menu-row.is-active,
+		.vsword-block-menu-row:hover:not(.is-disabled) {
+			background: var(--vscode-menu-selectionBackground, rgba(120,120,120,0.24));
+			color: var(--vscode-menu-selectionForeground, inherit);
+		}
+		.vsword-block-menu-row.is-disabled { opacity: 0.4; cursor: default; }
+		.vsword-block-menu-label { flex: 1 1 auto; }
+		.vsword-block-menu-shortcut {
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: 11px;
+			color: var(--vscode-descriptionForeground, #888);
+			opacity: 0.85;
+		}
+		.vsword-block-menu-divider {
+			height: 1px;
+			margin: 4px 0;
+			background: var(--vscode-menu-separatorBackground, rgba(120,120,120,0.25));
+		}
+		/* Reading mode: no handles, no menus. */
+		.vsword-md-shell[data-mode="reading"] .vsword-block-handle,
+		.vsword-md-shell[data-mode="reading"] .vsword-block-menu { display: none !important; }
+
 		${getThemesCss()}
 	</style>
 </head>
