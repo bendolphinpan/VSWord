@@ -36,6 +36,62 @@ VSWord = Code OSS 1.124.2 基线
 
 ---
 
+## T-号对照表（Phase 3 · commit ↔ plan）
+
+> **背景**：Phase 3 中期 commit 里的 T-3.6 ~ T-3.11 与本 plan 里同名 T-号语义已漂移（编号被复用于不同含义）。此表以 **commit 实际含义** 为主，反查 **plan 中对应的功能条目**，为后续继续拆解 / 完成度对账做统一口径。生成时间：2026-07-04。
+> 依据：`git log --oneline -30`（最新提交 2f93e63c）。
+
+| plan T-号 | plan 含义（一句话） | 实际 commit T-号 | commit hash | commit 含义（一句话） | 一致 | 备注 |
+|-----------|--------------------|------------------|-------------|----------------------|------|------|
+| T-3.0 | 清理旧 Block Editor（前置） | T-3.0 | c361b402 / 4ccbb95a | Phase 3 rebuild — remove BlockNote block editor, add Milkdown WYSIWYG MVP + gitignore 收紧 | ✅ | 与 T-3.2 合并落地 |
+| T-3.1 | Milkdown spike | T-3.1 | （历史，此 30 条外） | Milkdown spike | ✅ | spike 已归档 |
+| T-3.2 | WYSIWYG MVP（文件类型关联） | T-3.2 | c361b402 | add Milkdown WYSIWYG MVP | ✅ | 与 T-3.0 同 commit |
+| T-3.2b | EditorPane + WorkingCopy 升级 | T-3.2b | 0f6bc00a | native dirty/save/revert via WorkingCopy | ✅ | |
+| T-3.3.1~3.3.7 | Typora 级即时渲染 + 排版基础全套（主题 / 光标进出 / slash / KaTeX / Prism / remark / 智能输入） | T-3.3 全套 | 9f76d3e0 | Phase 3 完成 T-3.3 全套 + T-3.4 Outline 面板 | ✅ | Outline 面板一并落地（本属 T-3.7c.2） |
+| T-3.4 | 自定义排版 + Typora 缺失语法（mark / emoji / footnote / 字体 / pretext / frontmatter） | T-3.4（Outline 部分） | 9f76d3e0 | Outline 面板 | ⚠️ | 完整 T-3.4 六子项未逐项交付；commit 只覆盖 Outline 面板（属 plan T-3.7c.2） |
+| T-3.5.1 | 粘贴/拖拽 → assets/ + 相对路径 | T-3.5.1 | 8bd1650d | paste/drop image → assets/ + relative path | ✅ | |
+| T-3.5.2 | 图片拖拽调整大小 | T-3.5.2 | f3b0597a | image resize NodeView with locked aspect ratio | ✅ | |
+| T-3.5.3 | 图注（alt / caption） | T-3.5.3 | 2304e746 | image caption (alt-as-caption) with popover editor | ✅ | |
+| T-3.5.4 | 图片对齐（左/中/右 via HTML align 保真） | T-3.5.4 | 3f43dc6a | image alignment via `<p align>` wrapper | ✅ | |
+| T-3.5b.1~4 | 图表全套（Mermaid / Flowchart / js-seq / 懒加载） | — | — | 未启动 | ⛔ | |
+| T-3.6.1 | `[[wiki link]]` 语法 | **T-3.11.1** | 5cad963d | wiki-links (syntax + resolver + click-to-open) | ⚠️ 编号漂移 | commit 用了 T-3.11.1，实为 plan T-3.6.1 |
+| T-3.6.2 | 自动补全 UI | **T-3.11.2** | 635b9a1b | wiki-link autocomplete popover | ⚠️ 编号漂移 | 实为 plan T-3.6.2 |
+| T-3.6.3 | 全局反向链接索引服务 | **T-3.11.4**（含） | f664d47e | wiki-link backlinks footer | ⚠️ 编号漂移 | 索引服务与面板一并交付 |
+| T-3.6.4 | 反向链接面板 | **T-3.11.4** | f664d47e | wiki-link backlinks footer | ⚠️ 编号漂移 | 目前为 footer 形态，非独立面板 |
+| T-3.6.5 | 链接跳转 / 悬停预览 | **T-3.11.3** | a78cb8f9 | wiki-link hover preview | ⚠️ 编号漂移 | 跳转在 T-3.11.1 已覆盖 |
+| T-3.7.1 | 块拖拽手柄 | **T-3.8**（commit） | 00daab60 | block hover handle (drag + transform menu) | ⚠️ 编号漂移 | commit T-3.8 语义 ≠ plan T-3.8（Round-trip） |
+| T-3.7.2 | 块转换菜单（H1↔H2↔段落↔引用等） | **T-3.8**（commit） | 00daab60 | transform menu | ⚠️ 编号漂移 | 与拖拽手柄同 commit 落地 |
+| T-3.7.3 | 表格可视化操作（增删行列 / 对齐） | **T-3.6**（commit） | fe241cb1 | table chrome (col/row/align/resize) | ⚠️ 编号漂移 | commit T-3.6 语义 ≠ plan T-3.6（双链） |
+| T-3.7b.1 | 源码模式 | — | — | 未启动 | ⛔ | |
+| T-3.7b.2 | 预览/阅读模式 | — | — | 未启动 | ⛔ | |
+| T-3.7b.3 | 专注模式 | **T-3.10**（commit） | ce03f41f | decoupled focus + typewriter toggles | ⚠️ 编号漂移 | commit T-3.10 语义 ≠ plan T-3.9（性能收口） |
+| T-3.7b.4 | 打字机模式 | **T-3.10**（commit） | ce03f41f | typewriter toggle | ⚠️ 编号漂移 | 与专注模式同 commit |
+| T-3.7c.1 | TOC 自动生成（`[TOC]`） | — | — | 未启动 | ⛔ | |
+| T-3.7c.2 | 大纲面板（Outline View） | T-3.4（commit 附带） | 9f76d3e0 | Outline 面板 | ⚠️ 编号漂移 | commit T-3.4 里同时含 T-3.3 全套 + 本项 |
+| T-3.7c.3 | 查找替换 | — | — | 未启动 | ⛔ | |
+| T-3.7d.1~3 | 主题兼容层（内置 4 主题 / Typora .css / 切换命令） | — | — | 未启动 | ⛔ | 3.3.1 已做内置主题系统，Typora .css 兼容与切换命令未落 |
+| T-3.8.1~4 | Round-trip 保真层（source-mapping） | — | — | 未启动 | ⛔ | 高优先级欠项 |
+| T-3.8b.1~3 | 导入导出（HTML / PDF / Pandoc） | — | — | 未启动 | ⛔ | |
+| T-3.3.4（数学公式） | KaTeX 行内 + 块（原属 T-3.3.4） | **T-3.9**（commit） | dec56efc | math NodeView (click-to-edit + KaTeX safety) | ⚠️ 编号漂移 | commit T-3.9 语义 ≠ plan T-3.9（性能收口） |
+| T-3.3.5（Prism） | Prism 代码高亮（原属 T-3.3.5） | **T-3.7**（commit） | 51d25a3b | code block chrome (prism + lang picker + copy + keymap) | ⚠️ 编号漂移 | commit T-3.7 语义 ≠ plan T-3.7（Notion 块增强） |
+| T-3.9.1~4 | 性能与 IME 全矩阵收口 | — | — | 未启动 | ⛔ | Gate D/E/G 未启 |
+| — | tsc baseline 清零（非计划任务） | 无 T-号 | 2f93e63c | chore: fix pre-existing tsc errors in Phase 3 baseline | — | 工程债偿还，非 plan 追踪项 |
+
+### 漂移根因
+
+commit 提交时使用的 T-号（T-3.6 / 3.7 / 3.8 / 3.9 / 3.10 / 3.11.x）是 **交付顺序编号**，与 plan 中的 **功能领域编号**（T-3.6 双链 / T-3.7 Notion 块 / T-3.8 Round-trip / T-3.9 性能 / …）语义完全脱钩。以下 6 组编号已被 commit 复用：
+
+- commit **T-3.6**（表格）≠ plan T-3.6（双链） → 实为 plan T-3.7.3
+- commit **T-3.7**（代码块）≠ plan T-3.7（Notion 块） → 实为 plan T-3.3.5
+- commit **T-3.8**（块 hover）≠ plan T-3.8（Round-trip） → 实为 plan T-3.7.1 + 3.7.2
+- commit **T-3.9**（数学）≠ plan T-3.9（性能收口） → 实为 plan T-3.3.4
+- commit **T-3.10**（focus / typewriter）→ 实为 plan T-3.7b.3 + 3.7b.4
+- commit **T-3.11.x**（双链系列）→ 实为 plan T-3.6.x
+
+**后续策略**：新 commit 一律以 plan 原始 T-号为准（三段式 `T-3.<主项>.<子项>`），本表钉住漂移期映射，避免再次错位。
+
+---
+
 ## 2. 全景进度矩阵
 
 | Phase | 模块 | 状态 | 进度 |
