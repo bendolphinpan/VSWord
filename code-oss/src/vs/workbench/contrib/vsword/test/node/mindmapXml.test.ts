@@ -5,8 +5,8 @@
 
 import assert from 'assert';
 import { readFileSync } from 'fs';
-import { join, resolve } from '../../../../../base/common/path.js';
-import { FileAccess } from '../../../../../base/common/network.js';
+import { dirname, join } from 'path';
+import { fileURLToPath } from 'url';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { mindElixirNodeToMindmapNode, mindmapToMindElixirData } from '../../common/mindmapElixir.js';
 import { mindmapToMarkdownBullets } from '../../common/mindmapMarkdown.js';
@@ -15,10 +15,13 @@ import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendM
 suite('VSWord Mindmap XML', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
+	// Resolve fixtures relative to this test file (works under both raw `mocha out/`
+	// and VSCode's own test loader — no dependency on FileAccess / VSCode module loader).
+	// After compile: /out/vs/workbench/contrib/vsword/test/node/mindmapXml.test.js
+	//                                                      -> ../fixtures/mindmap/<name>
+	const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), '..', 'fixtures', 'mindmap');
 	function readFixture(name: string): string {
-		const fixturesOutDir = FileAccess.asFileUri('vs/workbench/contrib/vsword/test/fixtures/mindmap').fsPath;
-		const fixturesSrcDir = resolve(fixturesOutDir).replaceAll('\\\\', '/').replace('/out/vs/workbench/', '/src/vs/workbench/');
-		return readFileSync(join(fixturesSrcDir, name), 'utf8');
+		return readFileSync(join(fixturesDir, name), 'utf8');
 	}
 
 	test('parses FreeMind nodes and known attributes', () => {
