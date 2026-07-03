@@ -1075,6 +1075,70 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 		}
 
+		/* T-3.11.4 · backlinks footer */
+		.vsword-backlinks-footer {
+			border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
+			background: var(--vscode-editorWidget-background, transparent);
+			color: var(--vscode-descriptionForeground, #999);
+			font-size: 12px;
+			padding: 4px 12px;
+			margin-top: 12px;
+			user-select: none;
+		}
+		.vsword-backlinks-footer.empty .vsword-backlinks-header { opacity: 0.6; }
+		.vsword-backlinks-header {
+			background: transparent;
+			border: 0;
+			color: inherit;
+			font: inherit;
+			padding: 4px 0;
+			cursor: pointer;
+			letter-spacing: 0.02em;
+		}
+		.vsword-backlinks-header:hover:not(:disabled) {
+			color: var(--vscode-foreground, #ddd);
+		}
+		.vsword-backlinks-header:disabled { cursor: default; }
+		.vsword-backlinks-footer.collapsed .vsword-backlinks-list { display: none; }
+		.vsword-backlinks-list {
+			list-style: none;
+			margin: 4px 0 8px;
+			padding: 0;
+			max-height: 240px;
+			overflow-y: auto;
+		}
+		.vsword-backlinks-item {
+			display: flex;
+			align-items: baseline;
+			gap: 8px;
+			padding: 3px 6px;
+			border-radius: 3px;
+			cursor: pointer;
+		}
+		.vsword-backlinks-item:hover {
+			background: var(--vscode-list-hoverBackground, rgba(128, 128, 128, 0.15));
+		}
+		.vsword-backlinks-name {
+			color: var(--vscode-textLink-foreground, #4ea1ff);
+			font-weight: 500;
+		}
+		.vsword-backlinks-count {
+			font-size: 10px;
+			padding: 0 5px;
+			border-radius: 8px;
+			background: var(--vscode-badge-background, rgba(128, 128, 128, 0.25));
+			color: var(--vscode-badge-foreground, inherit);
+		}
+		.vsword-backlinks-path {
+			flex: 1 1 auto;
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: 11px;
+			color: var(--vscode-descriptionForeground, #888);
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+		}
+
 		${getThemesCss()}
 	</style>
 </head>

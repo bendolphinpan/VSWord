@@ -116,3 +116,87 @@ export function extractPreviewTitle(md: string, fallback: string = ''): string {
 	const m = body.match(/^\s*#{1,6}\s+([^\n]+)/);
 	return m ? m[1].trim() : fallback;
 }
+
+// T-3.11.4 · backlinks graph.
+// Scans a markdown source for [[target]] / [[target|alias]] tokens and yields
+// the raw target strings. Duplicates preserved so callers can compute per-doc
+// reference counts. Escaped forms `\[[…]]` are skipped, and code fences /
+// inline code are stripped first to avoid false positives in code snippets.
+const BACKLINK_RE = /\[\[([^\[\]\n|]+)(?:\|[^\[\]\n]*)?\]\]/g;
+
+function stripCode(md: string): string {
+	return md
+		.replace(/```[\s\S]*?```/g, '')  // fenced code blocks
+		.replace(/`[^`\n]*`/g, '');       // inline code
+}
+
+/** Extract every wiki-link target referenced from a markdown source. */
+export function extractWikilinkReferences(md: string): string[] {
+	if (typeof md !== 'string' || md.length === 0) return [];
+	const stripped = stripCode(stripFrontmatter(md));
+	const out: string[] = [];
+	let m: RegExpExecArray | null;
+	BACKLINK_RE.lastIndex = 0;
+	while ((m = BACKLINK_RE.exec(stripped)) !== null) {
+		// Reject escaped `\[[…]]` — check the char preceding the match.
+		if (m.index > 0 && stripped.charCodeAt(m.index - 1) === 92 /* \ */) continue;
+		const t = m[1].trim();
+		if (t) out.push(t);
+	}
+	return out;
+}
+
+/**
+ * A single entry in the inverse graph.
+ * `count` = how many times `fromPath` references the owning target.
+ */
+export interface WikilinkBackref {
+	readonly fromPath: string;
+	readonly fromName: string;
+	readonly count: number;
+}
+
+/**
+ * Build an inverse reference graph: `targetPath → Backref[]`. Each source
+ * markdown is scanned for wiki-link tokens; every token is resolved against
+ * the workspace index and, if it lands on a real file, recorded as a reference
+ * from the source path to that resolved target.
+ *
+ * Pure over `(index, sources)` so it round-trips cleanly in unit tests.
+ */
+export function buildBacklinksGraph(
+	index: readonly WikilinkIndexEntry[],
+	sources: ReadonlyArray<{ path: string; name: string; text: string }>,
+): Map<string, WikilinkBackref[]> {
+	const graph = new Map<string, WikilinkBackref[]>();
+	for (const src of sources) {
+		const refs = extractWikilinkReferences(src.text);
+		if (refs.length === 0) continue;
+		// Per-source dedupe: same file citing the same target N times → count=N,
+		// one row per (fromPath, targetPath) pair.
+		const perTarget = new Map<string, number>();
+		for (const raw of refs) {
+			const resolution = resolveWikilink(raw, index);
+			const file = resolution.status === 'found'
+				? resolution.file
+				: resolution.status === 'ambiguous' && resolution.candidates
+					? resolution.candidates[0]
+					: undefined;
+			if (!file || file.path === src.path) continue; // skip self-references
+			perTarget.set(file.path, (perTarget.get(file.path) ?? 0) + 1);
+		}
+		for (const [targetPath, count] of perTarget) {
+			const list = graph.get(targetPath) ?? [];
+			list.push({ fromPath: src.path, fromName: src.name, count });
+			graph.set(targetPath, list);
+		}
+	}
+	// Stable ordering: refs sorted by fromPath for deterministic output.
+	for (const list of graph.values()) list.sort((a, b) => a.fromPath.localeCompare(b.fromPath));
+	return graph;
+}
+
+/** Look up backlinks for a specific target path. */
+export function backlinksFor(graph: Map<string, WikilinkBackref[]>, path: string): WikilinkBackref[] {
+	return graph.get(path) ?? [];
+}

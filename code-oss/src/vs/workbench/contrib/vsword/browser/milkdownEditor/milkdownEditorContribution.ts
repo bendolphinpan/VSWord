@@ -30,7 +30,7 @@ import { asWebviewUri } from '../../../webview/common/webview.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
-import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle } from './milkdownWikilinkResolver.js';
+import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
 import {
 	HostToWebviewMessage,
 	VSWORD_MILKDOWN_DEFAULT_MODE,
@@ -144,6 +144,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			if (!dirty) return;
 			this.wikilinkIndex = null;
 			this.wikilinkIndexPromise = null;
+			this.wikilinkGraph = null;
+			this.wikilinkGraphPromise = null;
 			for (const input of this.liveInputs) {
 				this.post(input, { type: 'workspaceIndexChanged' });
 			}
@@ -152,6 +154,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		this._register(this.workspaceService.onDidChangeWorkspaceFolders(() => {
 			this.wikilinkIndex = null;
 			this.wikilinkIndexPromise = null;
+			this.wikilinkGraph = null;
+			this.wikilinkGraphPromise = null;
 			for (const input of this.liveInputs) {
 				this.post(input, { type: 'workspaceIndexChanged' });
 			}
@@ -161,6 +165,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	// ---- T-3.11.1 wiki-link file index -------------------------------------
 	private wikilinkIndex: WikilinkIndexEntry[] | null = null;
 	private wikilinkIndexPromise: Promise<WikilinkIndexEntry[]> | null = null;
+	private wikilinkGraph: Map<string, WikilinkBackref[]> | null = null;
+	private wikilinkGraphPromise: Promise<Map<string, WikilinkBackref[]>> | null = null;
 
 	private createEditorInput(resource: URI, group: IEditorGroup): EditorInputWithOptions {
 		const { vendorRoot, scriptUri, katexCssUri } = getMilkdownWebviewResources();
@@ -290,8 +296,14 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'wikilinkPreviewRequest':
 				await this.handleWikilinkPreviewRequest(input, msg.requestId, msg.target);
 				return;
+			case 'wikilinkBacklinksRequest':
+				await this.handleWikilinkBacklinksRequest(input);
+				return;
 			case 'openWikilink':
 				await this.handleOpenWikilink(input, msg.target, msg.newSplit);
+				return;
+			case 'openWikilinkPath':
+				await this.handleOpenWikilinkPath(input, msg.path, msg.newSplit);
 				return;
 		}
 	}
@@ -599,6 +611,83 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		}
 	}
 
+	/** Compute the workspace-relative path of the doc a webview hosts. */
+	private ownRelPath(input: MilkdownEditorInput): { rootUri: URI; rel: string } | null {
+		const roots = this.workspaceService.getWorkspace().folders;
+		const abs = input.resource.path;
+		for (const f of roots) {
+			const root = f.uri.path;
+			if (abs.toLowerCase() === root.toLowerCase()) return { rootUri: f.uri, rel: basename(input.resource) };
+			if (abs.toLowerCase().startsWith(root.toLowerCase() + '/')) return { rootUri: f.uri, rel: abs.slice(root.length + 1) };
+		}
+		return null;
+	}
+
+	/** Lazy-build the inverse reference graph. Reads every indexed .md (8 KB cap each). */
+	private ensureBacklinksGraph(): Promise<Map<string, WikilinkBackref[]>> {
+		if (this.wikilinkGraph) return Promise.resolve(this.wikilinkGraph);
+		if (this.wikilinkGraphPromise) return this.wikilinkGraphPromise;
+		this.wikilinkGraphPromise = this.buildBacklinksGraph().then(g => {
+			this.wikilinkGraph = g;
+			this.wikilinkGraphPromise = null;
+			return g;
+		}, err => {
+			this.logService.error('[VSWord Milkdown] backlinks graph build failed', err);
+			this.wikilinkGraphPromise = null;
+			this.wikilinkGraph = new Map();
+			return this.wikilinkGraph;
+		});
+		return this.wikilinkGraphPromise;
+	}
+
+	private async buildBacklinksGraph(): Promise<Map<string, WikilinkBackref[]>> {
+		const index = await this.ensureWikilinkIndex();
+		if (index.length === 0) return new Map();
+		const roots = this.workspaceService.getWorkspace().folders;
+		const root = roots[0]?.uri;
+		if (!root) return new Map();
+		// Read each file with the same 8 KB cap the preview uses — plenty for a
+		// wiki-link scan, cheap on a 500-file vault. Failures are silent per file.
+		const sources: Array<{ path: string; name: string; text: string }> = [];
+		await Promise.all(index.map(async entry => {
+			try {
+				const uri = joinPath(root, entry.path);
+				const raw = await this.fileService.readFile(uri, { position: 0, length: 8192 });
+				sources.push({ path: entry.path, name: entry.name, text: raw.value.toString() });
+			} catch { /* per-file failure is not fatal */ }
+		}));
+		return buildBacklinksGraph(index, sources);
+	}
+
+	private async handleWikilinkBacklinksRequest(input: MilkdownEditorInput): Promise<void> {
+		const own = this.ownRelPath(input);
+		if (!own) {
+			this.post(input, { type: 'wikilinkBacklinksResponse', ownPath: '', refs: [] });
+			return;
+		}
+		const graph = await this.ensureBacklinksGraph();
+		const refs = backlinksFor(graph, own.rel);
+		this.post(input, {
+			type: 'wikilinkBacklinksResponse',
+			ownPath: own.rel,
+			refs: refs.map(r => ({ path: r.fromPath, name: r.fromName, count: r.count })),
+		});
+	}
+
+	private async handleOpenWikilinkPath(input: MilkdownEditorInput, path: string, newSplit: boolean): Promise<void> {
+		const roots = this.workspaceService.getWorkspace().folders;
+		const root = roots[0]?.uri;
+		if (!root || !path) return;
+		try {
+			await this.editorService.openEditor(
+				{ resource: joinPath(root, path), options: { pinned: true, override: 'default' } },
+				newSplit ? SIDE_GROUP : input.group,
+			);
+		} catch (err) {
+			this.logService.error('[VSWord Milkdown] openWikilinkPath failed:', err);
+		}
+	}
+
 	private async handleOpenWikilink(input: MilkdownEditorInput, target: string, newSplit: boolean): Promise<void> {
 		const index = await this.ensureWikilinkIndex();
 		const resolution = resolveWikilink(target, index);
@@ -662,6 +751,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			// Index will pick it up via onDidFilesChange; broadcast now so webview
 			// stops showing the ✎ badge immediately.
 			this.wikilinkIndex = null;
+			this.wikilinkGraph = null;
+			this.wikilinkGraphPromise = null;
 			for (const live of this.liveInputs) {
 				this.post(live, { type: 'workspaceIndexChanged' });
 			}

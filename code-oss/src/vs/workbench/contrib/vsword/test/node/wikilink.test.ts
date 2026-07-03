@@ -34,7 +34,14 @@ import {
 	normalizeTarget as hostNormalizeTarget,
 	extractPreviewSnippet as hostExtractPreviewSnippet,
 	extractPreviewTitle as hostExtractPreviewTitle,
+	extractWikilinkReferences,
+	buildBacklinksGraph,
+	backlinksFor,
 } from '../../browser/milkdownEditor/milkdownWikilinkResolver.js';
+import {
+	makeBacklinksState,
+	applyBacklinksResponse,
+} from '../../browser/milkdownEditor/webview/wikilink-backlinks.template.js';
 
 // ---- Regex + parseAll -------------------------------------------------------
 
@@ -509,5 +516,165 @@ suite('T-3.11.3 · HoverIntent (fake clock)', () => {
 	test('leaveAnchor while idle is a noop', () => {
 		const { intent } = makeIntent();
 		assert.strictEqual(intent.leaveAnchor().action, 'noop');
+	});
+});
+
+// ===========================================================================
+// T-3.11.4 · backlinks: reference extractor, graph builder, state reducer
+// ===========================================================================
+
+suite('T-3.11.4 · extractWikilinkReferences', () => {
+	test('extracts all raw targets in order', () => {
+		const refs = extractWikilinkReferences('See [[Alpha]] and [[Beta|beta note]].');
+		assert.deepStrictEqual(refs, ['Alpha', 'Beta']);
+	});
+	test('drops targets inside fenced code blocks', () => {
+		const md = 'text [[Real]]\n```\n[[Fake]]\n```\nmore [[Also]]';
+		assert.deepStrictEqual(extractWikilinkReferences(md), ['Real', 'Also']);
+	});
+	test('drops targets inside inline code spans', () => {
+		assert.deepStrictEqual(extractWikilinkReferences('a `[[Fake]]` b [[Real]]'), ['Real']);
+	});
+	test('drops YAML frontmatter refs', () => {
+		const md = '---\nrelated: [[Ignored]]\n---\n[[Kept]]';
+		assert.deepStrictEqual(extractWikilinkReferences(md), ['Kept']);
+	});
+	test('skips escaped forms', () => {
+		assert.deepStrictEqual(extractWikilinkReferences('\\[[Escaped]] [[Real]]'), ['Real']);
+	});
+	test('empty / non-string input yields []', () => {
+		assert.deepStrictEqual(extractWikilinkReferences(''), []);
+		assert.deepStrictEqual(extractWikilinkReferences(null as any), []);
+	});
+});
+
+suite('T-3.11.4 · buildBacklinksGraph', () => {
+	const index = [
+		{ name: 'Alpha', path: 'notes/Alpha.md', dir: 'notes' },
+		{ name: 'Beta',  path: 'notes/Beta.md',  dir: 'notes' },
+		{ name: 'Gamma', path: 'Gamma.md',       dir: '' },
+	];
+
+	test('single reference → single backlink row', () => {
+		const g = buildBacklinksGraph(index, [
+			{ path: 'notes/Beta.md', name: 'Beta', text: 'See [[Alpha]].' },
+		]);
+		const refs = backlinksFor(g, 'notes/Alpha.md');
+		assert.strictEqual(refs.length, 1);
+		assert.strictEqual(refs[0].fromPath, 'notes/Beta.md');
+		assert.strictEqual(refs[0].count, 1);
+	});
+
+	test('duplicate refs in one source coalesce to count=N', () => {
+		const g = buildBacklinksGraph(index, [
+			{ path: 'notes/Beta.md', name: 'Beta', text: '[[Alpha]] and [[Alpha]] and [[Alpha]].' },
+		]);
+		const refs = backlinksFor(g, 'notes/Alpha.md');
+		assert.strictEqual(refs.length, 1);
+		assert.strictEqual(refs[0].count, 3);
+	});
+
+	test('self-references are skipped', () => {
+		const g = buildBacklinksGraph(index, [
+			{ path: 'notes/Alpha.md', name: 'Alpha', text: '[[Alpha]] refs self' },
+		]);
+		assert.strictEqual(backlinksFor(g, 'notes/Alpha.md').length, 0);
+	});
+
+	test('unresolvable targets are dropped silently', () => {
+		const g = buildBacklinksGraph(index, [
+			{ path: 'notes/Beta.md', name: 'Beta', text: '[[NoSuchNote]]' },
+		]);
+		assert.strictEqual(g.size, 0);
+	});
+
+	test('multiple sources produce sorted (fromPath asc) rows', () => {
+		const g = buildBacklinksGraph(index, [
+			{ path: 'notes/Beta.md',  name: 'Beta',  text: '[[Alpha]]' },
+			{ path: 'Gamma.md',       name: 'Gamma', text: '[[Alpha]] [[Alpha]]' },
+		]);
+		const refs = backlinksFor(g, 'notes/Alpha.md');
+		assert.deepStrictEqual(refs.map(r => r.fromPath), ['Gamma.md', 'notes/Beta.md']);
+		assert.deepStrictEqual(refs.map(r => r.count), [2, 1]);
+	});
+
+	test('backlinksFor missing key returns []', () => {
+		const g = buildBacklinksGraph(index, []);
+		assert.deepStrictEqual(backlinksFor(g, 'anything'), []);
+	});
+});
+
+suite('T-3.11.4 · applyBacklinksResponse (reducer)', () => {
+	test('fresh state is empty + unloaded + collapsed', () => {
+		const s = makeBacklinksState();
+		assert.deepStrictEqual(s, { ownPath: '', refs: [], loaded: false, expanded: false });
+	});
+
+	test('response with refs → sorted by count desc, name asc', () => {
+		const s = applyBacklinksResponse(makeBacklinksState(), {
+			type: 'wikilinkBacklinksResponse',
+			ownPath: 'x.md',
+			refs: [
+				{ path: 'a.md', name: 'A', count: 1 },
+				{ path: 'b.md', name: 'B', count: 3 },
+				{ path: 'c.md', name: 'C', count: 3 },
+			],
+		});
+		assert.strictEqual(s.loaded, true);
+		assert.strictEqual(s.ownPath, 'x.md');
+		assert.deepStrictEqual(s.refs.map((r: { name: string }) => r.name), ['B', 'C', 'A']);
+	});
+
+	test('empty response marks loaded but keeps refs empty', () => {
+		const s = applyBacklinksResponse(makeBacklinksState(), {
+			type: 'wikilinkBacklinksResponse', ownPath: 'x.md', refs: [],
+		});
+		assert.strictEqual(s.loaded, true);
+		assert.deepStrictEqual(s.refs, []);
+	});
+
+	test('preserves expanded flag across responses', () => {
+		let s = makeBacklinksState();
+		s = { ...s, expanded: true };
+		s = applyBacklinksResponse(s, { type: 'wikilinkBacklinksResponse', ownPath: 'x', refs: [] });
+		assert.strictEqual(s.expanded, true);
+	});
+
+	test('missing name defaults to basename-no-ext', () => {
+		const s = applyBacklinksResponse(makeBacklinksState(), {
+			type: 'wikilinkBacklinksResponse',
+			ownPath: 'x.md',
+			refs: [{ path: 'notes/Foo.md', count: 1 } as any],
+		});
+		assert.strictEqual(s.refs[0].name, 'Foo');
+	});
+
+	test('count ≤ 0 or non-numeric normalises to 1', () => {
+		const s = applyBacklinksResponse(makeBacklinksState(), {
+			type: 'wikilinkBacklinksResponse',
+			ownPath: 'x.md',
+			refs: [
+				{ path: 'a.md', name: 'A', count: 0 } as any,
+				{ path: 'b.md', name: 'B' } as any,
+			],
+		});
+		assert.strictEqual(s.refs[0].count, 1);
+		assert.strictEqual(s.refs[1].count, 1);
+	});
+
+	test('unrelated message shape is a no-op', () => {
+		const start = makeBacklinksState();
+		const s = applyBacklinksResponse(start, { type: 'somethingElse' } as any);
+		assert.strictEqual(s, start);
+	});
+
+	test('rejects entries with no path', () => {
+		const s = applyBacklinksResponse(makeBacklinksState(), {
+			type: 'wikilinkBacklinksResponse',
+			ownPath: 'x.md',
+			refs: [{ path: '', name: 'X', count: 1 } as any, { path: 'y.md', name: 'Y', count: 1 }],
+		});
+		assert.strictEqual(s.refs.length, 1);
+		assert.strictEqual(s.refs[0].name, 'Y');
 	});
 });

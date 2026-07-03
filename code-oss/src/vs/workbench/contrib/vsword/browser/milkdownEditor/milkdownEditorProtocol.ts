@@ -115,6 +115,18 @@ export interface WebviewWikilinkPreviewRequestMessage {
 	readonly target: string;
 }
 
+/** T-3.11.4: webview asks for the inverse reference list of the doc it hosts. */
+export interface WebviewWikilinkBacklinksRequestMessage {
+	readonly type: 'wikilinkBacklinksRequest';
+}
+
+/** T-3.11.4: webview asks the host to open a source doc by workspace-relative path. */
+export interface WebviewOpenWikilinkPathMessage {
+	readonly type: 'openWikilinkPath';
+	readonly path: string;
+	readonly newSplit: boolean;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -127,9 +139,11 @@ export type WebviewToHostMessage =
 	| WebviewOutlineChangedMessage
 	| WebviewImageUploadRequestMessage
 	| WebviewOpenWikilinkMessage
+	| WebviewOpenWikilinkPathMessage
 	| WebviewWikilinkResolveRequestMessage
 	| WebviewWikilinkIndexRequestMessage
-	| WebviewWikilinkPreviewRequestMessage;
+	| WebviewWikilinkPreviewRequestMessage
+	| WebviewWikilinkBacklinksRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -251,6 +265,17 @@ export interface HostWikilinkPreviewResponseMessage {
 	readonly path?: string;
 }
 
+/** T-3.11.4: inverse reference list for the doc the webview owns. */
+export interface HostWikilinkBacklinksResponseMessage {
+	readonly type: 'wikilinkBacklinksResponse';
+	readonly ownPath: string;
+	readonly refs: readonly {
+		readonly path: string;
+		readonly name: string;
+		readonly count: number;
+	}[];
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -265,7 +290,8 @@ export type HostToWebviewMessage =
 	| HostWikilinkResolveResponseMessage
 	| HostWorkspaceIndexChangedMessage
 	| HostWikilinkIndexResponseMessage
-	| HostWikilinkPreviewResponseMessage;
+	| HostWikilinkPreviewResponseMessage
+	| HostWikilinkBacklinksResponseMessage;
 
 // ---------------------------------------------------------------------------
 // Constants

@@ -52,6 +52,12 @@ import {
 	ingestPreviewResponse,
 	_resetWikilinkPreview,
 } from './wikilink-preview.mjs';
+import {
+	configureWikilinkBacklinks,
+	mountBacklinksFooter,
+	refreshBacklinks,
+	ingestBacklinks,
+} from './wikilink-backlinks.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -173,6 +179,12 @@ async function createEditor(markdown) {
 			configureWikilinkPreview({
 				postToHost: (m) => { try { vscode.postMessage(m); } catch { /* ignore */ } },
 			});
+			configureWikilinkBacklinks({
+				postToHost: (m) => { try { vscode.postMessage(m); } catch { /* ignore */ } },
+				openBacklink: (path, newSplit) => {
+					try { vscode.postMessage({ type: 'openWikilinkPath', path, newSplit }); } catch { /* ignore */ }
+				},
+			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -226,6 +238,14 @@ async function createEditor(markdown) {
 	currentMarkdown = serialize();
 	initialized = true;
 	setStatus('Ready', 'ok');
+	// T-3.11.4: pin the backlinks footer to the editor container and kick off
+	// the first inverse-index query. Repaints itself on host response.
+	try {
+		mountBacklinksFooter(root.parentElement || root);
+		refreshBacklinks();
+	} catch (err) {
+		reportError('backlinks-mount', err);
+	}
 	// T-3.8: mount the hover block handle. Kept separate from `.use()` because
 	// the handle DOM listens on the editor root, which only exists post-create.
 	try {
@@ -356,11 +376,17 @@ window.addEventListener('message', event => {
 		ingestPreviewResponse(msg);
 		return;
 	}
+	if (msg.type === 'wikilinkBacklinksResponse') {
+		// T-3.11.4: host answered a backlinks request.
+		ingestBacklinks(msg);
+		return;
+	}
 	if (msg.type === 'workspaceIndexChanged') {
-		// T-3.11.1/.2/.3: host tells us a .md was added/removed/renamed — flush all wiki-link caches.
+		// T-3.11.1/.2/.3/.4: host tells us a .md was added/removed/renamed — flush all wiki-link caches.
 		invalidateWikilinkCache();
 		invalidateWikilinkIndex();
 		_resetWikilinkPreview();
+		refreshBacklinks();
 		return;
 	}
 	if (msg.type === 'themeChanged') {
