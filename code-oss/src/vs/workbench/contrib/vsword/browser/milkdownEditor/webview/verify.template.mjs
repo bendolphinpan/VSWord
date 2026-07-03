@@ -34,6 +34,7 @@ import { upload, uploadConfig, defaultUploader } from '@milkdown/plugin-upload';
 import { createHostImageUploader, imageUploadPlugins } from './image-upload.mjs';
 import { imageResizePlugins, normalizeAlt } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin, imageSchemaOverride } from './image-schema-override.mjs';
+import { normalizeAlign, parseAlignWrapper, renderAlignedImg } from './image-resize.mjs';
 import { clampWidth, widthFromDrag, parseImgTag, renderImgTag, IMAGE_RESIZE_MIN_PX, IMAGE_RESIZE_MAX_PX } from './image-resize.mjs';
 
 // Must match webview/entry.template.js — kept literally in sync for round-trip parity.
@@ -53,7 +54,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -265,6 +266,26 @@ const checks = {
 	normalizeAltKeepsInterior:   normalizeAlt('图 1: 示意图') === '图 1: 示意图',
 	normalizeAltFlattensNewline: normalizeAlt('a\nb') === 'a b',
 	normalizeAltNullSafe:        normalizeAlt(null) === '' && normalizeAlt(undefined) === '',
+
+	// T-3.5.4 alignment (Typora <p align="…">). Wrapped images round-trip as
+	// html verbatim; bare `![]()` stays unwrapped (default = left).
+	alignCenterRoundTrip:  /<p align="center"><img src="assets\/hero.png" alt="居中大图"><\/p>/.test(output),
+	alignRightWithWidth:   /<p align="right"><img src="assets\/thumb.png" alt="右对齐" width="200"><\/p>/.test(output),
+	alignBareStaysBare:    output.includes('![截图](assets/screenshot-1.png)'),
+	alignBareRemoteStays:  output.includes('![远程](https://example.com/pic.png)'),
+	// normalizeAlign: 'left'/''/garbage → null; case-insensitive.
+	normalizeAlignLeftNull:   normalizeAlign('left') === null,
+	normalizeAlignCenter:     normalizeAlign('CENTER') === 'center' && normalizeAlign(' Right ') === 'right',
+	normalizeAlignNullSafe:   normalizeAlign(null) === null && normalizeAlign(undefined) === null && normalizeAlign('bogus') === null,
+	// parseAlignWrapper: matches <p align> and <div align>, rejects non-wrappers.
+	parseAlignPWrapper:       parseAlignWrapper('<p align="center"><img src="a.png"></p>')?.align === 'center',
+	parseAlignDivWrapper:     parseAlignWrapper('<div align="right"><img src="b.png" width="120"></div>')?.align === 'right'
+		&& parseAlignWrapper('<div align="right"><img src="b.png" width="120"></div>')?.width === 120,
+	parseAlignRejectsPlain:   parseAlignWrapper('<img src="c.png">') === null,
+	// renderAlignedImg: emits wrapper only for center/right.
+	renderAlignedLeftBare:    renderAlignedImg({ src: 'a.png', align: 'left' })   === '<img src="a.png">',
+	renderAlignedCenter:      renderAlignedImg({ src: 'a.png', align: 'center' }) === '<p align="center"><img src="a.png"></p>',
+	renderAlignedRightWidth:  renderAlignedImg({ src: 'a.png', align: 'right', width: 300 }) === '<p align="right"><img src="a.png" width="300"></p>',
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };

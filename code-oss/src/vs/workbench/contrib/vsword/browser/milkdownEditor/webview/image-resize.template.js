@@ -128,3 +128,50 @@ function decodeHtmlEntities(s) {
 		return ENTITY_MAP[entity.toLowerCase()] ?? _;
 	});
 }
+
+// ─── T-3.5.4: alignment (Typora-style <p align="…"> wrapper) ────────────────
+
+/** Valid align values; `null` == unset (left, short syntax). */
+export const IMAGE_ALIGNS = /** @type {const} */ (['left', 'center', 'right']);
+
+/** Normalize any input to one of the three enum values or null. `'left'` also
+ *  collapses to null because a left-aligned image is exactly a plain `![]()`. */
+export function normalizeAlign(v) {
+	if (v == null) return null;
+	const s = String(v).trim().toLowerCase();
+	if (s === 'center' || s === 'right') return s;
+	// 'left' / '' / anything else → null (default, no wrapper needed).
+	return null;
+}
+
+// Match a `<p align="…">` or `<div align="…">` wrapper containing a single
+// `<img …>` and nothing else — anchored, permissive on whitespace only.
+const ALIGN_WRAPPER_RE = /^\s*<(p|div)\s+align\s*=\s*"(left|center|right)"\s*>\s*(<img\b[^>]*?\/?>)\s*<\/\1>\s*$/i;
+
+/**
+ * Parse a raw html mdast value. If it's a `<p align="…"><img></p>` wrapper,
+ * return the inner image attrs merged with `align`. Otherwise fall through to
+ * a plain `parseImgTag` — that way both the wrapped and bare forms lift.
+ * Returns `null` on non-match so the caller leaves the html node opaque.
+ */
+export function parseAlignWrapper(value) {
+	if (typeof value !== 'string') return null;
+	const m = ALIGN_WRAPPER_RE.exec(value);
+	if (!m) return null;
+	const inner = parseImgTag(m[3]);
+	if (!inner) return null;
+	return { ...inner, align: normalizeAlign(m[2]) };
+}
+
+/**
+ * Serialize image attrs to a raw html string, wrapping in `<p align>` when
+ * `align` is 'center' or 'right'. Left/null skip the wrapper — the caller
+ * should emit `![]()` short syntax instead.
+ */
+export function renderAlignedImg(attrs) {
+	const align = normalizeAlign(attrs?.align);
+	const img = renderImgTag(attrs);
+	if (!align) return img;
+	return `<p align="${align}">${img}</p>`;
+}
+

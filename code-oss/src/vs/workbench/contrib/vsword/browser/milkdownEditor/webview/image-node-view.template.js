@@ -28,7 +28,7 @@
 
 import { $view } from '@milkdown/utils';
 import { imageSchemaOverride } from './image-schema-override.mjs';
-import { HANDLE_DIRECTIONS, widthFromDrag } from './image-resize.mjs';
+import { HANDLE_DIRECTIONS, widthFromDrag, normalizeAlign, IMAGE_ALIGNS } from './image-resize.mjs';
 
 const HANDLES = /** @type {const} */ (['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w']);
 
@@ -55,16 +55,37 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 	captionEl.className = 'vsword-img-caption';
 	wrap.appendChild(captionEl);
 
-	// T-3.5.3: "改文字" trigger. Only surfaces when the wrap is selected/hovered
+	// T-3.5.3: "图片标注" trigger. Only surfaces when the wrap is selected/hovered
 	// (same rules as resize handles), sits at the bottom-right corner.
 	const editBtn = doc.createElement('button');
 	editBtn.type = 'button';
 	editBtn.className = 'vsword-img-edit-alt';
-	editBtn.textContent = '改文字';
+	editBtn.textContent = '图片标注';
 	editBtn.setAttribute('aria-label', 'Edit image alt text (caption)');
 	wrap.appendChild(editBtn);
 	editBtn.addEventListener('mousedown', ev => { ev.preventDefault(); ev.stopPropagation(); });
 	editBtn.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); openAltPopover(); });
+
+	// T-3.5.4: 3-button align group at the bottom-left, same visibility rules
+	// as the "图片标注" button. Each button toggles: clicking the currently
+	// active align resets to left (null).
+	const alignBar = doc.createElement('span');
+	alignBar.className = 'vsword-img-align-bar';
+	wrap.appendChild(alignBar);
+	/** @type {Record<string, HTMLButtonElement>} */
+	const alignBtns = {};
+	for (const [key, label] of [['left', '左对齐'], ['center', '居中'], ['right', '右对齐']]) {
+		const b = doc.createElement('button');
+		b.type = 'button';
+		b.className = 'vsword-img-align-btn';
+		b.dataset.align = key;
+		b.textContent = label;
+		b.setAttribute('aria-label', 'Align ' + key);
+		b.addEventListener('mousedown', ev => { ev.preventDefault(); ev.stopPropagation(); });
+		b.addEventListener('click', ev => { ev.preventDefault(); ev.stopPropagation(); commitAlign(key); });
+		alignBar.appendChild(b);
+		alignBtns[key] = b;
+	}
 
 	const handleEls = HANDLES.map(h => {
 		const el = doc.createElement('span');
@@ -100,6 +121,12 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 		const alt = normalizeAlt(n.attrs.alt);
 		captionEl.textContent = alt;
 		wrap.dataset.hasCaption = alt ? 'true' : 'false';
+		// T-3.5.4 align. `null` == left (unwrapped short syntax on serialize).
+		const align = normalizeAlign(n.attrs.align);
+		wrap.dataset.align = align || 'left';
+		for (const key of IMAGE_ALIGNS) {
+			alignBtns[key].dataset.active = ((align || 'left') === key) ? 'true' : 'false';
+		}
 	}
 
 	function commitAlt(nextAlt) {
@@ -110,6 +137,52 @@ export const imageResizeNodeView = $view(imageSchemaOverride.node, () => (node, 
 		const normalized = normalizeAlt(nextAlt);
 		if (current.attrs.alt === normalized) return;
 		const tr = view.state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, alt: normalized });
+		view.dispatch(tr);
+	}
+
+	/**
+	 * T-3.5.4: apply align to this image. Q4=b — when the image shares a
+	 * paragraph with siblings, split the paragraph so this image gets its own
+	 * block-level container. That way each image can be aligned independently
+	 * without alignment fighting (a `<p align>` wrapper is block-level and
+	 * cannot host arbitrary sibling inlines from a different alignment).
+	 *
+	 * Clicking the currently active align resets to null (left, short syntax).
+	 */
+	function commitAlign(nextAlign) {
+		const pos = typeof getPos === 'function' ? getPos() : null;
+		if (typeof pos !== 'number') return;
+		const state = view.state;
+		const current = state.doc.nodeAt(pos);
+		if (!current || current.type.name !== 'image') return;
+		const currentAlign = normalizeAlign(current.attrs.align);
+		// Toggle: clicking the active align resets to null. 'left' is stored
+		// as null so users can distinguish "no wrapper" from an explicit choice.
+		let target = normalizeAlign(nextAlign) || (nextAlign === 'left' ? null : normalizeAlign(nextAlign));
+		if ((currentAlign || 'left') === (target || 'left')) target = null;
+		if (currentAlign === target) return;
+
+		const $pos = state.doc.resolve(pos);
+		const parent = $pos.parent;
+		const paragraphType = state.schema.nodes.paragraph;
+		let tr = state.tr.setNodeMarkup(pos, undefined, { ...current.attrs, align: target });
+
+		// Only split when the parent is a paragraph that has other content
+		// besides this image. If the image is already alone in a paragraph, or
+		// its parent isn't a paragraph (e.g. list item body — rare), skip.
+		if (parent && parent.type === paragraphType && parent.childCount > 1) {
+			// Positions of the image start/end within the doc.
+			const imgStart = pos;
+			const imgEnd = pos + current.nodeSize;
+			const paraStart = $pos.before($pos.depth);
+			const paraEnd = paraStart + parent.nodeSize;
+			// If there's content after the image, split at imgEnd first so the
+			// tail becomes its own paragraph. Then split before the image so
+			// the image sits in a paragraph by itself. Order matters — split
+			// from the back so earlier positions stay valid.
+			if (imgEnd < paraEnd - 1) tr = tr.split(imgEnd);
+			if (imgStart > paraStart + 1) tr = tr.split(imgStart);
+		}
 		view.dispatch(tr);
 	}
 

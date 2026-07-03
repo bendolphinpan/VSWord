@@ -22,7 +22,7 @@ import { $nodeSchema, $remark } from '@milkdown/utils';
 import { expectDomTypeError } from '@milkdown/exception';
 import { visit } from 'unist-util-visit';
 
-import { parseImgTag, renderImgTag } from './image-resize.mjs';
+import { parseImgTag, renderImgTag, parseAlignWrapper, renderAlignedImg, normalizeAlign } from './image-resize.mjs';
 
 /** Same context attr as commonmark exposes (`imageAttr.key`) — read as `undefined`-safe. */
 function readAttrs(ctx, node) {
@@ -47,6 +47,8 @@ export const imageSchemaOverride = $nodeSchema('image', (ctx) => ({
 		title: { default: '', validate: 'string' },
 		// Extra: 0 means "no explicit sizing" — serialize as `![]()` short syntax.
 		width: { default: 0, validate: 'number' },
+		// T-3.5.4: 'center' | 'right' | null. null == left (no wrapper).
+		align: { default: null },
 	},
 	parseDOM: [{
 		tag: 'img[src]',
@@ -54,11 +56,18 @@ export const imageSchemaOverride = $nodeSchema('image', (ctx) => ({
 			if (!(dom instanceof HTMLElement)) throw expectDomTypeError(dom);
 			const rawW = dom.getAttribute('width') || '';
 			const w = parseInt(rawW, 10);
+			// Inherit align from a parent <p align> / <div align> if present.
+			// This lets ProseMirror's paste pipeline (which flows through the
+			// DOM parser, not the markdown pipeline) preserve alignment when
+			// users paste HTML that already carries a wrapper.
+			const alignHost = dom.closest('[align]');
+			const align = alignHost ? normalizeAlign(alignHost.getAttribute('align')) : null;
 			return {
 				src: dom.getAttribute('src') || '',
 				alt: dom.getAttribute('alt') || '',
 				title: dom.getAttribute('title') || dom.getAttribute('alt') || '',
 				width: Number.isFinite(w) && w > 0 ? w : 0,
+				align,
 			};
 		},
 	}],
@@ -75,19 +84,22 @@ export const imageSchemaOverride = $nodeSchema('image', (ctx) => ({
 				src: node.url ?? '',
 				alt: node.alt ?? '',
 				title: node.title ?? '',
-				// Width is stashed on `data` by the html-lift plugin below.
+				// Width & align are stashed on `data` by the html-lift plugin.
 				width: Number.isFinite(node.data?.width) && node.data.width > 0 ? node.data.width : 0,
+				align: normalizeAlign(node.data?.align),
 			});
 		},
 	},
 	toMarkdown: {
 		match: (node) => node.type.name === 'image',
 		runner: (state, node) => {
-			const { src, alt, title, width } = node.attrs;
-			if (Number.isFinite(width) && width > 0) {
-				// Round-trip as raw HTML so the width slot survives; wrap in a
-				// paragraph-inline html node — remark stringifies value verbatim.
-				state.addNode('html', undefined, renderImgTag({ src, alt, title, width }));
+			const { src, alt, title, width, align } = node.attrs;
+			const hasWidth = Number.isFinite(width) && width > 0;
+			const alignN = normalizeAlign(align);
+			if (alignN || hasWidth) {
+				// Round-trip as raw HTML so the width/align slots survive; a
+				// single html mdast node emits its `value` verbatim.
+				state.addNode('html', undefined, renderAlignedImg({ src, alt, title, width, align: alignN }));
 			} else {
 				state.addNode('image', undefined, undefined, { title, url: src, alt });
 			}
@@ -105,7 +117,10 @@ export const imageSchemaOverride = $nodeSchema('image', (ctx) => ({
  */
 export const remarkLiftImgHtmlPlugin = $remark('remark-lift-img-html', () => () => (tree) => {
 	visit(tree, 'html', (node) => {
-		const attrs = parseImgTag(node.value);
+		// Prefer the wrapper form first — it carries align + inner img attrs
+		// in one shot. Fall back to a bare `<img>` if the value isn't wrapped.
+		const wrapped = parseAlignWrapper(node.value);
+		const attrs = wrapped || parseImgTag(node.value);
 		if (!attrs) return;
 		// Mutate in place — mdast nodes are plain JSON so this is safe.
 		node.type = 'image';
@@ -113,6 +128,6 @@ export const remarkLiftImgHtmlPlugin = $remark('remark-lift-img-html', () => () 
 		node.alt = attrs.alt;
 		node.title = attrs.title || null;
 		node.value = undefined;
-		node.data = { ...(node.data || {}), width: attrs.width };
+		node.data = { ...(node.data || {}), width: attrs.width, align: attrs.align ?? null };
 	});
 });

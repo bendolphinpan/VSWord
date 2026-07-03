@@ -400,6 +400,56 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			border-radius: 3px;
 			cursor: pointer;
 		}
+		/* T-3.5.4: align. wrap defaults inline-block so it flows with prose;
+		 * center/right promote it to block so margin-auto can position the
+		 * image. Left is treated as the default = no positioning. */
+		.vsword-img-wrap[data-align="center"] {
+			display: block;
+			margin-inline: auto;
+			text-align: center;
+		}
+		.vsword-img-wrap[data-align="right"] {
+			display: block;
+			margin-inline-start: auto;
+			margin-inline-end: 0;
+			text-align: right;
+		}
+		.vsword-img-wrap[data-align="left"] {
+			/* Inherits inline-block flow; no override so it stays with text. */
+		}
+		.vsword-img-align-bar {
+			position: absolute;
+			left: 0;
+			bottom: -22px;
+			display: inline-flex;
+			gap: 2px;
+			opacity: 0;
+			pointer-events: none;
+			transition: opacity 80ms ease;
+			z-index: 3;
+		}
+		.vsword-img-wrap:hover .vsword-img-align-bar,
+		.vsword-img-wrap[data-selected="true"] .vsword-img-align-bar {
+			opacity: 1;
+			pointer-events: auto;
+		}
+		.vsword-img-align-btn {
+			padding: 1px 8px;
+			font: inherit;
+			font-size: 11px;
+			line-height: 16px;
+			color: var(--vsword-fg);
+			background: var(--vsword-bg);
+			border: 1px solid var(--vsword-border);
+			border-radius: 3px;
+			cursor: pointer;
+		}
+		.vsword-img-align-btn:hover { border-color: var(--vsword-accent); }
+		.vsword-img-align-btn[data-active="true"] {
+			color: var(--vsword-bg);
+			background: var(--vsword-accent);
+			border-color: var(--vsword-accent);
+		}
 		${getThemesCss()}
 	</style>
 </head>
