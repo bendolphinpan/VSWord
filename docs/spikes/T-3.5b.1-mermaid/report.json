@@ -1,0 +1,249 @@
+{
+  "generatedAt": "2026-07-04T14:19:53.480Z",
+  "mermaidVersion": "11.14.0",
+  "dynamicImportMs": 728.4,
+  "bundleSizes": {
+    "mermaid.core.mjs": {
+      "raw": 45712,
+      "gzip": 11083
+    },
+    "mermaid.esm.min.mjs": {
+      "raw": 27199,
+      "gzip": 10247
+    },
+    "mermaid.min.js": {
+      "raw": 3164970,
+      "gzip": 876604
+    },
+    "mermaid.esm.mjs": {
+      "raw": 57507,
+      "gzip": 14215
+    }
+  },
+  "distSummary": {
+    "chunkCount": 5,
+    "chunkTotalRaw": 10604523,
+    "chunkTotalGzip": 2185828
+  },
+  "cspScan": {
+    "mermaid.core.mjs": {
+      "evalCalls": 0,
+      "newFunctionCalls": 0,
+      "functionCtorCalls": 0,
+      "dynamicImports": 31,
+      "documentWrite": false,
+      "innerHTMLSet": 3,
+      "sizeBytes": 45712
+    },
+    "mermaid.esm.min.mjs": {
+      "evalCalls": 0,
+      "newFunctionCalls": 0,
+      "functionCtorCalls": 0,
+      "dynamicImports": 31,
+      "documentWrite": false,
+      "innerHTMLSet": 3,
+      "sizeBytes": 27199
+    },
+    "mermaid.min.js": {
+      "evalCalls": 0,
+      "newFunctionCalls": 0,
+      "functionCtorCalls": 2,
+      "dynamicImports": 0,
+      "documentWrite": false,
+      "innerHTMLSet": 9,
+      "sizeBytes": 3164877
+    },
+    "mermaid.esm.mjs": {
+      "evalCalls": 0,
+      "newFunctionCalls": 0,
+      "functionCtorCalls": 0,
+      "dynamicImports": 31,
+      "documentWrite": false,
+      "innerHTMLSet": 3,
+      "sizeBytes": 57507
+    }
+  },
+  "fixtures": [
+    {
+      "name": "flowchart",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 15037,
+      "ms": 731.5,
+      "err": null
+    },
+    {
+      "name": "sequenceDiagram",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 23212,
+      "ms": 61.8,
+      "err": null
+    },
+    {
+      "name": "classDiagram",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 17557,
+      "ms": 103.9,
+      "err": null
+    },
+    {
+      "name": "stateDiagram-v2",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 27897,
+      "ms": 63.8,
+      "err": null
+    },
+    {
+      "name": "erDiagram",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 9473,
+      "ms": 51.2,
+      "err": null
+    },
+    {
+      "name": "pie",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 4034,
+      "ms": 273.5,
+      "err": null
+    },
+    {
+      "name": "gantt",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 8964,
+      "ms": 37.6,
+      "err": null
+    },
+    {
+      "name": "journey",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 8187,
+      "ms": 27.9,
+      "err": null
+    },
+    {
+      "name": "gitGraph",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 9553,
+      "ms": 48.6,
+      "err": null
+    },
+    {
+      "name": "mindmap",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 24658,
+      "ms": 263.1,
+      "err": null
+    },
+    {
+      "name": "timeline",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 13558,
+      "ms": 31.4,
+      "err": null
+    },
+    {
+      "name": "quadrantChart",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 5413,
+      "ms": 24.6,
+      "err": null
+    },
+    {
+      "name": "requirementDiagram",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 10315,
+      "ms": 49.9,
+      "err": null
+    },
+    {
+      "name": "C4",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 19834,
+      "ms": 30.1,
+      "err": null
+    },
+    {
+      "name": "xychart-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 7196,
+      "ms": 30.2,
+      "err": null
+    },
+    {
+      "name": "block-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 8199,
+      "ms": 49.6,
+      "err": null
+    },
+    {
+      "name": "packet-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 3618,
+      "ms": 20.1,
+      "err": null
+    },
+    {
+      "name": "kanban-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 18904,
+      "ms": 47.3,
+      "err": null
+    },
+    {
+      "name": "sankey-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 4135,
+      "ms": 24.7,
+      "err": null
+    },
+    {
+      "name": "architecture-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 9192,
+      "ms": 132.6,
+      "err": null
+    },
+    {
+      "name": "radar-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 7843,
+      "ms": 33.7,
+      "err": null
+    },
+    {
+      "name": "treemap-beta",
+      "ok": true,
+      "hasSvg": true,
+      "svgLen": 6072,
+      "ms": 68.4,
+      "err": null
+    }
+  ],
+  "summary": {
+    "total": 22,
+    "pass": 22,
+    "fail": 0
+  }
+}

@@ -1,0 +1,75 @@
+{
+  "scannedFiles": 216,
+  "rootDir": "D:\\GIT\\VSWord\\docs\\spikes\\T-3.5b.1-mermaid\\node_modules\\mermaid\\dist",
+  "patterns": {
+    "new Function": {
+      "count": 0,
+      "firstThree": []
+    },
+    "Function(...)": {
+      "count": 4,
+      "firstThree": [
+        {
+          "file": "chunks\\mermaid.esm\\chunk-3QJOF6JT.mjs",
+          "line": 11,
+          "snippet": "Global_default || freeSelf || Function(\"return this\")(); var root_default = root; // ../."
+        },
+        {
+          "file": "chunks\\mermaid.esm\\chunk-MDI5NGGP.mjs",
+          "line": 671,
+          "snippet": "t = freeGlobal || freeSelf || Function(\"return this\")(); _root = root; return _root; }"
+        },
+        {
+          "file": "chunks\\mermaid.esm.min\\chunk-7RZVMHOQ.mjs",
+          "line": 4,
+          "snippet": "Object===Object&&self,t=r||e||Function(\"return this\")();return ri=t,ri}v(In,\"require_root\""
+        }
+      ]
+    },
+    "eval(": {
+      "count": 0,
+      "firstThree": []
+    },
+    "import(": {
+      "count": 120,
+      "firstThree": [
+        {
+          "file": "chunks\\mermaid.core\\chunk-336JU56O.mjs",
+          "line": 50,
+          "snippet": "_ */ __name(async () => await import(\"./dagre-KV5264BT.mjs\"), \"loader\") }, ...true"
+        },
+        {
+          "file": "chunks\\mermaid.core\\chunk-336JU56O.mjs",
+          "line": 55,
+          "snippet": "_ */ __name(async () => await import(\"./cose-bilkent-S5V4N54A.mjs\"), \"loader\") } "
+        },
+        {
+          "file": "chunks\\mermaid.core\\chunk-ICPOFSXX.mjs",
+          "line": 4858,
+          "snippet": "st { default: katex } = await import(\"katex\"); const outputMode = config2.forceLegacyM"
+        }
+      ]
+    },
+    "new Worker": {
+      "count": 0,
+      "firstThree": []
+    },
+    "importScripts": {
+      "count": 0,
+      "firstThree": []
+    },
+    "WebAssembly.": {
+      "count": 0,
+      "firstThree": []
+    },
+    ".wasm": {
+      "count": 0,
+      "firstThree": []
+    }
+  },
+  "dynamicImportSummary": {
+    "total": 120,
+    "nonLiteral": 0,
+    "nonLiteralSamples": []
+  }
+}

@@ -1,0 +1,217 @@
+{
+  "mermaidVersion": "11.14.0",
+  "total": 22,
+  "ok": 22,
+  "failed": 0,
+  "byTier": {
+    "GA": {
+      "total": 15,
+      "ok": 15
+    },
+    "beta": {
+      "total": 7,
+      "ok": 7
+    }
+  },
+  "externalRegistrationHits": 0,
+  "results": [
+    {
+      "id": "flowchart",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 712.1,
+      "svgBytes": 12978,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "sequenceDiagram",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 61.3,
+      "svgBytes": 23493,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "classDiagram",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 85.9,
+      "svgBytes": 15067,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "stateDiagram-v2",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 48.7,
+      "svgBytes": 26879,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "erDiagram",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 44.2,
+      "svgBytes": 8200,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "journey",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 33.3,
+      "svgBytes": 7236,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "gantt",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 47.3,
+      "svgBytes": 10411,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "pie",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 272,
+      "svgBytes": 3729,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "quadrantChart",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 25.2,
+      "svgBytes": 5517,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "requirementDiagram",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 44.3,
+      "svgBytes": 8162,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "gitGraph",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 48.4,
+      "svgBytes": 10054,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "C4Context",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 31.5,
+      "svgBytes": 20014,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "mindmap",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 261.5,
+      "svgBytes": 24012,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "timeline",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 28.8,
+      "svgBytes": 14418,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "sankey-beta",
+      "tier": "GA",
+      "ok": true,
+      "elapsedMs": 27.4,
+      "svgBytes": 4202,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "xychart-beta",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 32.7,
+      "svgBytes": 7485,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "block-beta",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 62.1,
+      "svgBytes": 9550,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "packet-beta",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 25.3,
+      "svgBytes": 3792,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "kanban",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 57.4,
+      "svgBytes": 20717,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "architecture-beta",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 121.4,
+      "svgBytes": 9374,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "radar-beta",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 42.8,
+      "svgBytes": 8098,
+      "hasSvgTag": true,
+      "err": null
+    },
+    {
+      "id": "treemap-beta",
+      "tier": "beta",
+      "ok": true,
+      "elapsedMs": 69,
+      "svgBytes": 6273,
+      "hasSvgTag": true,
+      "err": null
+    }
+  ]
+}

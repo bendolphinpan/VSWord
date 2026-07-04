@@ -1,0 +1,92 @@
+<!doctype html>
+<!--
+  T-3.5b.1 spike · mermaid live demo
+  这个 HTML 里的 CSP 与 VSWord webview 一致（只有 script-src 'self'，无
+  'unsafe-eval'、无 'wasm-unsafe-eval'）。用它在真浏览器里手动验证 mermaid
+  v11 是否被 CSP 拦截。
+  用法：
+    cd docs/spikes/T-3.5b.1-mermaid
+    npx serve .   # 或任何静态服务器，file:// 无法用 ESM
+    浏览器打开 http://localhost:xxxx/demo.html
+    打开 DevTools · Console 看有没有 CSP violation 或 mermaid 错误
+-->
+<html lang="zh-CN">
+<head>
+	<meta charset="UTF-8">
+	<meta http-equiv="Content-Security-Policy"
+	      content="default-src 'none'; img-src 'self' https: data: blob:; font-src 'self' data:; style-src 'self' 'unsafe-inline'; script-src 'self';">
+	<title>T-3.5b.1 · Mermaid CSP demo</title>
+	<style>
+		* { box-sizing: border-box; }
+		body { font: 13px/1.5 system-ui, sans-serif; margin: 24px; color: #ddd; background: #1e1e1e; }
+		h1 { font-size: 18px; }
+		.diagram { border: 1px solid #444; padding: 12px; margin: 12px 0; background: #252526; }
+		.diagram > h3 { margin: 0 0 8px; font-size: 12px; color: #9cdcfe; }
+		.diagram > .status { font-size: 11px; color: #6a9955; }
+		.diagram.err > .status { color: #f85149; }
+		.diagram > .src { white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 11px; background: #1e1e1e; padding: 6px; margin: 4px 0; color: #ce9178; }
+		.diagram > .out svg { max-width: 100%; height: auto; background: #fff; }
+		#report { border-top: 1px solid #444; padding-top: 12px; margin-top: 16px; }
+	</style>
+</head>
+<body>
+	<h1>T-3.5b.1 · Mermaid v11 CSP demo（与 VSWord webview 同款 CSP）</h1>
+	<div id="report">加载中…（首次会动态 import mermaid，网络面板会看到 chunk 一批加载）</div>
+	<div id="grid"></div>
+
+	<script type="module">
+		// 与 render-all.mjs 用同一份 fixture 表
+		import { FIXTURES } from './fixtures/diagrams.mjs';
+
+		const grid = document.getElementById('grid');
+		const reportBox = document.getElementById('report');
+
+		// 逐个塞占位符
+		const cells = new Map();
+		for (const f of FIXTURES) {
+			const cell = document.createElement('div');
+			cell.className = 'diagram';
+			cell.innerHTML = `
+				<h3>${f.tier} · ${f.id}</h3>
+				<div class="src">${escapeHtml(f.src)}</div>
+				<div class="out"></div>
+				<div class="status">pending…</div>
+			`;
+			grid.appendChild(cell);
+			cells.set(f.id, cell);
+		}
+
+		function escapeHtml(s) { return s.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c])); }
+
+		// 动态 import — 这是懒加载入口
+		const t0 = performance.now();
+		const mermaid = (await import('./node_modules/mermaid/dist/mermaid.core.mjs')).default;
+		const tImport = (performance.now() - t0).toFixed(1);
+
+		mermaid.initialize({ startOnLoad: false, theme: 'default', securityLevel: 'strict' });
+
+		const results = [];
+		for (const f of FIXTURES) {
+			const cell = cells.get(f.id);
+			const out = cell.querySelector('.out');
+			const status = cell.querySelector('.status');
+			const t1 = performance.now();
+			try {
+				const { svg } = await mermaid.render('demo-' + f.id.replace(/[^a-z0-9]/gi, '_'), f.src);
+				out.innerHTML = svg;
+				const elapsed = (performance.now() - t1).toFixed(1);
+				status.textContent = `ok · ${elapsed}ms · ${svg.length}B`;
+				results.push({ id: f.id, tier: f.tier, ok: true, ms: +elapsed, bytes: svg.length });
+			} catch (e) {
+				cell.classList.add('err');
+				status.textContent = `err: ${(e && e.message || e).toString().slice(0, 200)}`;
+				results.push({ id: f.id, tier: f.tier, ok: false, err: String(e).slice(0, 200) });
+			}
+		}
+
+		const ok = results.filter(r => r.ok).length;
+		reportBox.textContent = `mermaid.core 动态 import: ${tImport}ms · 渲染 ${ok}/${results.length} 通过 · 打开 DevTools Console 确认无 CSP violation`;
+		window.__SPIKE_RESULTS__ = results;
+	</script>
+</body>
+</html>

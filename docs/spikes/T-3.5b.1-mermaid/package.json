@@ -1,0 +1,10 @@
+{
+  "private": true,
+  "name": "vsword-mermaid-spike",
+  "version": "0.0.0",
+  "type": "module",
+  "dependencies": {
+    "jsdom": "^29.1.1",
+    "mermaid": "^11.14.0"
+  }
+}

@@ -1,0 +1,141 @@
+{
+  "scanned": {
+    "entry": "dist/mermaid.core.mjs",
+    "chunkDir": "dist/chunks/mermaid.core",
+    "chunkCount": 51
+  },
+  "entry": {
+    "raw": 45712,
+    "gz": 11030
+  },
+  "chunks": {
+    "count": 51,
+    "total": {
+      "raw": 2283918,
+      "gz": 455540
+    },
+    "sharedRuntime": {
+      "raw": 986188,
+      "gz": 177909,
+      "files": 26
+    },
+    "perDiagramCount": 22
+  },
+  "perDiagram": {
+    "sequenceDiagram": {
+      "raw": 203518,
+      "gz": 38054,
+      "files": 1
+    },
+    "blockDiagram": {
+      "raw": 137377,
+      "gz": 26481,
+      "files": 1
+    },
+    "c4Diagram": {
+      "raw": 120404,
+      "gz": 24170,
+      "files": 1
+    },
+    "flowDiagram": {
+      "raw": 104969,
+      "gz": 23882,
+      "files": 1
+    },
+    "ganttDiagram": {
+      "raw": 76370,
+      "gz": 17005,
+      "files": 1
+    },
+    "xychartDiagram": {
+      "raw": 74917,
+      "gz": 14387,
+      "files": 1
+    },
+    "gitGraphDiagram": {
+      "raw": 72714,
+      "gz": 13658,
+      "files": 1
+    },
+    "diagram": {
+      "raw": 46550,
+      "gz": 12582,
+      "files": 4
+    },
+    "quadrantDiagram": {
+      "raw": 62583,
+      "gz": 12488,
+      "files": 1
+    },
+    "requirementDiagram": {
+      "raw": 54436,
+      "gz": 12280,
+      "files": 1
+    },
+    "erDiagram": {
+      "raw": 50466,
+      "gz": 12072,
+      "files": 1
+    },
+    "journeyDiagram": {
+      "raw": 46106,
+      "gz": 11286,
+      "files": 1
+    },
+    "vennDiagram": {
+      "raw": 42924,
+      "gz": 10413,
+      "files": 1
+    },
+    "architectureDiagram": {
+      "raw": 45743,
+      "gz": 10188,
+      "files": 1
+    },
+    "ishikawaDiagram": {
+      "raw": 35808,
+      "gz": 9390,
+      "files": 1
+    },
+    "wardleyDiagram": {
+      "raw": 43179,
+      "gz": 8379,
+      "files": 1
+    },
+    "sankeyDiagram": {
+      "raw": 27770,
+      "gz": 7324,
+      "files": 1
+    },
+    "dagre": {
+      "raw": 22310,
+      "gz": 5223,
+      "files": 1
+    },
+    "stateDiagram": {
+      "raw": 19560,
+      "gz": 4880,
+      "files": 1
+    },
+    "pieDiagram": {
+      "raw": 7886,
+      "gz": 2484,
+      "files": 1
+    },
+    "infoDiagram": {
+      "raw": 1166,
+      "gz": 571,
+      "files": 1
+    },
+    "classDiagram": {
+      "raw": 974,
+      "gz": 434,
+      "files": 1
+    }
+  },
+  "firstRenderEstimate": {
+    "note": "entry + sharedRuntime + one diagram chunk (flowchart if present, else avg)",
+    "gzBytes": 201559
+  },
+  "fullPackageAllChunksGz": 466570
+}
