@@ -325,7 +325,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				if (msg.typewriter !== undefined) this.writeToggle(VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY, msg.typewriter);
 				return;
 			case 'themeRequest':
-				this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme() });
+				this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme(), isDark: this.readIsDark() });
 				return;
 			case 'outlineChanged':
 				input.updateOutlineData({ headings: msg.headings, activeId: msg.activeId });
@@ -370,7 +370,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			markdown,
 		});
 		this.post(input, { type: 'dirtyChanged', dirty: input.workingCopy.isDirty() });
-		this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme() });
+		this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme(), isDark: this.readIsDark() });
 	}
 
 	private async onExternalChange(input: MilkdownEditorInput, changeType: FileChangeType): Promise<void> {
@@ -457,9 +457,16 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 
 	private broadcastTheme(): void {
 		const theme = this.readEffectiveTheme();
+		const isDark = this.readIsDark();
 		for (const input of this.liveInputs) {
-			this.post(input, { type: 'themeChanged', theme });
+			this.post(input, { type: 'themeChanged', theme, isDark });
 		}
+	}
+
+	/** T-3.5b.2: 从 workbench color theme 抽取暗色标记，用于 mermaid 主题联动。 */
+	private readIsDark(): boolean {
+		const kind = this.themeService.getColorTheme().type;
+		return kind === ColorScheme.DARK || kind === ColorScheme.HIGH_CONTRAST_DARK;
 	}
 
 	private readImageStrategy(): VswordImageStorageStrategy {

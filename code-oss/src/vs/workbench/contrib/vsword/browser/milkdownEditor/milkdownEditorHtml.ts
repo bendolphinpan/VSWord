@@ -957,6 +957,79 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-md-shell[data-mode="reading"] .vsword-math-block,
 		.vsword-md-shell[data-mode="reading"] .vsword-math-inline { cursor: default; box-shadow: none; }
 
+		/* T-3.5b.2 · mermaid NodeView */
+		.vsword-mermaid {
+			display: block;
+			margin: 6px 0;
+			padding: 8px 10px;
+			border-radius: 4px;
+			background: var(--vscode-editor-background, transparent);
+			position: relative;
+		}
+		.vsword-mermaid:hover:not(.is-editing) { background: var(--vscode-editor-hoverHighlightBackground, rgba(120,120,120,0.06)); }
+		.vsword-mermaid.is-editing { background: var(--vscode-editor-background, transparent); box-shadow: 0 0 0 1px var(--vscode-focusBorder, #007acc); }
+		.vsword-mermaid.has-error:not(.is-editing) { box-shadow: 0 0 0 1px #cc0000; }
+		.vsword-mermaid.is-selected { outline: 2px solid var(--vscode-focusBorder, #007acc); outline-offset: 2px; }
+		.vsword-mermaid-preview {
+			display: block;
+			overflow-x: auto;
+			text-align: center;
+			cursor: pointer;
+		}
+		.vsword-mermaid-preview svg { max-width: 100%; height: auto; }
+		.vsword-mermaid-preview.is-stale { opacity: 0.55; }
+		.vsword-mermaid-skeleton {
+			display: inline-block;
+			padding: 24px 32px;
+			color: var(--vscode-descriptionForeground, #888);
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: 12px;
+			border: 1px dashed var(--vscode-panel-border, #444);
+			border-radius: 4px;
+		}
+		.vsword-mermaid-placeholder {
+			display: inline-block;
+			padding: 12px 20px;
+			color: var(--vscode-descriptionForeground, #888);
+			font-style: italic;
+			font-size: 12px;
+		}
+		.vsword-mermaid-error {
+			display: block;
+			padding: 4px 8px;
+			margin-bottom: 6px;
+			background: rgba(204,0,0,0.08);
+			color: #cc0000;
+			border-left: 3px solid #cc0000;
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: 11px;
+			white-space: pre-wrap;
+			word-break: break-word;
+		}
+		.vsword-mermaid-editor {
+			display: block;
+			margin-top: 6px;
+		}
+		.vsword-mermaid-source {
+			display: block;
+			width: 100%;
+			min-height: 60px;
+			padding: 6px 8px;
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: var(--vscode-editor-font-size, 13px);
+			color: var(--vscode-editor-foreground, #d4d4d4);
+			background: var(--vscode-input-background, #1e1e1e);
+			border: 1px solid var(--vscode-input-border, #3c3c3c);
+			border-radius: 3px;
+			resize: vertical;
+			outline: none;
+			box-sizing: border-box;
+		}
+		.vsword-mermaid-source:focus { border-color: var(--vscode-focusBorder, #007acc); }
+		.vsword-md-shell[data-mode="reading"] .vsword-mermaid-editor { display: none !important; }
+		.vsword-md-shell[data-mode="reading"] .vsword-mermaid { cursor: default; box-shadow: none; }
+		.vsword-md-shell[data-mode="reading"] .vsword-mermaid-preview { cursor: default; }
+
 		/* T-3.11.1 · wiki-link inline atoms */
 		.vsword-wikilink {
 			color: var(--vscode-textLink-foreground, #7267ef);

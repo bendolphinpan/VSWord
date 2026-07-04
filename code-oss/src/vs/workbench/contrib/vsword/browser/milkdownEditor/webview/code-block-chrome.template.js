@@ -61,6 +61,9 @@ import {
 	refractorLangIds,
 } from './code-block-helpers.mjs';
 
+// T-3.5b.2: mermaid NodeView 分派。
+import { createMermaidNodeView } from './mermaid-view.mjs';
+
 export { CODE_LANGS, labelForLang, normalizeLangKey, searchLangs, refractorLangIds };
 
 // Register the 27 refractor language modules. Refractor 5 exposes register()
@@ -200,6 +203,13 @@ function buildPickerPopover(doc, currentLang, onCommit) {
 
 function codeBlockNodeViewFactory(ctx) {
 	return (node, view, getPos) => {
+		// T-3.5b.2: mermaid code_block 走独立 NodeView。
+		// 注意：language 变更（mermaid ↔ 非 mermaid）在下方 update() 里返回 false，
+		// 交由 ProseMirror 重建 NodeView，从而重新走这里的分派。
+		if ((node.attrs.language || '') === 'mermaid') {
+			return createMermaidNodeView(node, view, getPos);
+		}
+
 		const doc = view.dom.ownerDocument;
 		const wrap = doc.createElement('div');
 		wrap.className = 'vsword-code-wrap';
@@ -292,6 +302,10 @@ function codeBlockNodeViewFactory(ctx) {
 			contentDOM: codeEl,
 			update(next) {
 				if (next.type.name !== 'code_block') return false;
+				// T-3.5b.2: language 从/到 mermaid 的切换 → 交回 PM 重建 NodeView。
+				const wasMermaid = (node.attrs.language || '') === 'mermaid';
+				const isMermaid = (next.attrs.language || '') === 'mermaid';
+				if (wasMermaid !== isMermaid) return false;
 				langBtn.textContent = labelForLang(next.attrs.language);
 				return true;
 			},

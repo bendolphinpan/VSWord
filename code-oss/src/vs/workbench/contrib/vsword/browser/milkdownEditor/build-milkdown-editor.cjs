@@ -42,6 +42,8 @@ const blockHandleMenuPath = path.join(srcDir, 'block-handle-menu.mjs');
 const blockHandleHelpersPath = path.join(srcDir, 'block-handle-helpers.mjs');
 const mathViewPath = path.join(srcDir, 'math-view.mjs');
 const mathViewHelpersPath = path.join(srcDir, 'math-view-helpers.mjs');
+const mermaidViewPath = path.join(srcDir, 'mermaid-view.mjs');
+const mermaidViewHelpersPath = path.join(srcDir, 'mermaid-view-helpers.mjs');
 const wikilinkPath = path.join(srcDir, 'wikilink.mjs');
 const wikilinkHelpersPath = path.join(srcDir, 'wikilink-helpers.mjs');
 const wikilinkAutocompletePath = path.join(srcDir, 'wikilink-autocomplete.mjs');
@@ -72,6 +74,10 @@ const packages = [
 	'unist-util-visit@5.1.0',
 	'@milkdown/transformer@7.21.2',
 	'@milkdown/prose@7.21.2',
+	// T-3.5b.2: mermaid runtime. spike 已验证 22/22 全绿。当前 esbuild bundle 未开
+	// splitting，`import('mermaid')` 会被内联进主 bundle（≈2-3MB），T-3.5b.2.b 遗留
+	// 做代码分割 + 独立 chunk 懒加载。
+	'mermaid@11.14.0',
 	'esbuild@0.27.0',
 	'jsdom@27.3.0',
 ];
@@ -128,6 +134,8 @@ fs.writeFileSync(blockHandleMenuPath, fs.readFileSync(path.join(webviewSrcDir, '
 fs.writeFileSync(blockHandleHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-helpers.template.js'), 'utf8'));
 fs.writeFileSync(mathViewPath, fs.readFileSync(path.join(webviewSrcDir, 'math-view.template.js'), 'utf8'));
 fs.writeFileSync(mathViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'math-view-helpers.template.js'), 'utf8'));
+fs.writeFileSync(mermaidViewPath, fs.readFileSync(path.join(webviewSrcDir, 'mermaid-view.template.js'), 'utf8'));
+fs.writeFileSync(mermaidViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'mermaid-view-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkAutocompletePath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-autocomplete.template.js'), 'utf8'));

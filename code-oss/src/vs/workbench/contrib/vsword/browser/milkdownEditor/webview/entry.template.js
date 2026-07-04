@@ -40,6 +40,7 @@ import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
 import { mathViewPlugins, configureMathKatex } from './math-view.mjs';
+import { broadcastMermaidTheme } from './mermaid-view.mjs';
 import { wikilinkPlugins, configureWikilinkHost, ingestResolutions, invalidateWikilinkCache } from './wikilink.mjs';
 import {
 	wikilinkAutocompletePlugins,
@@ -450,6 +451,15 @@ window.addEventListener('message', event => {
 		} else {
 			document.body.setAttribute('data-theme', theme);
 		}
+		// T-3.5b.2: 转发 isDark 给 mermaid-view，触发所有活着的 mermaid 图表 re-render。
+		// 兼容旧版 host（缺 isDark 字段）：从 data-theme 名字 fallback 判断。
+		let isDark;
+		if (typeof msg.isDark === 'boolean') {
+			isDark = msg.isDark;
+		} else {
+			isDark = theme === 'night';
+		}
+		try { broadcastMermaidTheme(isDark); } catch (err) { reportError('mermaid-theme', err); }
 		return;
 	}
 	if (msg.type === 'hostError') {

@@ -234,6 +234,8 @@ export interface HostPreferenceResponseMessage {
 export interface HostThemeChangedMessage {
 	readonly type: 'themeChanged';
 	readonly theme: string;
+	/** T-3.5b.2: workbench 当前色阶是否为暗色，webview 侧 mermaid 主题联动依赖此字段。 */
+	readonly isDark?: boolean;
 }
 
 /** T-3.4: host asks the webview to move the cursor to a ProseMirror doc position. */
