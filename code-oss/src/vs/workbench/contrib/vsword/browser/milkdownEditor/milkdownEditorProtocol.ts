@@ -22,6 +22,12 @@ export interface WebviewReadyMessage {
 export interface WebviewMarkdownUpdatedMessage {
 	readonly type: 'markdownUpdated';
 	readonly markdown: string;
+	/** T-3.8.1: blockId 集合（session 内稳定 id），未附则视为整篇 dirty。 */
+	readonly dirtyBlocks?: readonly string[];
+	/** T-3.8.1: 已 dirty 块对应的最新 markdown 片段。Qd1=a webview 上报。 */
+	readonly dirtyBlockContents?: Readonly<Record<string, string>>;
+	/** T-3.8.1: sessionEpoch —— 每次 load / sessionReady 后自增，host 用于识别落后的消息。 */
+	readonly sessionEpoch?: number;
 }
 
 export interface WebviewSaveRequestMessage {
@@ -127,6 +133,36 @@ export interface WebviewOpenWikilinkPathMessage {
 	readonly newSplit: boolean;
 }
 
+// ---------------------------------------------------------------------------
+// T-3.8.1 · Round-trip 保真度 —— webview → host
+// ---------------------------------------------------------------------------
+
+/** T-3.8.1: 一段原文区间。UTF-16 code unit 半开区间 [from, to)，与 remark position.offset 对齐。 */
+export type VswordSrcRange = readonly [from: number, to: number];
+
+/** T-3.8.1: session 内稳定的 block 标识（'b_' + 8 位 base36，冲突时加 '_N' 后缀）。 */
+export type VswordBlockId = string;
+
+/**
+ * T-3.8.1: webview 首次 parse 完成后，把 range-map 交给 host。host 缓存 sourceText / ranges /
+ * interstitial 供后续增量拼接。session 一旦落地即为不可变（sessionEpoch 递增才更新）。
+ */
+export interface WebviewSessionReadyMessage {
+	readonly type: 'sessionReady';
+	readonly epoch: number;
+	readonly blockOrder: readonly VswordBlockId[];
+	/** blockId → [from, to)，UTF-16 code unit 偏移，与 sourceText 对齐。 */
+	readonly blockRanges: Readonly<Record<VswordBlockId, VswordSrcRange>>;
+	/** blockOrder.length + 1 段；覆盖首、每对相邻块之间、尾的原样区。 */
+	readonly interstitial: readonly VswordSrcRange[];
+	/** 所有 blockRanges 字符数之和 / sourceText.length。 */
+	readonly coverage: number;
+	readonly hasBOM: boolean;
+	readonly newlineStyle: 'LF' | 'CRLF' | 'CR' | 'mixed' | 'none';
+	/** coverage 达阈值且结构自洽 —— 可走增量 save；false 时 host 必须走全文 remark 降级。 */
+	readonly safe: boolean;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -143,7 +179,8 @@ export type WebviewToHostMessage =
 	| WebviewWikilinkResolveRequestMessage
 	| WebviewWikilinkIndexRequestMessage
 	| WebviewWikilinkPreviewRequestMessage
-	| WebviewWikilinkBacklinksRequestMessage;
+	| WebviewWikilinkBacklinksRequestMessage
+	| WebviewSessionReadyMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -276,6 +313,26 @@ export interface HostWikilinkBacklinksResponseMessage {
 	}[];
 }
 
+// ---------------------------------------------------------------------------
+// T-3.8.1 · Round-trip 保真度 —— host → webview
+// ---------------------------------------------------------------------------
+
+/**
+ * T-3.8.1 · Qa2=c: 整篇「Format Document」命令。webview 拿到后执行等价 `parse → stringify`
+ * 全量替换，回写整篇。触发路径：主机侧命令面板 / 快捷键。
+ */
+export interface HostFormatDocumentMessage {
+	readonly type: 'formatDocument';
+}
+
+/**
+ * T-3.8.1 · Qa2=c + Qd3=a: 选区「Format Selection」命令。webview 侧按当前选区找出
+ * 严格 block 对齐的块集合，只格式化这些块；选区未跨完整块时该命令 no-op。
+ */
+export interface HostFormatSelectionMessage {
+	readonly type: 'formatSelection';
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -291,7 +348,9 @@ export type HostToWebviewMessage =
 	| HostWorkspaceIndexChangedMessage
 	| HostWikilinkIndexResponseMessage
 	| HostWikilinkPreviewResponseMessage
-	| HostWikilinkBacklinksResponseMessage;
+	| HostWikilinkBacklinksResponseMessage
+	| HostFormatDocumentMessage
+	| HostFormatSelectionMessage;
 
 // ---------------------------------------------------------------------------
 // Constants
