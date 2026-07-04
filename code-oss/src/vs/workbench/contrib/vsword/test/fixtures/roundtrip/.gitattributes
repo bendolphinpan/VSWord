@@ -1,0 +1,5 @@
+# Roundtrip fixtures are byte-exact test inputs.
+# Freeze all bytes: no eol conversion, no whitespace stripping, no filter mangling.
+# BOM/CRLF/LF/CR patterns encoded in filenames must survive checkout unchanged.
+* -text
+* binary
