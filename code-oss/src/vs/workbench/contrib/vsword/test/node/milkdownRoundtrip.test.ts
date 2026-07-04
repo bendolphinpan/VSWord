@@ -21,6 +21,7 @@
 // 把 fixtures 按 isSafe() 分区，safe 走 A/B 路径，unsafe 走 C 路径。
 
 import * as assert from 'assert';
+import * as cp from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as url from 'node:url';
@@ -671,6 +672,15 @@ suite('VSWord Roundtrip · Qqa1 blockId session 内稳定 / 跨 session 重分�
 
 // ---------------------------------------------------------------------------
 // Qqa3 · perf p95 采样（写 test/reports/roundtrip-perf.jsonl）
+//
+// 三分支保存路径各测一轮 open→save→reopen，追加一行 JSONL：
+//   { ts, commit, path: '200kb-mixed.md', branch: 'A'|'B'|'C', ms, bytes, samples }
+//
+// path=A：空 dirty + openedBytes → 直接返回 openedBytes（byte-for-byte）
+// path=B：全 blocks dirty + contents 覆盖齐 → assembleIncremental
+// path=C：forcePath=C → 走 encodeUtf8(整篇 sourceText) 兜底
+//
+// 一轮 = buildSession + pickSavePath + save 实际字节流 + 重新 buildSession（reopen）。
 // ---------------------------------------------------------------------------
 
 function findReportsDir(): string | null {
@@ -685,7 +695,68 @@ function findReportsDir(): string | null {
 	return null;
 }
 
+function currentCommit(): string {
+	try {
+		const r = cp.spawnSync('git', ['rev-parse', '--short', 'HEAD'], {
+			encoding: 'utf8', cwd: process.cwd(), timeout: 3000,
+		});
+		if (r.status === 0 && r.stdout) { return r.stdout.trim(); }
+	} catch { /* ignore */ }
+	return 'unknown';
+}
+
+function appendPerfLine(row: Record<string, unknown>): void {
+	try {
+		const target = findReportsDir();
+		if (!target) { return; }
+		fs.mkdirSync(target, { recursive: true });
+		fs.appendFileSync(path.join(target, 'roundtrip-perf.jsonl'), JSON.stringify(row) + '\n');
+	} catch { /* non-fatal */ }
+}
+
+/**
+ * 单轮 open→save→reopen 计时。返回本轮总耗时（毫秒）。
+ */
+function measureOneRound(f: Fixture, branch: 'A' | 'B' | 'C', epoch: number): number {
+	const t0 = Date.now();
+	// open —— 从磁盘字节到 session
+	const openedBytes = new Uint8Array(f.bytes);
+	const { session } = buildFor(f.text, epoch);
+	void session.coverage; void session.isSafe();
+
+	// save —— 三分支各自的字节产物
+	if (branch === 'A') {
+		const p = pickSavePath({
+			session, dirtyBlockIds: [], dirtyBlockContents: {}, openedBytes,
+		});
+		assert.strictEqual(p, 'A');
+		// path A：直接使用 openedBytes（模拟磁盘原样回写），无需额外拷贝
+		void openedBytes.byteLength;
+	} else if (branch === 'B') {
+		const ids = [...session.blockOrder];
+		const contents: Record<string, string> = {};
+		for (const id of ids) { contents[id] = 'x'; }
+		const p = pickSavePath({
+			session, dirtyBlockIds: ids, dirtyBlockContents: contents, openedBytes,
+		});
+		assert.strictEqual(p, 'B');
+		assembleIncremental(session, contents);
+	} else {
+		const p = pickSavePath({
+			session, dirtyBlockIds: [], dirtyBlockContents: {}, openedBytes, forcePath: 'C',
+		});
+		assert.strictEqual(p, 'C');
+		encodeUtf8(f.text);
+	}
+
+	// reopen —— 重新构 session（新 epoch 模拟重开）
+	const reopened = buildFor(f.text, epoch + 1);
+	void reopened.session.blockOrder.length;
+	return Date.now() - t0;
+}
+
 suite('VSWord Roundtrip · Qqa3 perf 采样', () => {
+	// 保留历史 case（session build 单点 p95 < 500ms），下游脚本已依赖此断言点。
 	test('perf/200kb-mixed.md session build p95 < 500ms + 写 jsonl', () => {
 		const f = FIXTURES.find(x => x.name === '200kb-mixed.md')!;
 		assert.ok(f, 'perf fixture 存在');
@@ -700,22 +771,42 @@ suite('VSWord Roundtrip · Qqa3 perf 采样', () => {
 		}
 		samples.sort((a, b) => a - b);
 		const p95 = samples[Math.min(samples.length - 1, Math.floor(samples.length * 0.95))];
-		try {
-			const target = findReportsDir();
-			if (target) {
-				fs.mkdirSync(target, { recursive: true });
-				const line = JSON.stringify({
-					ts: new Date().toISOString(),
-					fixture: '200kb-mixed.md',
-					bytes: f.bytes.length,
-					ms: p95,
-					samples,
-				}) + '\n';
-				fs.appendFileSync(path.join(target, 'roundtrip-perf.jsonl'), line);
-			}
-		} catch (_e) { /* non-fatal */ }
+		appendPerfLine({
+			ts: new Date().toISOString(),
+			fixture: '200kb-mixed.md',
+			bytes: f.bytes.length,
+			ms: p95,
+			samples,
+		});
 		assert.ok(p95 < 500, `p95=${p95}ms should be under 500ms (samples=${JSON.stringify(samples)})`);
 	});
+
+	// Qqa3=b · 三分支 open→save→reopen 一轮耗时 → 追加 { ts, commit, path, branch, ms }
+	for (const branch of ['A', 'B', 'C'] as const) {
+		test(`perf/200kb-mixed.md branch=${branch} open→save→reopen 一轮耗时 + JSONL`, () => {
+			const f = FIXTURES.find(x => x.name === '200kb-mixed.md')!;
+			assert.ok(f, 'perf fixture 存在');
+			const commit = currentCommit();
+			const samples: number[] = [];
+			for (let i = 0; i < 3; i++) {
+				samples.push(measureOneRound(f, branch, (i + 1) * 100));
+			}
+			samples.sort((a, b) => a - b);
+			const median = samples[Math.floor(samples.length / 2)];
+			appendPerfLine({
+				ts: new Date().toISOString(),
+				commit,
+				path: '200kb-mixed.md',
+				branch,
+				bytes: f.bytes.length,
+				ms: median,
+				samples,
+			});
+			// 阈值放宽 —— 三分支各自完成一整轮 open+save+reopen，
+			// path B 要额外跑 assembleIncremental，允许 <1500ms。
+			assert.ok(median < 1500, `branch ${branch} median=${median}ms should be under 1500ms (samples=${JSON.stringify(samples)})`);
+		});
+	}
 });
 
 // ---------------------------------------------------------------------------

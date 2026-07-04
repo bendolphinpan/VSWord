@@ -4,6 +4,7 @@ npm-debug.log
 Thumbs.db
 node_modules/
 .tmp/
+.tmp-vsword-*/
 .build/
 .vscode/extensions/**/out/
 extensions/**/dist/

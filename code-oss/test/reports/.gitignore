@@ -1,0 +1,7 @@
+# T-3.8.4 Round-trip Gate E 中间产物 gitignore
+#
+# roundtrip-perf.jsonl 入库（作为 CI baseline 参考数据）
+# gate-e-*.md / selfcheck-*.md 不入库（每次跑都变化，只保留最新在本地）
+
+gate-e-*.md
+selfcheck-*.md
