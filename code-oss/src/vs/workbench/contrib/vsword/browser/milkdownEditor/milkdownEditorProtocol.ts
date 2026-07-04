@@ -372,3 +372,7 @@ export const VSWORD_MILKDOWN_MODE_STORAGE_KEY = 'vsword.milkdown.lastMode';
 /** T-3.10: focus / typewriter toggle preferences (APPLICATION scope, boolean-as-'on'|'off'). */
 export const VSWORD_MILKDOWN_FOCUS_STORAGE_KEY = 'vsword.milkdown.focus';
 export const VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY = 'vsword.milkdown.typewriter';
+
+/** T-3.8.2 · Qa2=c: 两条 format 命令的 action id（命令面板 / 快捷键绑定用）。 */
+export const VSWORD_MILKDOWN_FORMAT_DOCUMENT_ACTION_ID = 'vsword.milkdown.formatDocument';
+export const VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID = 'vsword.milkdown.formatSelection';

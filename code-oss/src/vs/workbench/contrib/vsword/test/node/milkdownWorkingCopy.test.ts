@@ -220,4 +220,139 @@ suite('VSWord Milkdown WorkingCopy', () => {
 		assert.strictEqual(externalHits, 0, 'self-write should not surface as external change');
 		disposables.dispose();
 	});
+
+	// ---- T-3.8.2 · 三分支保存路径 -------------------------------------
+
+	/** 构造一个 safe session payload —— 与 roundtripSerializer.test 中的 fixture 同形。 */
+	function safeSessionPayload(epoch = 1) {
+		return {
+			type: 'sessionReady' as const,
+			epoch,
+			blockOrder: ['b1', 'b2'] as const,
+			blockRanges: {
+				b1: [0, 10] as [number, number],
+				b2: [11, 21] as [number, number],
+			},
+			interstitial: [
+				[0, 0] as [number, number],
+				[10, 11] as [number, number],
+				[21, 21] as [number, number],
+			],
+			coverage: 20 / 21,
+			hasBOM: false,
+			newlineStyle: 'LF' as const,
+			safe: true,
+		};
+	}
+	const SAFE_SOURCE = 'AAAAAAAAAA\nBBBBBBBBBB';
+
+	test('T-3.8.2 · load 缓存 _openedBytes 与磁盘字节对齐', async () => {
+		const { copy, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		const bytes = copy._testOpenedBytes;
+		assert.ok(bytes, '_openedBytes 应被填充');
+		assert.strictEqual(bytes!.length, SAFE_SOURCE.length);
+		assert.strictEqual(new TextDecoder('utf-8').decode(bytes!), SAFE_SOURCE);
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · 分支 A · dirty=[] + force save → 原字节回写', async () => {
+		const { copy, fs, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		copy.updateSession(safeSessionPayload());
+		// dirty=[] & contents={} —— pickSavePath 会选 A
+		copy.updateContent(SAFE_SOURCE, [], {});
+		// updateContent 因 markdown === _saved 保持 dirty=false，需要 force
+		const ok = await copy.save({ force: true });
+		assert.strictEqual(ok, true);
+		assert.strictEqual(fs.writeCalls.length, 1);
+		assert.strictEqual(fs.writeCalls[0].contents, SAFE_SOURCE);
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · 分支 B · 单块 dirty + contents 齐 → 增量拼装', async () => {
+		const { copy, fs, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		copy.updateSession(safeSessionPayload());
+		// b1 换成 "CCCC"；结果应等于 "CCCC" + "\n" + "BBBBBBBBBB"
+		copy.updateContent('CCCC\nBBBBBBBBBB', ['b1'], { b1: 'CCCC' });
+		const ok = await copy.save({ reason: SaveReason.EXPLICIT });
+		assert.strictEqual(ok, true);
+		assert.strictEqual(fs.writeCalls.length, 1);
+		assert.strictEqual(fs.writeCalls[0].contents, 'CCCC\nBBBBBBBBBB');
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · 分支 C · session 缺失 → 全文回写 _current', async () => {
+		const { copy, fs, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		// 不调 updateSession；session=null → C 分支
+		copy.updateContent('# rewritten by webview\n');
+		const ok = await copy.save({ reason: SaveReason.EXPLICIT });
+		assert.strictEqual(ok, true);
+		assert.strictEqual(fs.writeCalls.length, 1);
+		assert.strictEqual(fs.writeCalls[0].contents, '# rewritten by webview\n');
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · 分支 C · dirty 有 id 不在 session → 降级', async () => {
+		const { copy, fs, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		copy.updateSession(safeSessionPayload());
+		// 'phantom' 不在 session.blockOrder → pickSavePath 降级到 C
+		copy.updateContent('unknown reshape', ['b1', 'phantom'], { b1: 'x', phantom: 'y' });
+		const ok = await copy.save({ reason: SaveReason.EXPLICIT });
+		assert.strictEqual(ok, true);
+		assert.strictEqual(fs.writeCalls.length, 1);
+		assert.strictEqual(fs.writeCalls[0].contents, 'unknown reshape');
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · setPendingFormatPath(document) → 强制 C 分支', async () => {
+		const { copy, fs, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		copy.updateSession(safeSessionPayload());
+		// dirty 与 contents 齐，本来应走 B；但 forcePath='C' 会强制降级
+		copy.updateContent('CCCC\nBBBBBBBBBB', ['b1'], { b1: 'CCCC' });
+		copy.setPendingFormatPath('document');
+		assert.strictEqual(copy._testPendingForcePath, 'C');
+		const ok = await copy.save({ reason: SaveReason.EXPLICIT });
+		assert.strictEqual(ok, true);
+		// 走 C —— 写的是 _current，也就是 updateContent 传入的整篇
+		assert.strictEqual(fs.writeCalls[0].contents, 'CCCC\nBBBBBBBBBB');
+		// pendingForcePath 一次性消费
+		assert.strictEqual(copy._testPendingForcePath, null);
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · save 成功后清空 dirtyBlocks & session（B/C 分支）', async () => {
+		const { copy, disposables } = make(SAFE_SOURCE);
+		await copy.load();
+		copy.updateSession(safeSessionPayload());
+		copy.updateContent('CCCC\nBBBBBBBBBB', ['b1'], { b1: 'CCCC' });
+		await copy.save({ reason: SaveReason.EXPLICIT });
+		// B 分支：session 清空（等下次 sessionReady）
+		assert.strictEqual(copy._testSession, null);
+		// _openedBytes 刷新为新写入的字节
+		const bytes = copy._testOpenedBytes;
+		assert.ok(bytes);
+		assert.strictEqual(new TextDecoder('utf-8').decode(bytes!), 'CCCC\nBBBBBBBBBB');
+		disposables.dispose();
+	});
+
+	test('T-3.8.2 · load 重置 _openedBytes/_session/pendingForcePath', async () => {
+		const { copy, disposables, fs, resource } = make(SAFE_SOURCE);
+		await copy.load();
+		copy.updateSession(safeSessionPayload());
+		copy.setPendingFormatPath('document');
+		assert.ok(copy._testSession);
+		assert.strictEqual(copy._testPendingForcePath, 'C');
+
+		fs.files.set(resource.toString(), 'RELOADED\n');
+		await copy.load('externalChange');
+		assert.strictEqual(copy._testSession, null);
+		assert.strictEqual(copy._testPendingForcePath, null);
+		assert.strictEqual(new TextDecoder('utf-8').decode(copy._testOpenedBytes!), 'RELOADED\n');
+		disposables.dispose();
+	});
 });

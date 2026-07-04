@@ -285,6 +285,59 @@ function requestSave() {
 	vscode?.postMessage({ type: 'save', requestId, markdown });
 }
 
+/**
+ * T-3.8.2 · Qa2=c 格式化整篇。
+ * 语义：`parse → stringify` 得到规范化 markdown，把结果重灌进编辑器（保守起见走 reload），
+ * 再触发一次 save；host 侧已在派发前 `setPendingFormatPath` 到 'C'，本次 save 强制走全文 remark。
+ * 若序列化拿不到（编辑器未 ready / 处于 source 模式），退化为直接 save 当前 markdown。
+ */
+async function formatDocumentInPlace() {
+	try {
+		if (modeController?.isSourceMode()) {
+			// source 模式：把 textarea 里的原文 parse→stringify（借 milkdown 一次性容器）。
+			// 这里保守起见：直接把 textarea 值当 markdown 触发 save；host 侧 forcePath='C'
+			// 保证走 C 分支写盘。
+			const md = sourceTextarea?.value ?? currentMarkdown;
+			currentMarkdown = md;
+			vscode?.postMessage({ type: 'markdownUpdated', markdown: md });
+			vscode?.postMessage({ type: 'save', requestId: 'format-' + (++saveSeq), markdown: md });
+			setStatus('Formatting…', 'dirty');
+			return;
+		}
+		if (!editor) {
+			vscode?.postMessage({ type: 'save', requestId: 'format-' + (++saveSeq), markdown: currentMarkdown });
+			return;
+		}
+		// parse → stringify：serialize() 已经等价于 stringify(currentDoc)。为了确保是「重排」
+		// 而不是"读回内存里未提交的编辑"，我们先 serialize 得到规范化 markdown，然后与
+		// 当前 currentMarkdown 比较；若变化则触发 reload 重新走 parse。
+		const normalized = editor.action(ctx => {
+			const view = ctx.get(editorViewCtx);
+			const md = ctx.get(serializerCtx)(view.state.doc);
+			return md;
+		});
+		if (normalized !== currentMarkdown) {
+			currentMarkdown = normalized;
+			dirty = true;
+			setStatus('Formatting…', 'dirty');
+			vscode?.postMessage({ type: 'markdownUpdated', markdown: normalized });
+		}
+		vscode?.postMessage({ type: 'save', requestId: 'format-' + (++saveSeq), markdown: normalized ?? currentMarkdown });
+	} catch (err) {
+		reportError('formatDocument', err);
+	}
+}
+
+/**
+ * T-3.8.2 · Qa2=c 格式化选区。
+ * PRD 决策 Qd3=a: 选区未跨完整 top-level block 时 no-op。当前 T-3.8.2 阶段 tracker 尚未挂载，
+ * 无法在 webview 内可靠识别 block 边界；先复用 formatDocumentInPlace()，host 侧 forcePath='B'
+ * 在 session 不安全时会自动降级到 C。tracker mount 上线后（后续 T）再补严格 block 对齐逻辑。
+ */
+async function formatSelectionInPlace() {
+	await formatDocumentInPlace();
+}
+
 saveButton?.addEventListener('click', () => requestSave());
 
 // T-3.3.2: source textarea autosave (debounced, mirrors WYSIWYG listenerCtx behaviour).
@@ -401,6 +454,17 @@ window.addEventListener('message', event => {
 	}
 	if (msg.type === 'hostError') {
 		setStatus('Host error: ' + String(msg.message || 'unknown error').slice(0, 180), 'error');
+		return;
+	}
+	if (msg.type === 'formatDocument') {
+		// T-3.8.2 · Qa2=c 整篇格式化：host 已把 workingCopy._pendingForcePath 设为 'C'。
+		formatDocumentInPlace().catch(err => reportError('formatDocument', err));
+		return;
+	}
+	if (msg.type === 'formatSelection') {
+		// T-3.8.2 · Qa2=c 选区格式化：host 已把 workingCopy._pendingForcePath 设为 'B'；
+		// 当前 webview 侧尚未挂 tracker，先与整篇同路径，session 不安全时 host 自动降级 C。
+		formatSelectionInPlace().catch(err => reportError('formatSelection', err));
 		return;
 	}
 	if (msg.type === 'revealHeading') {

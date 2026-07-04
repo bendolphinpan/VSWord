@@ -8,11 +8,12 @@ import { VSBuffer } from '../../../../../base/common/buffer.js';
 import { FileAccess } from '../../../../../base/common/network.js';
 import { basename, dirname, joinPath } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
-import { localize } from '../../../../../nls.js';
+import { localize, localize2 } from '../../../../../nls.js';
+import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { IConfigurationService } from '../../../../../platform/configuration/common/configuration.js';
 import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.js';
 import { FileChangeType, IFileService, IFileStat } from '../../../../../platform/files/common/files.js';
-import { IInstantiationService } from '../../../../../platform/instantiation/common/instantiation.js';
+import { IInstantiationService, ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
@@ -36,6 +37,8 @@ import {
 	VSWORD_MILKDOWN_DEFAULT_MODE,
 	VSWORD_MILKDOWN_FOCUS_STORAGE_KEY,
 	VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY,
+	VSWORD_MILKDOWN_FORMAT_DOCUMENT_ACTION_ID,
+	VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID,
 	WikilinkResolveResult,
 	VSWORD_MILKDOWN_EDITOR_ID,
 	VSWORD_MILKDOWN_MODE_STORAGE_KEY,
@@ -160,6 +163,44 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				this.post(input, { type: 'workspaceIndexChanged' });
 			}
 		}));
+
+		// T-3.8.2 · Qa2=c: 两条 format 命令，命令面板可见（f1: true）。
+		// action.run() 走 accessor 找到当前 active editor 的 MilkdownEditorInput —— 只有当活跃
+		// 编辑器是 Milkdown 输入时才生效，否则静默 no-op（保持与 monaco 命令一致的语义）。
+		// eslint-disable-next-line @typescript-eslint/no-this-alias
+		const self = this;
+		this._register(registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: VSWORD_MILKDOWN_FORMAT_DOCUMENT_ACTION_ID,
+					title: localize2('vsword.milkdown.formatDocument', 'VSWord Milkdown: Format Document'),
+					category: localize2('vsword', 'VSWord'),
+					f1: true,
+				});
+			}
+			async run(accessor: ServicesAccessor): Promise<void> {
+				const editorSvc = accessor.get(IEditorService);
+				const active = editorSvc.activeEditor;
+				if (!(active instanceof MilkdownEditorInput)) { return; }
+				self.triggerFormat(active, 'document');
+			}
+		}));
+		this._register(registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID,
+					title: localize2('vsword.milkdown.formatSelection', 'VSWord Milkdown: Format Selection'),
+					category: localize2('vsword', 'VSWord'),
+					f1: true,
+				});
+			}
+			async run(accessor: ServicesAccessor): Promise<void> {
+				const editorSvc = accessor.get(IEditorService);
+				const active = editorSvc.activeEditor;
+				if (!(active instanceof MilkdownEditorInput)) { return; }
+				self.triggerFormat(active, 'selection');
+			}
+		}));
 	}
 
 	// ---- T-3.11.1 wiki-link file index -------------------------------------
@@ -246,7 +287,15 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				await this.postInit(input);
 				return;
 			case 'markdownUpdated':
-				input.workingCopy.updateContent(msg.markdown);
+				input.workingCopy.updateContent(
+					msg.markdown,
+					// undefined = 旧路径整篇 dirty；数组 = tracker 报告；null 上游协议里不出现。
+					msg.dirtyBlocks,
+					msg.dirtyBlockContents,
+				);
+				return;
+			case 'sessionReady':
+				input.workingCopy.updateSession(msg);
 				return;
 			case 'save': {
 				const ok = await input.workingCopy.save({ reason: SaveReason.EXPLICIT });
@@ -493,6 +542,21 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		} catch {
 			// Webview was disposed underneath us; swallow.
 		}
+	}
+
+	/**
+	 * T-3.8.2 · Qa2=c: 触发 format 命令的完整链路。
+	 *   1) 在 workingCopy 上打 pendingForcePath 标记（'C' 或 'B'），保证下一次 save 走对应分支；
+	 *   2) 向 webview 发 formatDocument / formatSelection 消息，让 webview 侧执行等价
+	 *      parse→stringify（或严格 block 对齐的选区 stringify），并在结束后回一次 markdownUpdated
+	 *      + 显式 save 请求。
+	 * 若 webview 侧未回 save 请求，pendingForcePath 会在下一次任意 save 消耗；forcePath=null 兜底。
+	 */
+	private triggerFormat(input: MilkdownEditorInput, scope: 'document' | 'selection'): void {
+		input.workingCopy.setPendingFormatPath(scope);
+		this.post(input, {
+			type: scope === 'document' ? 'formatDocument' : 'formatSelection',
+		});
 	}
 
 	// ---- T-3.11.1 wiki-link handlers ---------------------------------------
