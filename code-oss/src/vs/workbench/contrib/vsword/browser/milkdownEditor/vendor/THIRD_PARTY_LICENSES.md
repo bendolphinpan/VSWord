@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-04T15:39:02.552Z
+Generated: 2026-07-05T05:20:38.023Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |

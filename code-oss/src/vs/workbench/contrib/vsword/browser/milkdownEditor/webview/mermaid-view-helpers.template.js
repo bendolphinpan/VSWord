@@ -84,3 +84,93 @@ export function normalizeMermaidSource(input) {
 	// 去掉纯末尾的 \n\n\n… 但保留最后一个换行（若有）。
 	return s.replace(/(\r?\n)+$/g, '');
 }
+
+// ---- T-3.5b.3 · 错误 UI 打磨 -------------------------------------------------
+
+/**
+ * 顶部红条 headline：单行 + 最多 maxLen 字符，超出补 `…`。
+ * 优先复用 extractMermaidError 的语义，进一步截断确保 banner 布局稳定。
+ */
+export function formatErrorHeadline(err, maxLen = 80) {
+	const raw = extractMermaidError(err) || 'Mermaid 渲染失败';
+	// 只留第一行（防换行撑爆红条）
+	const oneLine = raw.split('\n')[0].trim();
+	if (oneLine.length <= maxLen) return oneLine;
+	return oneLine.slice(0, Math.max(1, maxLen - 1)) + '…';
+}
+
+/**
+ * 从 mermaid 错误里尽量解析 1-based 行号。返回 number 或 null。
+ *
+ * 兼容两条路径：
+ *   1. err.hash.line —— mermaid v11 parse 抛的机器可读错误对象，line 是 0-based，+1 即人类行号
+ *   2. err.message 里带 "Parse error on line N" / "line N:" / "line N," 等文本
+ *
+ * 解析失败或非正整数 → null。
+ */
+export function parseErrorLineNumber(err) {
+	if (!err || typeof err !== 'object') return null;
+	const hash = /** @type {any} */ (err).hash;
+	if (hash && typeof hash.line === 'number' && Number.isFinite(hash.line) && hash.line >= 0) {
+		return hash.line + 1;
+	}
+	const msg = String(/** @type {any} */ (err).message || '');
+	// 覆盖 "Parse error on line 4:" / "on line 4," / "line 4 " 等常见 mermaid/jison 输出
+	const m = msg.match(/(?:on\s+)?line\s+(\d+)/i);
+	if (m) {
+		const n = Number(m[1]);
+		if (Number.isFinite(n) && n > 0) return n;
+	}
+	return null;
+}
+
+/**
+ * 详情面板文本：多行、给复制/查看用。包含：
+ *   • extractMermaidError（人话摘要）
+ *   • err.hash（若为对象，JSON.stringify 缩进 2）
+ *   • err.stack（若有）
+ * 空/异常输入 → 空字符串。
+ */
+export function formatErrorStack(err) {
+	if (err == null) return '';
+	const parts = [];
+	const head = extractMermaidError(err);
+	if (head) parts.push(head);
+	if (typeof err === 'object') {
+		const hash = /** @type {any} */ (err).hash;
+		if (hash && typeof hash === 'object') {
+			try {
+				parts.push('hash: ' + JSON.stringify(hash, null, 2));
+			} catch { /* 循环引用等，忽略 */ }
+		}
+		const stack = /** @type {any} */ (err).stack;
+		if (typeof stack === 'string' && stack.trim()) {
+			parts.push(stack.trim());
+		} else {
+			const msg = String(/** @type {any} */ (err).message || '');
+			if (msg && !parts.some(p => p.includes(msg))) parts.push(msg);
+		}
+	} else {
+		parts.push(String(err));
+	}
+	return parts.join('\n\n').trim();
+}
+
+/**
+ * 定位光标到 textarea 里指定 1-based 行首。
+ * 纯函数：返回下一次应赋给 selectionStart/selectionEnd 的 offset。
+ * 越界或非正整数行号 → 0（首行首列）。
+ */
+export function offsetOfLine(source, line) {
+	const src = String(source ?? '');
+	if (!Number.isFinite(line) || line <= 1) return 0;
+	let off = 0;
+	let currentLine = 1;
+	while (currentLine < line && off < src.length) {
+		const nl = src.indexOf('\n', off);
+		if (nl < 0) return src.length; // 行号越界 → 末尾
+		off = nl + 1;
+		currentLine++;
+	}
+	return off;
+}

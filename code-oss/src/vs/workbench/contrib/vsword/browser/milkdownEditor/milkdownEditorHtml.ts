@@ -979,13 +979,18 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-mermaid-preview svg { max-width: 100%; height: auto; }
 		.vsword-mermaid-preview.is-stale { opacity: 0.55; }
 		.vsword-mermaid-skeleton {
-			display: inline-block;
+			display: block;
 			padding: 24px 32px;
 			color: var(--vscode-descriptionForeground, #888);
 			font-family: var(--vscode-editor-font-family, monospace);
 			font-size: 12px;
 			border: 1px dashed var(--vscode-panel-border, #444);
 			border-radius: 4px;
+			text-align: center;
+			box-sizing: border-box;
+			width: 100%;
+			min-height: 80px;
+			line-height: 32px;
 		}
 		.vsword-mermaid-placeholder {
 			display: inline-block;
@@ -1003,8 +1008,62 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			border-left: 3px solid #cc0000;
 			font-family: var(--vscode-editor-font-family, monospace);
 			font-size: 11px;
+		}
+		.vsword-mermaid-error-head {
+			display: flex;
+			align-items: center;
+			gap: 8px;
+			min-height: 20px;
+		}
+		.vsword-mermaid-error-headline {
+			flex: 1 1 auto;
+			cursor: pointer;
+			user-select: none;
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			outline: none;
+		}
+		.vsword-mermaid-error-headline::before {
+			content: '\u25B6';
+			display: inline-block;
+			margin-right: 4px;
+			font-size: 8px;
+			transition: transform 0.12s;
+		}
+		.vsword-mermaid-error-headline[aria-expanded='true']::before { transform: rotate(90deg); }
+		.vsword-mermaid-error-headline:focus-visible { outline: 1px dashed #cc0000; outline-offset: 1px; }
+		.vsword-mermaid-error-tools {
+			display: inline-flex;
+			gap: 4px;
+			flex: 0 0 auto;
+		}
+		.vsword-mermaid-error-btn {
+			font: inherit;
+			color: inherit;
+			background: transparent;
+			border: 1px solid rgba(204,0,0,0.35);
+			border-radius: 3px;
+			padding: 1px 6px;
+			cursor: pointer;
+			line-height: 1.3;
+		}
+		.vsword-mermaid-error-btn:hover { background: rgba(204,0,0,0.12); }
+		.vsword-mermaid-error-btn.is-copied { color: #2a7f2a; border-color: rgba(42,127,42,0.5); }
+		.vsword-mermaid-error-btn.is-copy-failed { color: #cc0000; border-color: rgba(204,0,0,0.7); }
+		.vsword-mermaid-error-detail {
+			display: block;
+			margin: 6px 0 0;
+			padding: 6px 8px;
+			background: rgba(204,0,0,0.05);
+			color: var(--vscode-editor-foreground, #d4d4d4);
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: 11px;
 			white-space: pre-wrap;
 			word-break: break-word;
+			max-height: 240px;
+			overflow-y: auto;
+			border-radius: 2px;
 		}
 		.vsword-mermaid-editor {
 			display: block;
