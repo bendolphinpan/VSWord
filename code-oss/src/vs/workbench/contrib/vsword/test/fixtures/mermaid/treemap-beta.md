@@ -1,0 +1,6 @@
+```mermaid
+treemap-beta
+  "Root"
+    "A": 10
+    "B": 20
+```

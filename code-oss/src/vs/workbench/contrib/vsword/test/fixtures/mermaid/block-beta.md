@@ -1,0 +1,6 @@
+```mermaid
+block-beta
+  columns 3
+  a b c
+  d e f
+```

@@ -1,0 +1,6 @@
+```mermaid
+sankey-beta
+
+A,B,10
+A,C,5
+```
