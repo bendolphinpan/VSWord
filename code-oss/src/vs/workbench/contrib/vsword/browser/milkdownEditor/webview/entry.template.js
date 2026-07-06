@@ -72,6 +72,9 @@ import {
 	refreshBacklinks,
 	ingestBacklinks,
 } from './wikilink-backlinks.mjs';
+// T-3.5c.2: footnote 引用+定义+hover+跳转。
+import { footnotePlugins, configureFootnoteHost } from './footnote.mjs';
+import { configureFootnotePreview, _resetFootnotePreview } from './footnote-preview.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -226,6 +229,15 @@ async function createEditor(markdown) {
 					try { vscode.postMessage({ type: 'openWikilinkPath', path, newSplit }); } catch { /* ignore */ }
 				},
 			});
+			// T-3.5c.2: footnote host + hover-preview 桥接。数据源在本 doc，
+			// 不走 host RT；host 仅收 openFootnote click 用作 telemetry / future 扩展。
+			configureFootnoteHost(ctx, {
+				vscode,
+				getView: () => { try { return ctx.get(editorViewCtx); } catch { return null; } },
+			});
+			configureFootnotePreview({
+				getView: () => { try { return ctx.get(editorViewCtx); } catch { return null; } },
+			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
 				if (!initialized) return;
@@ -280,6 +292,7 @@ async function createEditor(markdown) {
 		.use(mathViewPlugins)
 		.use(wikilinkPlugins)
 		.use(wikilinkAutocompletePlugins)
+		.use(footnotePlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;

@@ -56,6 +56,10 @@ const subSupHelpersPath = path.join(srcDir, 'sub-sup-helpers.mjs');
 // T-3.5c.1: emoji shortcode 保源码。
 const emojiPath = path.join(srcDir, 'emoji.mjs');
 const emojiHelpersPath = path.join(srcDir, 'emoji-helpers.mjs');
+// T-3.5c.2: footnote 引用+定义+hover+跳转。
+const footnotePath = path.join(srcDir, 'footnote.mjs');
+const footnoteHelpersPath = path.join(srcDir, 'footnote-helpers.mjs');
+const footnotePreviewPath = path.join(srcDir, 'footnote-preview.mjs');
 // T-3.5c.5b: setext heading 保真。
 const setextHelpersPath = path.join(srcDir, 'setext-helpers.mjs');
 const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
@@ -159,6 +163,10 @@ fs.writeFileSync(subSupHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'su
 // T-3.5c.1: emoji shortcode 保源码。
 fs.writeFileSync(emojiPath, fs.readFileSync(path.join(webviewSrcDir, 'emoji.template.js'), 'utf8'));
 fs.writeFileSync(emojiHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'emoji-helpers.template.js'), 'utf8'));
+// T-3.5c.2: footnote 引用+定义+hover+跳转。
+fs.writeFileSync(footnotePath, fs.readFileSync(path.join(webviewSrcDir, 'footnote.template.js'), 'utf8'));
+fs.writeFileSync(footnoteHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'footnote-helpers.template.js'), 'utf8'));
+fs.writeFileSync(footnotePreviewPath, fs.readFileSync(path.join(webviewSrcDir, 'footnote-preview.template.js'), 'utf8'));
 // T-3.5c.5b: setext heading 保真。
 fs.writeFileSync(setextHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-helpers.template.js'), 'utf8'));
 fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-heading.template.js'), 'utf8'));
