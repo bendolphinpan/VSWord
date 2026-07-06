@@ -38,6 +38,16 @@ import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBrid
 import { imageResizePlugins } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
 import { codeBlockSchemaOverride } from './code-block-schema-override.mjs';
+// T-3.5c.5b: setext heading 保真后处理。
+import {
+	configureSetextHeading,
+	postProcessSetextHeadings,
+} from './setext-heading.mjs';
+// T-3.5c.5b: 用一个轻量 remark-parse 解析 source 给 setext-hints 抽取位置。
+// 不复用 editor 的 parser（避免引入 @milkdown 内部依赖），只跑出 mdast 节点
+// + 位置偏移。
+import { unified } from 'unified';
+import remarkParse from 'remark-parse';
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
@@ -139,7 +149,9 @@ function serialize() {
 		return modeController.getSourceValue();
 	}
 	if (!editor) return currentMarkdown;
-	return editor.action(ctx => ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc));
+	const raw = editor.action(ctx => ctx.get(serializerCtx)(ctx.get(editorViewCtx).state.doc));
+	// T-3.5c.5b: 把 ATX h1/h2 改写为 setext（与原文一致时）。后处理不可变。
+	return postProcessSetextHeadings(raw);
 }
 
 function reportError(prefix, err) {
@@ -155,6 +167,28 @@ async function createEditor(markdown) {
 	currentMarkdown = markdown;
 	dirty = false;
 	initialized = false;
+	// T-3.5c.5b: 在创建编辑器前先把原文里的 setext heading 抽成 hint 队列。
+	// 注意：必须**在 editor 加载 markdown 之前**做，避免丢失 sourceText 引用
+	// （编辑器内部不会保留原文，只保留 PM doc）。
+	try {
+		const mdast = unified().use(remarkParse).parse(markdown);
+		const blocks = [];
+		for (const node of (mdast && mdast.children) || []) {
+			const pos = node && node.position;
+			if (!pos || !pos.start || !pos.end) { blocks.push(null); continue; }
+			const from = pos.start.offset;
+			const to = pos.end.offset;
+			if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
+				blocks.push(null); continue;
+			}
+			blocks.push([from, to]);
+		}
+		configureSetextHeading({ sourceText: markdown, blockRanges: blocks });
+	} catch (err) {
+		// sourceText 解析失败时禁用后处理（不阻塞主流程，setext 退化为 ATX）。
+		configureSetextHeading({ sourceText: '', blockRanges: [] });
+		reportError('setext-init', err);
+	}
 	if (editor) {
 		await editor.destroy(true);
 		editor = undefined;
@@ -324,7 +358,7 @@ async function formatDocumentInPlace() {
 		const normalized = editor.action(ctx => {
 			const view = ctx.get(editorViewCtx);
 			const md = ctx.get(serializerCtx)(view.state.doc);
-			return md;
+			return postProcessSetextHeadings(md);
 		});
 		if (normalized !== currentMarkdown) {
 			currentMarkdown = normalized;

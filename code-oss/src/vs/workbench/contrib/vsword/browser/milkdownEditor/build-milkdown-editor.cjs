@@ -53,6 +53,9 @@ const wikilinkPreviewPath = path.join(srcDir, 'wikilink-preview.mjs');
 const wikilinkBacklinksPath = path.join(srcDir, 'wikilink-backlinks.mjs');
 const subSupPath = path.join(srcDir, 'sub-sup.mjs');
 const subSupHelpersPath = path.join(srcDir, 'sub-sup-helpers.mjs');
+// T-3.5c.5b: setext heading 保真。
+const setextHelpersPath = path.join(srcDir, 'setext-helpers.mjs');
+const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -148,6 +151,9 @@ fs.writeFileSync(wikilinkPreviewPath, fs.readFileSync(path.join(webviewSrcDir, '
 fs.writeFileSync(wikilinkBacklinksPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-backlinks.template.js'), 'utf8'));
 fs.writeFileSync(subSupPath, fs.readFileSync(path.join(webviewSrcDir, 'sub-sup.template.js'), 'utf8'));
 fs.writeFileSync(subSupHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'sub-sup-helpers.template.js'), 'utf8'));
+// T-3.5c.5b: setext heading 保真。
+fs.writeFileSync(setextHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-helpers.template.js'), 'utf8'));
+fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-heading.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);
