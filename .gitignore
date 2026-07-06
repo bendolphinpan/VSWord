@@ -56,3 +56,7 @@ Thumbs.db
 
 # WSL NTFS symlink not supported: ignore test fixtures that contain symlinks
 code-oss/extensions/terminal-suggest/src/test/fixtures/
+
+# Copilot extension simulation cache: locally generated sqlite DBs (used to be LFS-tracked,
+# never actually uploaded — see chore: drop broken LFS sqlite cache)
+code-oss/extensions/copilot/test/simulation/cache/
