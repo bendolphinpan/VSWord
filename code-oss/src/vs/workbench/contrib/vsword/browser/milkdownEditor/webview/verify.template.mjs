@@ -16,7 +16,7 @@ import {
 	remarkStringifyOptionsCtx,
 } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
-import { gfm } from '@milkdown/preset-gfm';
+import { gfm, remarkGFMPlugin } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { math } from '@milkdown/plugin-math';
 import { refractor } from 'refractor';
@@ -24,6 +24,7 @@ import katex from 'katex';
 import { slash, SLASH_ITEMS } from './slash-menu.mjs';
 import { highlightPlugins } from './highlight.mjs';
 import { underlinePlugins } from './underline.mjs';
+import { subSupPlugins } from './sub-sup.mjs';
 import { typoraShortcuts, TYPORA_SHORTCUT_IDS } from './shortcuts.mjs';
 import { inputRulePlugins, AUTO_PAIRS } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
@@ -54,7 +55,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n化学式 H~2~O 与 CO~2~，指数 x^2^ 和 e^n^。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -72,6 +73,7 @@ const editor = await Editor.make()
 		ctx.set(rootCtx, root);
 		ctx.set(defaultValueCtx, source);
 		ctx.set(remarkStringifyOptionsCtx, TYPORA_STRINGIFY_OPTIONS);
+		ctx.set(remarkGFMPlugin.options.key, { singleTilde: false });
 	})
 	.use(commonmark)
 	.use(gfm)
@@ -79,6 +81,7 @@ const editor = await Editor.make()
 	.use(math)
 	.use(highlightPlugins)
 	.use(underlinePlugins)
+	.use(subSupPlugins)
 	.use(focusModePlugins)
 	.use(remarkLiftImgHtmlPlugin)
 	.use(imageResizePlugins)
@@ -156,6 +159,13 @@ const checks = {
 	inputRulesPluginPresent: Array.isArray(inputRulePlugins) && inputRulePlugins.length >= 1,
 	roundTripHasHighlight: output.includes('==高亮文本=='),
 	roundTripHasUnderline: output.includes('<u>下划线文本</u>'),
+	// T-3.5c.4 sub/sup：`~x~` / `^x^` 单波浪/单 caret 保源码；与 GFM strikethrough 不冲突。
+	roundTripHasSubscriptH2O:     output.includes('H~2~O'),
+	roundTripHasSubscriptCO2:     output.includes('CO~2~'),
+	roundTripHasSuperscriptX2:    output.includes('x^2^'),
+	roundTripHasSuperscriptEn:    output.includes('e^n^'),
+	// 不得把 `~x~` 误当成 strikethrough 输出（GFM strike 会写 `~~x~~`）。
+	subSupNoStrikeCollision:      !/~~[^~]+~~/.test(output),
 	// T-3.3.2 three-mode switcher: constants shared with the host protocol.
 	modesAreThreeCanonicalValues:
 		Array.isArray(MODES) && MODES.length === 3 &&

@@ -49,6 +49,8 @@ const wikilinkHelpersPath = path.join(srcDir, 'wikilink-helpers.mjs');
 const wikilinkAutocompletePath = path.join(srcDir, 'wikilink-autocomplete.mjs');
 const wikilinkPreviewPath = path.join(srcDir, 'wikilink-preview.mjs');
 const wikilinkBacklinksPath = path.join(srcDir, 'wikilink-backlinks.mjs');
+const subSupPath = path.join(srcDir, 'sub-sup.mjs');
+const subSupHelpersPath = path.join(srcDir, 'sub-sup-helpers.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -141,6 +143,8 @@ fs.writeFileSync(wikilinkHelpersPath, fs.readFileSync(path.join(webviewSrcDir, '
 fs.writeFileSync(wikilinkAutocompletePath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-autocomplete.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkPreviewPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-preview.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkBacklinksPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-backlinks.template.js'), 'utf8'));
+fs.writeFileSync(subSupPath, fs.readFileSync(path.join(webviewSrcDir, 'sub-sup.template.js'), 'utf8'));
+fs.writeFileSync(subSupHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'sub-sup-helpers.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

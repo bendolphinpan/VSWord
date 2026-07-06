@@ -20,7 +20,7 @@ import {
 	remarkStringifyOptionsCtx,
 } from '@milkdown/core';
 import { commonmark } from '@milkdown/preset-commonmark';
-import { gfm, columnResizingPlugin } from '@milkdown/preset-gfm';
+import { gfm, columnResizingPlugin, remarkGFMPlugin } from '@milkdown/preset-gfm';
 import { history } from '@milkdown/plugin-history';
 import { listener, listenerCtx } from '@milkdown/plugin-listener';
 import { prism } from '@milkdown/plugin-prism';
@@ -28,6 +28,7 @@ import { math } from '@milkdown/plugin-math';
 import { slash, attachSlashMenu } from './slash-menu.mjs';
 import { highlightPlugins } from './highlight.mjs';
 import { underlinePlugins } from './underline.mjs';
+import { subSupPlugins } from './sub-sup.mjs';
 import { typoraShortcutPlugins } from './shortcuts.mjs';
 import { inputRulePlugins } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
@@ -170,6 +171,9 @@ async function createEditor(markdown) {
 			ctx.set(rootCtx, root);
 			ctx.set(defaultValueCtx, markdown);
 			ctx.set(remarkStringifyOptionsCtx, TYPORA_STRINGIFY_OPTIONS);
+			// T-3.5c.4: 关掉 GFM strikethrough 的 singleTilde（默认 true 会把 `~x~` 也当删除线），
+			// 把单波浪 `~x~` 让给 subscript 装饰族，双波浪 `~~x~~` 依旧走 GFM strike。
+			ctx.set(remarkGFMPlugin.options.key, { singleTilde: false });
 			configureCodeBlockCtx(ctx);
 			configureBlockHandle(ctx);
 			configureMathKatex(ctx);
@@ -222,6 +226,7 @@ async function createEditor(markdown) {
 		.use(slash)
 		.use(highlightPlugins)
 		.use(underlinePlugins)
+		.use(subSupPlugins)
 		.use(typoraShortcutPlugins)
 		.use(inputRulePlugins)
 		.use(focusModePlugins)
