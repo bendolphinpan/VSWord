@@ -37,6 +37,7 @@ import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs
 import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
 import { imageResizePlugins } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
+import { codeBlockSchemaOverride } from './code-block-schema-override.mjs';
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
@@ -219,6 +220,9 @@ async function createEditor(markdown) {
 		})
 		.use(listener)
 		.use(commonmark)
+		// T-3.5c.5: 覆盖 commonmark 的 code_block schema，attrs 新增 `meta`，
+		// 让 fence info meta（```js {highlight-lines=[1,3]}```）round-trip 保真。
+		.use(codeBlockSchemaOverride)
 		.use(gfm)
 		.use(history)
 		.use(prism)

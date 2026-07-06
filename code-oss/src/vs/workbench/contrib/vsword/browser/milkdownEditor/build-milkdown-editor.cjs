@@ -37,6 +37,8 @@ const tableChromePath = path.join(srcDir, 'table-chrome.mjs');
 const tableChromeHelpersPath = path.join(srcDir, 'table-chrome-helpers.mjs');
 const codeBlockChromePath = path.join(srcDir, 'code-block-chrome.mjs');
 const codeBlockHelpersPath = path.join(srcDir, 'code-block-helpers.mjs');
+// T-3.5c.5a: code_block schema 覆盖，fence info meta 保真。
+const codeBlockSchemaOverridePath = path.join(srcDir, 'code-block-schema-override.mjs');
 const blockHandlePath = path.join(srcDir, 'block-handle.mjs');
 const blockHandleMenuPath = path.join(srcDir, 'block-handle-menu.mjs');
 const blockHandleHelpersPath = path.join(srcDir, 'block-handle-helpers.mjs');
@@ -131,6 +133,7 @@ fs.writeFileSync(tableChromePath, fs.readFileSync(path.join(webviewSrcDir, 'tabl
 fs.writeFileSync(tableChromeHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'table-chrome-helpers.template.js'), 'utf8'));
 fs.writeFileSync(codeBlockChromePath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-chrome.template.js'), 'utf8'));
 fs.writeFileSync(codeBlockHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-helpers.template.js'), 'utf8'));
+fs.writeFileSync(codeBlockSchemaOverridePath, fs.readFileSync(path.join(webviewSrcDir, 'code-block-schema-override.template.js'), 'utf8'));
 fs.writeFileSync(blockHandlePath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle.template.js'), 'utf8'));
 fs.writeFileSync(blockHandleMenuPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-menu.template.js'), 'utf8'));
 fs.writeFileSync(blockHandleHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'block-handle-helpers.template.js'), 'utf8'));

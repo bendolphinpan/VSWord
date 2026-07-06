@@ -813,9 +813,11 @@ suite('VSWord Roundtrip · Qqa3 perf 采样', () => {
 // Sanity · 每个 fixture 至少构造出 session 而不抛
 // ---------------------------------------------------------------------------
 
-suite('VSWord Roundtrip · sanity 30 fixture 全体 build 不抛', () => {
-	test('30 fixtures 全部可 build', () => {
-		assert.strictEqual(FIXTURES.length, 30, `expected 30, got ${FIXTURES.length}`);
+// T-3.5c.5a: fixture 总数由 30 → 31（新增 typora/code-fence-meta.md 用于 F-21 code fence
+// info meta round-trip 验证）。这里 sanity 只保证矩阵仍在增长且未回退。
+suite('VSWord Roundtrip · sanity 31 fixture 全体 build 不抛', () => {
+	test('31 fixtures 全部可 build', () => {
+		assert.strictEqual(FIXTURES.length, 31, `expected 31, got ${FIXTURES.length}`);
 		for (const f of FIXTURES) {
 			const { session } = buildFor(f.text);
 			assert.ok(session);

@@ -35,6 +35,7 @@ import { upload, uploadConfig, defaultUploader } from '@milkdown/plugin-upload';
 import { createHostImageUploader, imageUploadPlugins } from './image-upload.mjs';
 import { imageResizePlugins, normalizeAlt } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin, imageSchemaOverride } from './image-schema-override.mjs';
+import { codeBlockSchemaOverride } from './code-block-schema-override.mjs';
 import { normalizeAlign, parseAlignWrapper, renderAlignedImg } from './image-resize.mjs';
 import { clampWidth, widthFromDrag, parseImgTag, renderImgTag, IMAGE_RESIZE_MIN_PX, IMAGE_RESIZE_MAX_PX } from './image-resize.mjs';
 
@@ -55,7 +56,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n化学式 H~2~O 与 CO~2~，指数 x^2^ 和 e^n^。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n化学式 H~2~O 与 CO~2~，指数 x^2^ 和 e^n^。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n\n```js {highlight-lines=[1,3]}\nconst a = 1;\nconst b = 2;\nconst c = 3;\n```\n\n```ts {title="demo.ts" line-numbers}\nexport const x: number = 42;\n```\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -76,6 +77,7 @@ const editor = await Editor.make()
 		ctx.set(remarkGFMPlugin.options.key, { singleTilde: false });
 	})
 	.use(commonmark)
+	.use(codeBlockSchemaOverride)
 	.use(gfm)
 	.use(history)
 	.use(math)
@@ -313,6 +315,16 @@ const checks = {
 	codeBlockTabPreserved:    output.includes('	tab-indented line'),
 	codeBlockCustomLangKept:  /```mermaid\n/.test(output),
 	codeBlockNoChromeLeak:    !output.includes('vsword-code-wrap') && !output.includes('vsword-code-chrome'),
+	// T-3.5c.5a code_block fence info meta 保真：
+	//   - ```js {highlight-lines=[1,3]}``` 头行完整 round-trip
+	//   - ```ts {title="demo.ts" line-numbers}``` 头行完整 round-trip（含引号 + 空格）
+	//   - mermaid / python / no-lang 白名单：没有 meta 的头行不被 meta 分支误伤
+	codeBlockMetaJsPreserved:      output.includes('```js {highlight-lines=[1,3]}\n'),
+	codeBlockMetaTsPreserved:      output.includes('```ts {title="demo.ts" line-numbers}\n'),
+	codeBlockMetaBodyPreserved:    output.includes('const a = 1;') && output.includes('const b = 2;') && output.includes('const c = 3;') && output.includes('export const x: number = 42;'),
+	codeBlockMermaidWhitelistedNoMeta: /```mermaid\n(?!\{)/.test(output),
+	codeBlockPythonHasNoMeta:      /```python\n(?!\{)/.test(output),
+	codeBlockSchemaOverrideExported: !!codeBlockSchemaOverride && (Array.isArray(codeBlockSchemaOverride) ? codeBlockSchemaOverride.length >= 1 : typeof codeBlockSchemaOverride === 'object'),
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };
