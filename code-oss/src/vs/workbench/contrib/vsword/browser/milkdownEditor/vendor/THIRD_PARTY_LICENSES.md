@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-06T02:23:48.965Z
+Generated: 2026-07-06T11:32:20.764Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
@@ -339,3 +339,9 @@ Generated: 2026-07-06T02:23:48.965Z
 | stylis | 4.4.0 | MIT | https://registry.npmjs.org/stylis/-/stylis-4.4.0.tgz |
 | ts-dedent | 2.2.0 | MIT | https://registry.npmjs.org/ts-dedent/-/ts-dedent-2.2.0.tgz |
 | uuid | 11.1.1 | MIT | https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz |
+| node-emoji | 2.2.0 | MIT | https://registry.npmjs.org/node-emoji/-/node-emoji-2.2.0.tgz |
+| @sindresorhus/is | 4.6.0 | MIT | https://registry.npmjs.org/@sindresorhus/is/-/is-4.6.0.tgz |
+| char-regex | 1.0.2 | MIT | https://registry.npmjs.org/char-regex/-/char-regex-1.0.2.tgz |
+| emojilib | 2.4.0 | MIT | https://registry.npmjs.org/emojilib/-/emojilib-2.4.0.tgz |
+| skin-tone | 2.0.0 | MIT | https://registry.npmjs.org/skin-tone/-/skin-tone-2.0.0.tgz |
+| unicode-emoji-modifier-base | 1.0.0 | MIT | https://registry.npmjs.org/unicode-emoji-modifier-base/-/unicode-emoji-modifier-base-1.0.0.tgz |

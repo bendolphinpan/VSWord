@@ -53,6 +53,9 @@ const wikilinkPreviewPath = path.join(srcDir, 'wikilink-preview.mjs');
 const wikilinkBacklinksPath = path.join(srcDir, 'wikilink-backlinks.mjs');
 const subSupPath = path.join(srcDir, 'sub-sup.mjs');
 const subSupHelpersPath = path.join(srcDir, 'sub-sup-helpers.mjs');
+// T-3.5c.1: emoji shortcode 保源码。
+const emojiPath = path.join(srcDir, 'emoji.mjs');
+const emojiHelpersPath = path.join(srcDir, 'emoji-helpers.mjs');
 // T-3.5c.5b: setext heading 保真。
 const setextHelpersPath = path.join(srcDir, 'setext-helpers.mjs');
 const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
@@ -85,6 +88,8 @@ const packages = [
 	// splitting，`import('mermaid')` 会被内联进主 bundle（≈2-3MB），T-3.5b.2.b 遗留
 	// 做代码分割 + 独立 chunk 懒加载。
 	'mermaid@11.14.0',
+	// T-3.5c.1: emoji shortcode → unicode 查表（自研 remark plugin 消费）。
+	'node-emoji@2.2.0',
 	'esbuild@0.27.0',
 	'jsdom@27.3.0',
 ];
@@ -151,6 +156,9 @@ fs.writeFileSync(wikilinkPreviewPath, fs.readFileSync(path.join(webviewSrcDir, '
 fs.writeFileSync(wikilinkBacklinksPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-backlinks.template.js'), 'utf8'));
 fs.writeFileSync(subSupPath, fs.readFileSync(path.join(webviewSrcDir, 'sub-sup.template.js'), 'utf8'));
 fs.writeFileSync(subSupHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'sub-sup-helpers.template.js'), 'utf8'));
+// T-3.5c.1: emoji shortcode 保源码。
+fs.writeFileSync(emojiPath, fs.readFileSync(path.join(webviewSrcDir, 'emoji.template.js'), 'utf8'));
+fs.writeFileSync(emojiHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'emoji-helpers.template.js'), 'utf8'));
 // T-3.5c.5b: setext heading 保真。
 fs.writeFileSync(setextHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-helpers.template.js'), 'utf8'));
 fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-heading.template.js'), 'utf8'));

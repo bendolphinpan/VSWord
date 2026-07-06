@@ -25,6 +25,8 @@ import { slash, SLASH_ITEMS } from './slash-menu.mjs';
 import { highlightPlugins } from './highlight.mjs';
 import { underlinePlugins } from './underline.mjs';
 import { subSupPlugins } from './sub-sup.mjs';
+import { emojiPlugins, resolveEmoji } from './emoji.mjs';
+import { EMOJI_RE, parseInlineEmoji, stringifyEmoji, extractShortcodeName } from './emoji-helpers.mjs';
 import { typoraShortcuts, TYPORA_SHORTCUT_IDS } from './shortcuts.mjs';
 import { inputRulePlugins, AUTO_PAIRS } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
@@ -56,7 +58,7 @@ const TYPORA_STRINGIFY_OPTIONS = {
 	incrementListMarker: true,
 };
 
-const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n化学式 H~2~O 与 CO~2~，指数 x^2^ 和 e^n^。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n\n```js {highlight-lines=[1,3]}\nconst a = 1;\nconst b = 2;\nconst c = 3;\n```\n\n```ts {title="demo.ts" line-numbers}\nexport const x: number = 42;\n```\n';
+const source = '# 标题 Title\n\n你好，**Milkdown**。\n\n- 第一项\n- second `code`\n\n| 列 A | 列 B |\n| --- | --- |\n| 甲 | 乙 |\n\n| 姓名 | 年龄 | 地区 |\n| :--- | :---: | ---: |\n| 张三 | 30 | 北京 |\n| 李四 | 25 | 上海 |\n\n行内数学 $a^2 + b^2 = c^2$ 后面还有文本。\n\n$$\n\\int_0^\\infty e^{-x^2}\\,dx = \\frac{\\sqrt{\\pi}}{2}\n$$\n\n重点：==高亮文本==，还有 <u>下划线文本</u>。\n\n化学式 H~2~O 与 CO~2~，指数 x^2^ 和 e^n^。\n\n表情：:smile: 你好 :heart: 收工，未识别 :notarealemojiname: 保源码。\n\n![截图](assets/screenshot-1.png)\n\n![远程](https://example.com/pic.png)\n\n<img src="assets/wide.png" alt="宽图" width="640">\n\n![](assets/no-caption.png)\n\n![图 1: 带 \\[方括号\\] 的图注](assets/fig1.png)\n\n<p align="center"><img src="assets/hero.png" alt="居中大图"></p>\n\n<p align="right"><img src="assets/thumb.png" alt="右对齐" width="200"></p>\n\n```python\ndef greet(name):\n    return f"你好, {name}"\n```\n\n```\nno language here\n\ttab-indented line\n```\n\n```mermaid\ngraph LR\n    A --> B\n```\n\n```js {highlight-lines=[1,3]}\nconst a = 1;\nconst b = 2;\nconst c = 3;\n```\n\n```ts {title="demo.ts" line-numbers}\nexport const x: number = 42;\n```\n';
 const dom = new JSDOM('<!doctype html><html><body><main id="root"></main></body></html>', { pretendToBeVisual: true });
 for (const key of ['window', 'document', 'navigator', 'Node', 'HTMLElement', 'DOMParser', 'MutationObserver', 'Event', 'CustomEvent']) {
 	Object.defineProperty(globalThis, key, { value: dom.window[key], configurable: true, writable: true });
@@ -84,6 +86,7 @@ const editor = await Editor.make()
 	.use(highlightPlugins)
 	.use(underlinePlugins)
 	.use(subSupPlugins)
+	.use(emojiPlugins)
 	.use(focusModePlugins)
 	.use(remarkLiftImgHtmlPlugin)
 	.use(imageResizePlugins)
@@ -325,6 +328,48 @@ const checks = {
 	codeBlockMermaidWhitelistedNoMeta: /```mermaid\n(?!\{)/.test(output),
 	codeBlockPythonHasNoMeta:      /```python\n(?!\{)/.test(output),
 	codeBlockSchemaOverrideExported: !!codeBlockSchemaOverride && (Array.isArray(codeBlockSchemaOverride) ? codeBlockSchemaOverride.length >= 1 : typeof codeBlockSchemaOverride === 'object'),
+	// T-3.5c.1 emoji shortcode：round-trip 保源码 · 未识别兜底 · helper 纯函数正确性。
+	// 识别项 (`:smile:` / `:heart:`) 在 remark visitor 里被转成 emoji 节点，序列化写回 shortcode；
+	// 未识别 (`:notarealemojiname:`) 保留原文本，不进 emoji 节点。
+	emojiRoundTripKeepsSmile:        output.includes(':smile:'),
+	emojiRoundTripKeepsHeart:        output.includes(':heart:'),
+	emojiRoundTripKeepsUnknown:      output.includes(':notarealemojiname:'),
+	// 输出里不能出现 unicode 表情字符（本轮策略：保源码，绝不写 unicode）。
+	// 注：正则用 \uD83D\uDE00-\uDE4F 大致覆盖 emoticons + faces 段，够 fixture 用。
+	emojiOutputHasNoUnicodeSmile:    !/\uD83D[\uDE00-\uDE7F]/.test(output),
+	// helper: parseInlineEmoji 走 resolver 注入路径。
+	parseEmojiSplitsRecognised: (() => {
+		const out = parseInlineEmoji('a :smile: b', n => n === 'smile' ? '🙂' : null);
+		return out.length === 3 && out[0].type === 'text' && out[1].type === 'emoji'
+			&& out[1].name === 'smile' && out[2].type === 'text';
+	})(),
+	parseEmojiKeepsUnknownAsText: (() => {
+		const out = parseInlineEmoji('a :notreal: b', () => null);
+		return out.length === 1 && out[0].type === 'text' && out[0].value === 'a :notreal: b';
+	})(),
+	parseEmojiHandlesCjkAdjacency: (() => {
+		const out = parseInlineEmoji('中文:smile:紧邻', n => n === 'smile' ? '🙂' : null);
+		return out.length === 3 && out[0].value === '中文' && out[1].type === 'emoji' && out[2].value === '紧邻';
+	})(),
+	parseEmojiEscapedBackslashSkipped: (() => {
+		const out = parseInlineEmoji('a \\:smile: b', n => n === 'smile' ? '🙂' : null);
+		return out.length === 1 && out[0].type === 'text';
+	})(),
+	// resolver 契约：node-emoji.get 命中 → 非空 string；未命中 → null。
+	resolverHitsSmile:               typeof resolveEmoji('smile') === 'string' && resolveEmoji('smile').length > 0,
+	resolverMissesUnknown:           resolveEmoji('notarealemojiname') === null,
+	resolverNullSafe:                resolveEmoji('') === null && resolveEmoji(null) === null,
+	// stringifyEmoji: 始终写 `:name:`
+	stringifyEmojiBasic:             stringifyEmoji('smile') === ':smile:',
+	stringifyEmojiTrimsWhitespace:   stringifyEmoji('  smile  ') === ':smile:',
+	stringifyEmojiEmptySafe:         stringifyEmoji('') === '' && stringifyEmoji(null) === '',
+	// EMOJI_RE: 匹配单冒号形式，不匹配 footnote / 双冒号。
+	emojiReMatchesShortcode:         'text :smile: end'.match(EMOJI_RE)?.[0] === ':smile:',
+	emojiReIgnoresFootnote:          '[^1]'.match(EMOJI_RE) === null,
+	emojiReIgnoresEmptyPair:         '::'.match(EMOJI_RE) === null,
+	// extractShortcodeName: 严格匹配整段。
+	extractNameFromColonForm:        extractShortcodeName(':smile:') === 'smile',
+	extractNameRejectsGarbage:       extractShortcodeName('smile') === null && extractShortcodeName(':bad name:') === null,
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };

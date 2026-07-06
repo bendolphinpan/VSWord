@@ -29,6 +29,7 @@ import { slash, attachSlashMenu } from './slash-menu.mjs';
 import { highlightPlugins } from './highlight.mjs';
 import { underlinePlugins } from './underline.mjs';
 import { subSupPlugins } from './sub-sup.mjs';
+import { emojiPlugins } from './emoji.mjs';
 import { typoraShortcutPlugins } from './shortcuts.mjs';
 import { inputRulePlugins } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
@@ -265,6 +266,7 @@ async function createEditor(markdown) {
 		.use(highlightPlugins)
 		.use(underlinePlugins)
 		.use(subSupPlugins)
+		.use(emojiPlugins)
 		.use(typoraShortcutPlugins)
 		.use(inputRulePlugins)
 		.use(focusModePlugins)
