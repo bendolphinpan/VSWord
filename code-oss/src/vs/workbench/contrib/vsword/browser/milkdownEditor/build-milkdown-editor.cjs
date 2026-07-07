@@ -63,6 +63,9 @@ const footnotePreviewPath = path.join(srcDir, 'footnote-preview.mjs');
 // T-3.5c.5b: setext heading 保真。
 const setextHelpersPath = path.join(srcDir, 'setext-helpers.mjs');
 const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
+// T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
+const frontmatterPath = path.join(srcDir, 'frontmatter.mjs');
+const frontmatterHelpersPath = path.join(srcDir, 'frontmatter-helpers.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -94,6 +97,10 @@ const packages = [
 	'mermaid@11.14.0',
 	// T-3.5c.1: emoji shortcode → unicode 查表（自研 remark plugin 消费）。
 	'node-emoji@2.2.0',
+	// T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
+	'remark-frontmatter@5.0.0',
+	'js-yaml@4.1.0',
+	'@iarna/toml@2.2.5',
 	'esbuild@0.27.0',
 	'jsdom@27.3.0',
 ];
@@ -170,6 +177,9 @@ fs.writeFileSync(footnotePreviewPath, fs.readFileSync(path.join(webviewSrcDir, '
 // T-3.5c.5b: setext heading 保真。
 fs.writeFileSync(setextHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-helpers.template.js'), 'utf8'));
 fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-heading.template.js'), 'utf8'));
+// T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
+fs.writeFileSync(frontmatterPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter.template.js'), 'utf8'));
+fs.writeFileSync(frontmatterHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter-helpers.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

@@ -1,9 +1,10 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-06T11:32:20.764Z
+Generated: 2026-07-07T01:32:40.908Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
+| @iarna/toml | 2.2.5 | ISC | https://registry.npmjs.org/@iarna/toml/-/toml-2.2.5.tgz |
 | @milkdown/core | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/core/-/core-7.21.2.tgz |
 | @milkdown/ctx | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/ctx/-/ctx-7.21.2.tgz |
 | @milkdown/exception | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/exception/-/exception-7.21.2.tgz |
@@ -11,8 +12,8 @@ Generated: 2026-07-06T11:32:20.764Z
 | @milkdown/transformer | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/transformer/-/transformer-7.21.2.tgz |
 | remark-parse | 11.0.0 | MIT | https://registry.npmjs.org/remark-parse/-/remark-parse-11.0.0.tgz |
 | @types/mdast | 4.0.4 | MIT | https://registry.npmjs.org/@types/mdast/-/mdast-4.0.4.tgz |
-| @types/unist | 3.0.3 | MIT | https://registry.npmjs.org/@types/unist/-/unist-3.0.3.tgz |
 | mdast-util-from-markdown | 2.0.3 | MIT | https://registry.npmjs.org/mdast-util-from-markdown/-/mdast-util-from-markdown-2.0.3.tgz |
+| @types/unist | 3.0.3 | MIT | https://registry.npmjs.org/@types/unist/-/unist-3.0.3.tgz |
 | decode-named-character-reference | 1.3.0 | MIT | https://registry.npmjs.org/decode-named-character-reference/-/decode-named-character-reference-1.3.0.tgz |
 | character-entities | 2.0.2 | MIT | https://registry.npmjs.org/character-entities/-/character-entities-2.0.2.tgz |
 | devlop | 1.1.0 | MIT | https://registry.npmjs.org/devlop/-/devlop-1.1.0.tgz |
@@ -165,6 +166,8 @@ Generated: 2026-07-06T11:32:20.764Z
 | @esbuild/win32-arm64 |  |  |  |
 | @esbuild/win32-ia32 |  |  |  |
 | @esbuild/win32-x64 | 0.27.0 | MIT | https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.27.0.tgz |
+| js-yaml | 4.1.0 | MIT | https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.0.tgz |
+| argparse | 2.0.1 | Python-2.0 | https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz |
 | jsdom | 27.3.0 | MIT | https://registry.npmjs.org/jsdom/-/jsdom-27.3.0.tgz |
 | @acemir/cssom | 0.9.31 | MIT | https://registry.npmjs.org/@acemir/cssom/-/cssom-0.9.31.tgz |
 | @asamuzakjp/dom-selector | 6.8.1 | MIT | https://registry.npmjs.org/@asamuzakjp/dom-selector/-/dom-selector-6.8.1.tgz |
@@ -345,3 +348,8 @@ Generated: 2026-07-06T11:32:20.764Z
 | emojilib | 2.4.0 | MIT | https://registry.npmjs.org/emojilib/-/emojilib-2.4.0.tgz |
 | skin-tone | 2.0.0 | MIT | https://registry.npmjs.org/skin-tone/-/skin-tone-2.0.0.tgz |
 | unicode-emoji-modifier-base | 1.0.0 | MIT | https://registry.npmjs.org/unicode-emoji-modifier-base/-/unicode-emoji-modifier-base-1.0.0.tgz |
+| remark-frontmatter | 5.0.0 | MIT | https://registry.npmjs.org/remark-frontmatter/-/remark-frontmatter-5.0.0.tgz |
+| mdast-util-frontmatter | 2.0.1 | MIT | https://registry.npmjs.org/mdast-util-frontmatter/-/mdast-util-frontmatter-2.0.1.tgz |
+| micromark-extension-frontmatter | 2.0.0 | MIT | https://registry.npmjs.org/micromark-extension-frontmatter/-/micromark-extension-frontmatter-2.0.0.tgz |
+| fault | 2.0.1 | MIT | https://registry.npmjs.org/fault/-/fault-2.0.1.tgz |
+| format | 0.2.2 |  | https://registry.npmjs.org/format/-/format-0.2.2.tgz |

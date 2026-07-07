@@ -41,6 +41,19 @@ import {
 	OPEN_DELAY_MS as FN_OPEN_DELAY_MS,
 	CLOSE_DELAY_MS as FN_CLOSE_DELAY_MS,
 } from './footnote-preview.mjs';
+// T-3.5c.3: frontmatter round-trip + helpers.
+import { frontmatterPlugins, FRONTMATTER_PARSERS } from './frontmatter.mjs';
+import {
+	FLAVORS,
+	isValidFlavor,
+	extractTopLevelKeys,
+	summarizeFrontmatter,
+	formatSummaryLabel,
+	firstLineOfError,
+	detectFrontmatterError,
+	stripFence,
+	addFence,
+} from './frontmatter-helpers.mjs';
 import { typoraShortcuts, TYPORA_SHORTCUT_IDS } from './shortcuts.mjs';
 import { inputRulePlugins, AUTO_PAIRS } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
@@ -102,6 +115,7 @@ const editor = await Editor.make()
 	.use(subSupPlugins)
 	.use(emojiPlugins)
 	.use(footnotePlugins)
+	.use(frontmatterPlugins)
 	.use(focusModePlugins)
 	.use(remarkLiftImgHtmlPlugin)
 	.use(imageResizePlugins)
@@ -114,6 +128,27 @@ const outlineHeadingsFromMultiSource = editor.action(ctx => {
 	const multiDoc = ctx.get(parserCtx)('# One\n\n## Two\n\n### Three\n\nbody\n\n## Two\n');
 	return extractHeadings(multiDoc);
 });
+// T-3.5c.3: frontmatter round-trip fixtures（8 类）。
+// remark-frontmatter 的 stringifier 会补 trailing `\n`，所以 fixture 输入统一以 `\n` 收尾。
+const FRONTMATTER_FIXTURES = [
+	{ name: 'yaml-basic',    source: '---\ntitle: Hello\ntags: [a, b]\n---\n\n正文段落。\n' },
+	{ name: 'yaml-quoted',   source: '---\ntitle: "带 : 冒号的标题"\ndesc: \'she said "hi"\'\n---\n\n引号 fixture。\n' },
+	{ name: 'yaml-indent',   source: '---\nauthor:\n  name: 张三\n  email: z@example.com\ntags:\n  - alpha\n  - beta\n---\n\n嵌套结构。\n' },
+	{ name: 'yaml-empty-val',source: '---\ntitle:\nauthor:\ndraft: true\n---\n\n空值 fixture。\n' },
+	{ name: 'yaml-syntax-err', source: '---\ntitle: [unclosed\n---\n\n错误语法应该保源码写回。\n' },
+	{ name: 'toml-basic',    source: '+++\ntitle = "Post"\ndate = 2026-01-01\ntags = ["a", "b"]\n+++\n\nTOML 段。\n' },
+	{ name: 'json-legacy',   source: '# JSON frontmatter\n\n{ "title": "not-parsed-here" } 的行内 JSON 不算 frontmatter（F-16 未启用）。\n' },
+	{ name: 'trailing-nl',   source: '---\ntitle: keep-trailing\n---\n\nend\n' },
+];
+const frontmatterFixtureResults = FRONTMATTER_FIXTURES.map(fx => {
+	try {
+		const rt = editor.action(ctx => ctx.get(serializerCtx)(ctx.get(parserCtx)(fx.source)));
+		return { name: fx.name, ok: rt === fx.source, bytes: Buffer.byteLength(rt), diff: rt === fx.source ? null : rt };
+	} catch (err) {
+		return { name: fx.name, ok: false, error: String(err?.message || err) };
+	}
+});
+const frontmatterRoundTripAllOk = frontmatterFixtureResults.every(r => r.ok);
 await editor.destroy(true);
 
 const checks = {
@@ -487,6 +522,55 @@ const checks = {
 	// 延迟常量本身：与 wikilink-preview 同数量级但独立导出。
 	hoverDelaysArePositiveIntegers:  Number.isInteger(FN_OPEN_DELAY_MS) && FN_OPEN_DELAY_MS > 0
 		&& Number.isInteger(FN_CLOSE_DELAY_MS) && FN_CLOSE_DELAY_MS > 0,
+	// T-3.5c.3 frontmatter round-trip：8 类 fixture 全部 byte-for-byte 恢复。
+	frontmatterRoundTripAllFixtures: frontmatterRoundTripAllOk,
+	frontmatterYamlBasicRoundTrip:   frontmatterFixtureResults.find(r => r.name === 'yaml-basic')?.ok === true,
+	frontmatterYamlQuotedRoundTrip:  frontmatterFixtureResults.find(r => r.name === 'yaml-quoted')?.ok === true,
+	frontmatterYamlIndentRoundTrip:  frontmatterFixtureResults.find(r => r.name === 'yaml-indent')?.ok === true,
+	frontmatterYamlEmptyRoundTrip:   frontmatterFixtureResults.find(r => r.name === 'yaml-empty-val')?.ok === true,
+	frontmatterYamlBadSyntaxRoundTrip: frontmatterFixtureResults.find(r => r.name === 'yaml-syntax-err')?.ok === true,
+	frontmatterTomlRoundTrip:        frontmatterFixtureResults.find(r => r.name === 'toml-basic')?.ok === true,
+	frontmatterJsonLegacyRoundTrip:  frontmatterFixtureResults.find(r => r.name === 'json-legacy')?.ok === true,
+	frontmatterTrailingNewlineKept:  frontmatterFixtureResults.find(r => r.name === 'trailing-nl')?.ok === true,
+	// helpers 纯函数正确性
+	fmFlavorsAreFrozen:              Object.isFrozen(FLAVORS) && FLAVORS.includes('yaml') && FLAVORS.includes('toml') && FLAVORS.includes('json'),
+	fmIsValidFlavorAccepts:          isValidFlavor('yaml') && isValidFlavor('toml') && isValidFlavor('json'),
+	fmIsValidFlavorRejects:          !isValidFlavor('xml') && !isValidFlavor(null) && !isValidFlavor(42),
+	fmExtractYamlTopLevelKeys:       (() => {
+		const keys = extractTopLevelKeys('title: hi\ntags:\n  - a\nauthor: me\n', 'yaml');
+		return keys.length === 3 && keys[0] === 'title' && keys[2] === 'author';
+	})(),
+	fmExtractTomlTopLevelKeys:       (() => {
+		const keys = extractTopLevelKeys('title = "x"\ndate = 2026-01-01\n[section]\nignored = 1\n', 'toml');
+		return keys.length === 2 && keys[0] === 'title' && keys[1] === 'date';
+	})(),
+	fmExtractJsonTopLevelKeys:       (() => {
+		const keys = extractTopLevelKeys('{"a": 1, "b": {"nested": true}, "c": [1,2]}', 'json');
+		return keys.length === 3 && keys[0] === 'a' && keys[2] === 'c';
+	})(),
+	fmSummarizeReturnsTitle:         (() => {
+		const s = summarizeFrontmatter('title: Hello\ntags: [a]\n', 'yaml');
+		return s.title === 'Hello' && s.fieldCount === 2 && s.flavor === 'yaml';
+	})(),
+	fmSummaryLabelWithTitle:         formatSummaryLabel({ flavor: 'yaml', title: 'Hi', keys: ['a', 'b'], fieldCount: 2 }) === '📄 Hi · 2 fields',
+	fmSummaryLabelWithoutTitle:      formatSummaryLabel({ flavor: 'toml', title: null, keys: ['a'], fieldCount: 1 }) === '📄 TOML · 1 fields',
+	fmSummaryLabelEmpty:             formatSummaryLabel({ flavor: 'yaml', title: null, keys: [], fieldCount: 0 }) === '📄 YAML（空）',
+	fmFirstLineOfYamlError:          (() => {
+		try { FRONTMATTER_PARSERS.yaml('title: [unclosed\n  key: val\n'); return false; }
+		catch (err) {
+			const e = firstLineOfError(err, 'yaml');
+			return typeof e.message === 'string' && e.message.length > 0 && Number.isInteger(e.line) && e.line >= 1;
+		}
+	})(),
+	fmDetectFrontmatterErrorNullOk:  detectFrontmatterError('title: ok\n', 'yaml', FRONTMATTER_PARSERS) === null,
+	fmDetectFrontmatterErrorReturnsErr: (() => {
+		const e = detectFrontmatterError('title: [unclosed\n', 'yaml', FRONTMATTER_PARSERS);
+		return e && typeof e.message === 'string' && Number.isInteger(e.line);
+	})(),
+	fmStripFenceYaml:                stripFence('---\ntitle: x\n---', 'yaml') === 'title: x',
+	fmStripFenceToml:                stripFence('+++\ntitle = "x"\n+++', 'toml') === 'title = "x"',
+	fmAddFenceYaml:                  addFence('title: x', 'yaml') === '---\ntitle: x\n---',
+	fmAddFenceRespectsTrailingNl:    addFence('title: x\n', 'yaml') === '---\ntitle: x\n---',
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };

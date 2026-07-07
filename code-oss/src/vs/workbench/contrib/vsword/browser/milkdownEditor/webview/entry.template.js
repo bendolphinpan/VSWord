@@ -75,6 +75,8 @@ import {
 // T-3.5c.2: footnote 引用+定义+hover+跳转。
 import { footnotePlugins, configureFootnoteHost } from './footnote.mjs';
 import { configureFootnotePreview, _resetFootnotePreview } from './footnote-preview.mjs';
+// T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
+import { frontmatterPlugins } from './frontmatter.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -293,6 +295,7 @@ async function createEditor(markdown) {
 		.use(wikilinkPlugins)
 		.use(wikilinkAutocompletePlugins)
 		.use(footnotePlugins)
+		.use(frontmatterPlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
