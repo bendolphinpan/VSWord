@@ -66,7 +66,7 @@ VSWord = Code OSS 1.124.2 基线
 | T-3.7b.2 | 预览/阅读模式 | **T-3.7b** | da77750e | editable=false + shell aria-pressed | ✅ 已交付 | T-3.7b.a…f 收官 |
 | T-3.7b.3 | 专注模式 | **T-3.7b** | ce03f41f + 0dffffa7 | decoupled focus toggle · 服务化收敛到 `IVSWordViewModeService` | ✅ 已交付（服务化） | 从 commit T-3.10 起 · T-3.7b.a 服务化收敛 |
 | T-3.7b.4 | 打字机模式 | **T-3.7b** | ce03f41f + 0dffffa7 | typewriter toggle · 服务化收敛到 `IVSWordViewModeService` | ✅ 已交付（服务化） | 与专注模式同 commit + T-3.7b.a 服务化 |
-| T-3.7c.1 | TOC 自动生成（`[TOC]`） | — | — | 未启动 | ⛔ | |
+| T-3.7c.1 | TOC 自动生成（`[TOC]`） | **T-3.7c.1** | c0acda7b + f7499753 + 739e1c24 + 526c02d7 | Typora `[TOC]` 占位符 · remark + PM schema + NodeView + 事务级重算 + 点击跳转 + `vsword.toc.insertToc` 命令 · 62 单测（remark 15 / roundtrip 17 / interop 15 / interaction 10 / PM schema 5）· Gate D/E/F 全绿 | ✅ 已交付 | 4 子卡 a→b→c→d 顺序完成 |
 | T-3.7c.2 | 大纲面板（Outline View） | T-3.4（commit 附带） | 9f76d3e0 | Outline 面板 | ⚠️ 编号漂移 | commit T-3.4 里同时含 T-3.3 全套 + 本项 |
 | T-3.7c.3 | 查找替换 | — | — | 未启动 | ⛔ | |
 | T-3.7d.1~3 | 主题兼容层（内置 4 主题 / Typora .css / 切换命令） | — | — | 未启动 | ⛔ | 3.3.1 已做内置主题系统，Typora .css 兼容与切换命令未落 |
