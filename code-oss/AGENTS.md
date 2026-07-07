@@ -66,65 +66,87 @@ Gate E 只跑这 6 个文件（不是全量 vsword 单测）：
 
 ---
 
-## VSWord Milkdown Editor — Mermaid Gate F
+## VSWord Milkdown Editor — Gate F（mermaid + flow + sequence + mixed）
 
-Task **T-3.5b.5** 锁定 22 类 mermaid 图表（15 GA + 7 beta）在 jsdom + 真 mermaid v11 环境下的
-"渲染 → normalize → 与 golden svg 字节比对"回归通道，作为模块 b（mermaid NodeView）收官门槛。
-任何改动 `src/vs/workbench/contrib/vsword/browser/milkdownEditor/webview/mermaid-view*` 或 mermaid 相关测试文件必须过 Gate F 再合入。
+Task **T-3.5b.5** 首建 mermaid 22 类 golden 通道；**T-3.5b-flowseq.3c** 扩展加入 flowchart.js 3 类
++ js-sequence-diagrams 3 类 + mermaid/flow/sequence 三库联合 1 类，共 **28 fixture / 5 类测试用例
+类别**（含 3 个 worker 元测试）。Gate F 是模块 b（mermaid NodeView）+ 模块 b-flowseq（flow/seq
+NodeView）联合收官门槛。任何改动 `src/vs/workbench/contrib/vsword/browser/milkdownEditor/webview/
+{mermaid,flow,sequence}-view*` 或对应测试/worker/normalize 文件必须过 Gate F 再合入。
 
 ### 一键脚本
 
 从仓库根目录：
 
 ```
-node code-oss/test/scripts/gate-f.mjs                # mermaidView + mermaidRoundtrip → md 报告
+node code-oss/test/scripts/gate-f.mjs                # mermaid + flow + seq + mixed → md 报告
 node code-oss/test/scripts/gate-f.mjs --json         # 追加 JSON 摘要到 stdout (CI 消费)
 node code-oss/test/scripts/mermaid-selfcheck.mjs     # 22 类 × 3 遍 normalized svg 字节完全一致
+node code-oss/test/scripts/flow-selfcheck.mjs        # 3 类 flow × 3 遍字节一致
+node code-oss/test/scripts/sequence-selfcheck.mjs    # 3 类 sequence × 3 遍字节一致
 ```
 
 任意脚本 exit != 0 就代表 Gate F 未通过。
 
 ### 覆盖范围
 
-Gate F 只跑这 2 个文件：
+Gate F 跑这 5 个文件：
 
-- `test/node/mermaidView.test.ts`（NodeView 纯函数 + jsdom 集成，见 T-3.5b.3 44 case）
-- `test/node/mermaidRoundtrip.test.ts`（22 类 × golden svg diff + 1 元测试 = 23 case，missing golden 首跑自动生成）
+- `test/node/mermaidView.test.ts`（NodeView 纯函数 + jsdom 集成，47 case）
+- `test/node/mermaidRoundtrip.test.ts`（22 类 × golden svg diff + 1 元测试 = 23 case）
+- `test/node/flowRoundtrip.test.ts`（3 类 P0 × golden svg diff + 1 元测试 = 4 case）
+- `test/node/sequenceRoundtrip.test.ts`（3 类 P0 × golden svg diff + 1 元测试 = 4 case）
+- `test/node/mixedRoundtrip.test.ts`（三库联合 fixture × 3 段 = 3 case，复用单库 golden）
 
-基线：**70 通过 / 0 失败 / ≈ 5–6 s** on `dev@HEAD`。
+基线：**81 通过 / 0 失败 / ≈ 11–12 s** on `dev@HEAD`。
 
-### 22 类 fixture SSOT
+### 28 类 fixture SSOT
 
-- `test/fixtures/mermaid/_index.mjs` —— 22 条 `{ id, tier: 'GA'|'beta', src }` 定义（mjs 支持反引号 + 注释）
-- `test/fixtures/mermaid/<id>.md` —— 22 份最小 mermaid code-block 文件
-- `test/fixtures/mermaid/<id>.expected.svg` —— 22 份 normalized golden svg（首跑由 roundtrip 测试自动落盘，人工 review 后固化）
+- `test/fixtures/mermaid/_index.mjs` —— 22 条 `{ id, tier: 'GA'|'beta', src }`
+- `test/fixtures/mermaid/<id>.md` / `.expected.svg` —— 22 份 mermaid golden
+- `test/fixtures/flow/_index.mjs` —— 3 条 `{ id, tier: 'P0', src }`
+- `test/fixtures/flow/<id>.md` / `.golden.svg` —— 3 份 flowchart.js golden
+- `test/fixtures/sequence/_index.mjs` —— 3 条 `{ id, tier: 'P0', src }`
+- `test/fixtures/sequence/<id>.md` / `.golden.svg` —— 3 份 js-sequence-diagrams golden
+- `test/fixtures/mixed/_index.mjs` —— 1 条 `{ id, segments: [{ lang, fixtureId, src }] }`
+- `test/fixtures/mixed/<id>.md` —— 三库拼接文档，**不维护自己的 golden**，逐段复用单库 golden
 
-Fixture 集合由 gate-f、mermaidRoundtrip 测试、selfcheck 三方共享，不允许在其他地方另抄一份。
+Fixture 由 gate-f、`*Roundtrip.test.ts`、selfcheck、bootstrap 四方共享，不允许在其他地方另抄一份。
 
 ### 稳定性保障（selfcheck 拆解）
 
-同进程连跑 3 遍 mermaid 会有 3 类不稳定源，Gate F 通道在 3 处治理：
+不同库不稳定源不同，Gate F 通道分库治理：
 
-1. **`Math.random()`**（dagre / cytoscape layout 随机初始位置、gitGraph commit hash）
+**Mermaid（同进程 3 遍）** —— 3 类：
+1. **`Math.random()`**（dagre / cytoscape layout、gitGraph commit hash）
    → `mermaid-render-worker.mjs` monkey-patch 成 seeded LCG，每次 render 前 `resetRandomSeed()`
 2. **`new Date()`**（gantt today line 相对源码固定日期的距离）
-   → 用 Proxy 冻结 `Date` 到 `2026-01-01T00:00:00Z`；worker 自身计时改走保存的 `performance.now()` 引用
-3. **mermaid 模块级 counter**（actorN / classId-N / node-N / linearGradient-N / architecture id-suffix）
-   → 无法被 `?bust=` 消除（懒加载 diagram 子模块引用同一个单例），在 `mermaid-svg-normalize.mjs` 里用正则抹平
+   → 用 Proxy 冻结 `Date` 到 `2026-01-01T00:00:00Z`；worker 计时改走 `performance.now()`
+3. **mermaid 模块级 counter**（actorN / classId-N / linearGradient-N / architecture id-suffix）
+   → 懒加载 diagram 子模块共用单例，`mermaid-svg-normalize.mjs` 用正则抹平
+
+**Flow / Sequence（同进程 3 遍）** —— 1 类：
+- **raphael 内部 id + Math.random**（marker id `raphael-marker-<type><序号>-<hash>`）
+  → `flow-render-worker.mjs` / `sequence-render-worker.mjs` 相同 seeded LCG，每 fixture render 前
+     `resetSeed()`；剩余序号 + hash 由 `flowseq-svg-normalize.mjs` 正则抹平。
+- flow/sequence 各起独立 worker：raphael 全局 id counter 跨库共享会污染 selfcheck。
 
 ### DoD 校验清单
 
 | # | 项 | 校验方式 |
 |---|---|---|
-| 1 | 2 个测试文件全绿 | `gate-f.mjs` → `code-oss/test/reports/gate-f-*.md`，exit 0 |
-| 2 | 22 类 fixture 矩阵齐 | 报告里"Mermaid 22 类 fixture 通过矩阵"每行 `.md` + `.expected.svg` 双 ✓ 且 pass > 0 |
-| 3 | 22 类 × 3 遍 normalized svg 字节一致 | `mermaid-selfcheck.mjs`，exit 0，报告"3 遍稳定"= 22/22 |
-| 4 | tsc 全项目零 error | `cd code-oss && node node_modules/typescript/bin/tsc --noEmit -p src/tsconfig.json` |
+| 1 | 5 个测试文件全绿 | `gate-f.mjs` → `code-oss/test/reports/gate-f-*.md`，exit 0 |
+| 2 | 22 + 3 + 3 = 28 类 fixture 矩阵齐 | 报告里 mermaid / flow / sequence / mixed 四个矩阵每行 `.md` + golden 双 ✓ 且 pass > 0 |
+| 3 | 22 + 3 + 3 类 × 3 遍字节一致 | `mermaid-selfcheck.mjs` / `flow-selfcheck.mjs` / `sequence-selfcheck.mjs`，exit 0，"3 遍稳定" = 22/22 + 3/3 + 3/3 |
+| 4 | tsc 全项目零 error | `cd code-oss && NODE_OPTIONS="--max-old-space-size=8192" node node_modules/typescript/bin/tsc --noEmit -p src/tsconfig.json` |
 
 ### 常见坑
 
-- `gate-f.mjs` / worker / selfcheck 全部依赖 `.tmp/milkdown-prod-builder/node_modules/{mermaid,jsdom}`。首跑前先跑 vsword prod build。
+- `gate-f.mjs` / worker / selfcheck 依赖 `.tmp/milkdown-prod-builder/node_modules/{mermaid,flowchart.js,raphael,underscore,jsdom}`。首跑前先跑 vsword prod build。
 - Worker 里 `pretendToBeVisual` 的 requestAnimationFrame shim 会挂 event loop → `main().then(process.exit(0))` 强制退出。
 - jsdom 27.3（builder 内版本）需手工挂 `offsetWidth/clientWidth = 0` + `getComputedStyle` 兜底 `0px`，否则 cytoscape GridLayout 会 NPE。
-- Golden 更新流程：删除对应 `.expected.svg` → 跑一次 `gate-f.mjs`（测试会 auto-write missing golden）→ diff 复查 → commit。**永远不要手改 golden**。
+- flow/sequence worker 额外需要 `SVGSVGElement.prototype.createSVGMatrix` / `getScreenCTM` shim —— 否则 raphael renderfix 抛 `e.createSVGMatrix is not a function`。
+- mixed 测试**不生成自己的 golden**：跨库 fixture 只是同文档共存场景验证，逐段 render → 引用单库 golden。若单库 golden 失效需先修单库再跑 mixed。
+- Golden 更新流程：删除对应 `.golden.svg` / `.expected.svg` → 跑一次 `gate-f.mjs`（测试 auto-write missing golden）→ diff 复查 → commit。**永远不要手改 golden**。
+- Windows 上 tsc 全项目 typecheck 默认堆不足 → 加 `NODE_OPTIONS="--max-old-space-size=8192"`。
 

@@ -28,12 +28,18 @@ const BUILDER_A = path.resolve(CODE_OSS, 'src/vs/workbench/contrib/vsword/browse
 const BUILDER_B = path.resolve(REPO_ROOT, '.tmp', 'milkdown-prod-builder');
 const REPORTS_DIR = path.resolve(CODE_OSS, 'test', 'reports');
 const FIXTURE_ROOT = path.resolve(CODE_OSS, 'src/vs/workbench/contrib/vsword/test/fixtures/mermaid');
+const FLOW_FIXTURE_ROOT = path.resolve(CODE_OSS, 'src/vs/workbench/contrib/vsword/test/fixtures/flow');
+const SEQ_FIXTURE_ROOT = path.resolve(CODE_OSS, 'src/vs/workbench/contrib/vsword/test/fixtures/sequence');
+const MIXED_FIXTURE_ROOT = path.resolve(CODE_OSS, 'src/vs/workbench/contrib/vsword/test/fixtures/mixed');
 
 const argJson = process.argv.includes('--json');
 
 const TEST_FILES = [
 	'test/node/mermaidView.test.ts',
 	'test/node/mermaidRoundtrip.test.ts',
+	'test/node/flowRoundtrip.test.ts',
+	'test/node/sequenceRoundtrip.test.ts',
+	'test/node/mixedRoundtrip.test.ts',
 ];
 
 function log(msg) { if (!argJson) { process.stderr.write(msg + '\n'); } }
@@ -65,6 +71,43 @@ function collectFixtureMatrix() {
 			const id = name.slice(0, -'.expected.svg'.length);
 			out[id] = out[id] || { md: false, expected: false };
 			out[id].expected = true;
+		}
+	}
+	return out;
+}
+
+/** flow / sequence fixture 磁盘清单：{ id → { md, expected } }。expected 键名统一（golden.svg 也算 expected）。 */
+function collectFlowSeqMatrix(root, goldenSuffix) {
+	if (!fs.existsSync(root)) { return {}; }
+	const out = {};
+	for (const name of fs.readdirSync(root).sort()) {
+		const abs = path.join(root, name);
+		if (!fs.statSync(abs).isFile()) { continue; }
+		if (name === '_index.mjs') { continue; }
+		if (name.endsWith('.md')) {
+			const id = name.slice(0, -3);
+			out[id] = out[id] || { md: false, expected: false };
+			out[id].md = true;
+		} else if (name.endsWith(goldenSuffix)) {
+			const id = name.slice(0, -goldenSuffix.length);
+			out[id] = out[id] || { md: false, expected: false };
+			out[id].expected = true;
+		}
+	}
+	return out;
+}
+
+function collectMixedMatrix() {
+	if (!fs.existsSync(MIXED_FIXTURE_ROOT)) { return {}; }
+	const out = {};
+	for (const name of fs.readdirSync(MIXED_FIXTURE_ROOT).sort()) {
+		const abs = path.join(MIXED_FIXTURE_ROOT, name);
+		if (!fs.statSync(abs).isFile()) { continue; }
+		if (name === '_index.mjs') { continue; }
+		if (name.endsWith('.md')) {
+			const id = name.slice(0, -3);
+			out[id] = out[id] || { md: false, expected: 'ref' };  // mixed 复用单库 golden
+			out[id].md = true;
 		}
 	}
 	return out;
@@ -185,6 +228,20 @@ function classifyMermaidCase(fullTitle) {
 	return { tier: m[1], id: m[2] };
 }
 
+function classifyFlowSeqCase(fullTitle) {
+	// [flow/P0] flow-basic · ...  |  [seq/P0] seq-basic · ...
+	const m = /\[(flow|seq)\/(P0|P1|P2)\]\s+([^\s·]+)/.exec(fullTitle || '');
+	if (!m) { return null; }
+	return { kind: m[1], tier: m[2], id: m[3] };
+}
+
+function classifyMixedCase(fullTitle) {
+	// [mixed/all-three-basic] mermaid/flowchart · ...
+	const m = /\[mixed\/([^\]]+)\]\s+(mermaid|flow|sequence)\/([^\s·]+)/.exec(fullTitle || '');
+	if (!m) { return null; }
+	return { mixedId: m[1], lang: m[2], fixtureId: m[3] };
+}
+
 function buildSuiteToFileMap() {
 	const map = new Map();
 	for (const rel of TEST_FILES) {
@@ -206,7 +263,7 @@ function fileFromTitle(fullTitle, suiteMap) {
 	return 'unknown';
 }
 
-function buildMdReport({ report, elapsed, fixtures, exitCode }) {
+function buildMdReport({ report, elapsed, fixtures, flowFixtures, seqFixtures, mixedFixtures, exitCode }) {
 	const now = new Date();
 	const stats = report && report.stats ? report.stats : {};
 	const passes = report && report.passes ? report.passes : [];
@@ -221,11 +278,46 @@ function buildMdReport({ report, elapsed, fixtures, exitCode }) {
 		perFile.set(f, row);
 	};
 	const perFixture = {}; // id → { pass, fail, tier }
-	for (const c of passes) { bump(fileFromTitle(c.fullTitle || c.title || '', suiteMap), 'pass', c.duration || 0); const m = classifyMermaidCase(c.fullTitle || c.title || ''); if (m) { perFixture[m.id] = perFixture[m.id] || { pass: 0, fail: 0, tier: m.tier }; perFixture[m.id].pass++; } }
-	for (const c of failures) { bump(fileFromTitle(c.fullTitle || c.title || '', suiteMap), 'fail', c.duration || 0); const m = classifyMermaidCase(c.fullTitle || c.title || ''); if (m) { perFixture[m.id] = perFixture[m.id] || { pass: 0, fail: 0, tier: m.tier }; perFixture[m.id].fail++; } }
+	const perFlowFixture = {}; // id → { pass, fail, tier }
+	const perSeqFixture = {};
+	const perMixedFixture = {}; // mixedId → { pass, fail, langs: {mermaid: {pass,fail}, flow: {...}, sequence: {...}} }
+	for (const c of passes) {
+		bump(fileFromTitle(c.fullTitle || c.title || '', suiteMap), 'pass', c.duration || 0);
+		const m = classifyMermaidCase(c.fullTitle || c.title || '');
+		if (m) { perFixture[m.id] = perFixture[m.id] || { pass: 0, fail: 0, tier: m.tier }; perFixture[m.id].pass++; }
+		const fs2 = classifyFlowSeqCase(c.fullTitle || c.title || '');
+		if (fs2) {
+			const bucket = fs2.kind === 'flow' ? perFlowFixture : perSeqFixture;
+			bucket[fs2.id] = bucket[fs2.id] || { pass: 0, fail: 0, tier: fs2.tier }; bucket[fs2.id].pass++;
+		}
+		const mx = classifyMixedCase(c.fullTitle || c.title || '');
+		if (mx) {
+			perMixedFixture[mx.mixedId] = perMixedFixture[mx.mixedId] || { pass: 0, fail: 0, langs: {} };
+			perMixedFixture[mx.mixedId].pass++;
+			perMixedFixture[mx.mixedId].langs[mx.lang] = perMixedFixture[mx.mixedId].langs[mx.lang] || { pass: 0, fail: 0 };
+			perMixedFixture[mx.mixedId].langs[mx.lang].pass++;
+		}
+	}
+	for (const c of failures) {
+		bump(fileFromTitle(c.fullTitle || c.title || '', suiteMap), 'fail', c.duration || 0);
+		const m = classifyMermaidCase(c.fullTitle || c.title || '');
+		if (m) { perFixture[m.id] = perFixture[m.id] || { pass: 0, fail: 0, tier: m.tier }; perFixture[m.id].fail++; }
+		const fs2 = classifyFlowSeqCase(c.fullTitle || c.title || '');
+		if (fs2) {
+			const bucket = fs2.kind === 'flow' ? perFlowFixture : perSeqFixture;
+			bucket[fs2.id] = bucket[fs2.id] || { pass: 0, fail: 0, tier: fs2.tier }; bucket[fs2.id].fail++;
+		}
+		const mx = classifyMixedCase(c.fullTitle || c.title || '');
+		if (mx) {
+			perMixedFixture[mx.mixedId] = perMixedFixture[mx.mixedId] || { pass: 0, fail: 0, langs: {} };
+			perMixedFixture[mx.mixedId].fail++;
+			perMixedFixture[mx.mixedId].langs[mx.lang] = perMixedFixture[mx.mixedId].langs[mx.lang] || { pass: 0, fail: 0 };
+			perMixedFixture[mx.mixedId].langs[mx.lang].fail++;
+		}
+	}
 
 	const lines = [];
-	lines.push(`# Mermaid Gate F · ${now.toISOString()}`);
+	lines.push(`# Gate F · mermaid + flow + sequence + mixed · ${now.toISOString()}`);
 	lines.push('');
 	lines.push(`- exitCode: ${exitCode}`);
 	lines.push(`- 总用时: ${elapsed} ms`);
@@ -255,6 +347,40 @@ function buildMdReport({ report, elapsed, fixtures, exitCode }) {
 		const f = fixtures[id];
 		const p = perFixture[id] || { pass: 0, fail: 0, tier: '-' };
 		lines.push(`| ${id} | ${p.tier} | ${f.md ? '✓' : '✗'} | ${f.expected ? '✓' : '✗'} | ${p.pass} | ${p.fail} |`);
+	}
+	lines.push('');
+
+	lines.push('## Flow fixture 通过矩阵');
+	lines.push('');
+	lines.push('| id | tier | .md | .golden.svg | round-trip pass | round-trip fail |');
+	lines.push('|---|---|:-:|:-:|---:|---:|');
+	for (const id of Object.keys(flowFixtures || {}).sort()) {
+		const f = flowFixtures[id];
+		const p = perFlowFixture[id] || { pass: 0, fail: 0, tier: '-' };
+		lines.push(`| ${id} | ${p.tier} | ${f.md ? '✓' : '✗'} | ${f.expected ? '✓' : '✗'} | ${p.pass} | ${p.fail} |`);
+	}
+	lines.push('');
+
+	lines.push('## Sequence fixture 通过矩阵');
+	lines.push('');
+	lines.push('| id | tier | .md | .golden.svg | round-trip pass | round-trip fail |');
+	lines.push('|---|---|:-:|:-:|---:|---:|');
+	for (const id of Object.keys(seqFixtures || {}).sort()) {
+		const f = seqFixtures[id];
+		const p = perSeqFixture[id] || { pass: 0, fail: 0, tier: '-' };
+		lines.push(`| ${id} | ${p.tier} | ${f.md ? '✓' : '✗'} | ${f.expected ? '✓' : '✗'} | ${p.pass} | ${p.fail} |`);
+	}
+	lines.push('');
+
+	lines.push('## Mixed fixture 通过矩阵');
+	lines.push('');
+	lines.push('| id | .md | mermaid pass/fail | flow pass/fail | sequence pass/fail | total pass | total fail |');
+	lines.push('|---|:-:|---|---|---|---:|---:|');
+	for (const id of Object.keys(mixedFixtures || {}).sort()) {
+		const f = mixedFixtures[id];
+		const p = perMixedFixture[id] || { pass: 0, fail: 0, langs: {} };
+		const cell = (lang) => { const l = p.langs[lang] || { pass: 0, fail: 0 }; return `${l.pass}/${l.fail}`; };
+		lines.push(`| ${id} | ${f.md ? '✓' : '✗'} | ${cell('mermaid')} | ${cell('flow')} | ${cell('sequence')} | ${p.pass} | ${p.fail} |`);
 	}
 	lines.push('');
 
@@ -301,7 +427,10 @@ async function main() {
 	const stamp = new Date().toISOString().replace(/[:.]/g, '-');
 	const mdPath = path.join(REPORTS_DIR, `gate-f-${stamp}.md`);
 	const fixtures = collectFixtureMatrix();
-	const md = buildMdReport({ report, elapsed, fixtures, exitCode: status ?? 0 });
+	const flowFixtures = collectFlowSeqMatrix(FLOW_FIXTURE_ROOT, '.golden.svg');
+	const seqFixtures = collectFlowSeqMatrix(SEQ_FIXTURE_ROOT, '.golden.svg');
+	const mixedFixtures = collectMixedMatrix();
+	const md = buildMdReport({ report, elapsed, fixtures, flowFixtures, seqFixtures, mixedFixtures, exitCode: status ?? 0 });
 	fs.writeFileSync(mdPath, md, 'utf8');
 	log(`[gate-f] md 报告 -> ${mdPath}`);
 
@@ -314,6 +443,9 @@ async function main() {
 			stats: report && report.stats ? report.stats : null,
 			testFiles: TEST_FILES,
 			fixtureMatrix: fixtures,
+			flowFixtureMatrix: flowFixtures,
+			sequenceFixtureMatrix: seqFixtures,
+			mixedFixtureMatrix: mixedFixtures,
 		};
 		process.stdout.write(JSON.stringify(summary, null, 2) + '\n');
 	} else {

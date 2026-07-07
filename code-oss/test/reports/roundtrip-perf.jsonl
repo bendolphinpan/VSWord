@@ -254,3 +254,7 @@
 {"ts":"2026-07-07T16:39:47.345Z","commit":"4c638abc","path":"200kb-mixed.md","branch":"A","bytes":205600,"ms":5,"samples":[5,5,7]}
 {"ts":"2026-07-07T16:39:47.391Z","commit":"4c638abc","path":"200kb-mixed.md","branch":"B","bytes":205600,"ms":6,"samples":[6,6,7]}
 {"ts":"2026-07-07T16:39:47.435Z","commit":"4c638abc","path":"200kb-mixed.md","branch":"C","bytes":205600,"ms":6,"samples":[5,6,6]}
+{"ts":"2026-07-07T17:13:01.950Z","fixture":"200kb-mixed.md","bytes":205600,"ms":6,"samples":[3,5,5,5,6]}
+{"ts":"2026-07-07T17:13:01.998Z","commit":"c5400a87","path":"200kb-mixed.md","branch":"A","bytes":205600,"ms":6,"samples":[5,6,6]}
+{"ts":"2026-07-07T17:13:02.045Z","commit":"c5400a87","path":"200kb-mixed.md","branch":"B","bytes":205600,"ms":7,"samples":[5,7,7]}
+{"ts":"2026-07-07T17:13:02.089Z","commit":"c5400a87","path":"200kb-mixed.md","branch":"C","bytes":205600,"ms":5,"samples":[5,5,6]}
