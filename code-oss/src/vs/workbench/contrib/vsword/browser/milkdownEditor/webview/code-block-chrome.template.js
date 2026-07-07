@@ -65,6 +65,8 @@ import {
 import { createMermaidNodeView } from './mermaid-view.mjs';
 // T-3.5b-flow.2: flowchart.js NodeView 分派（language=flow）。
 import { createFlowchartNodeView } from './flowchart-view.mjs';
+// T-3.5b-seq.2: js-sequence-diagrams NodeView 分派（language=sequence）。
+import { createSequenceNodeView } from './sequence-view.mjs';
 
 export { CODE_LANGS, labelForLang, normalizeLangKey, searchLangs, refractorLangIds };
 
@@ -215,6 +217,10 @@ function codeBlockNodeViewFactory(ctx) {
 		if ((node.attrs.language || '') === 'flow') {
 			return createFlowchartNodeView(node, view, getPos);
 		}
+		// T-3.5b-seq.2: sequence code_block 走独立 NodeView（js-sequence-diagrams）。
+		if ((node.attrs.language || '') === 'sequence') {
+			return createSequenceNodeView(node, view, getPos);
+		}
 
 		const doc = view.dom.ownerDocument;
 		const wrap = doc.createElement('div');
@@ -313,9 +319,13 @@ function codeBlockNodeViewFactory(ctx) {
 				const isMermaid = (next.attrs.language || '') === 'mermaid';
 				if (wasMermaid !== isMermaid) return false;
 				// T-3.5b-flow.2: language 从/到 flow 的切换同款处理。
-				const wasFlow = (node.attrs.language || '') === 'flow';
-				const isFlow = (next.attrs.language || '') === 'flow';
-				if (wasFlow !== isFlow) return false;
+					const wasFlow = (node.attrs.language || '') === 'flow';
+					const isFlow = (next.attrs.language || '') === 'flow';
+					if (wasFlow !== isFlow) return false;
+					// T-3.5b-seq.2: language 从/到 sequence 的切换同款处理。
+					const wasSeq = (node.attrs.language || '') === 'sequence';
+					const isSeq = (next.attrs.language || '') === 'sequence';
+					if (wasSeq !== isSeq) return false;
 				langBtn.textContent = labelForLang(next.attrs.language);
 				return true;
 			},

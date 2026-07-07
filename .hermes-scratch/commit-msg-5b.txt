@@ -1,0 +1,75 @@
+feat(vsword/milkdown): T-3.5c.5b setext heading 保源码
+
+依据 PRD docs/plans/003c-syntax-completion.md（F-20 / AC-10 / §8 T-3.5c.5b）：
+原文是 setext（`Title\n====`=h1，`Title\n----`=h2）时，未编辑块回写仍是
+setext；用户主动改标题内容或级别时按 remark 默认（不强制写回 setext）。
+
+实施选择：首选路线 · setext-aware serializer 的轻量变体
+─────────────────────────────────────
+不改 remark-stringify 全局 `setext: false`（避免污染纯 ATX 文档 + 与 PRD
+「用户主动改按 remark 默认」一致），在 serialize 产物上做一次针对性后处理：
+
+1. init 阶段：用轻量 remark-parse 抽取原文块级 range，配合 sourceText 从
+   块级切片里识别 setext heading，构造 hint 队列（Map<text, hint[]>，FIFO）。
+2. serialize 阶段：postProcessSetextHeadings(raw) 扫每一行 `^#{1,2} .+`：
+   - hint 命中 + depth 一致 → 改写为 `text\n====...` / `text\n----...`，
+     消费一个 hint。
+   - hint 命中但 depth 不一致（用户改了级别）→ 保持 ATX。
+   - 未命中（用户改了文本 / 新增标题 / hint 耗尽）→ 保持 ATX。
+3. 后处理不可变 · 纯字符串输入输出 · 每次 serialize 都从原始 hint 集合
+   deep-clone 一份消费队列 → 多次 serialize 场景下互不污染。
+
+不依赖 tracker plugin state · 不依赖 attrs.blockId 注入 · 零 ProseMirror
+侵入。R5 降级路径：`disableSetextHeading()` 一行即可关闭后处理回退 ATX。
+
+改动清单
+─────────────────────────────────────
+- webview/setext-helpers.template.js（新增 205 行）
+  纯函数集，零 @milkdown/* 依赖：parseSetextHeading / collectSetextHints /
+  buildSetextHintQueue / rewriteSetextHeadings / buildSetextHintQueueFromSource。
+  兼容 LF / CRLF；underline 只识别同一种 `=`（h1）或 `-`（h2），连续 1+。
+- webview/setext-heading.template.js（新增 114 行）
+  post-process stringifier 单例：configureSetextHeading / postProcessSetextHeadings /
+  enable / disable / peekSetextHintQueue（test-only 快照）。
+- webview/roundtrip-parser-hook.template.js（+44）
+  buildSessionFromMdast 顺带附上 setextHints；packSessionReady Map→Record 打包。
+- webview/entry.template.js（+38）
+  createEditor 前用 unified().use(remarkParse) 抽 blockRanges 灌进
+  configureSetextHeading；serialize() 与 formatDocumentInPlace() 尾部走
+  postProcessSetextHeadings(raw)。setext-init 失败降级为空队列（不阻塞主流程）。
+- build-milkdown-editor.cjs（+6）
+  挂载 setext-helpers.template.js → .mjs / setext-heading.template.js → .mjs
+  两条拷贝到 .tmp/milkdown-prod-builder/src/，esbuild 内部 import 解析可通。
+- test/fixtures/roundtrip/typora/heading-setext-basic.md（新，h1 `=` + h2 `-`）
+- test/fixtures/roundtrip/typora/heading-setext-duplicate.md（新，同名重复 setext
+  验证 FIFO；含 2 个 h1 + 2 个 h2）
+- test/fixtures/roundtrip/typora/heading-setext-mixed.md（新，ATX 与 setext 交错
+  + code-fence-meta 混排，验证与 T-3.5c.5a 两族保真不冲突）
+- test/node/milkdownRoundtrip.test.ts（+8/-3）
+  sanity fixture 数量 31 → 34（+3 setext fixture）。
+
+DoD 验证
+─────────────────────────────────────
+1. tsc 全项目 0 error（NODE_OPTIONS=--max-old-space-size=8192 · code-oss 内建
+   node_modules/typescript/bin/tsc --noEmit -p src/tsconfig.json，保持 T-3.11.4
+   clean baseline）
+2. Gate E 一键：264 pass / 0 fail / 561ms（含 3 个新 setext fixture 全走通
+   AC-1 path=A byte-for-byte + AC-2 assembleIncremental 恒等 + AC-3 单块替换
+   + AC-8 多块 dirty + Qa2 forcePath=B。heading-setext-duplicate 与
+   heading-setext-mixed 被 session 判 unsafe 走 path=C，符合 R5 降级路径）
+3. Gate F 一键：70 pass / 0 fail / 5.9s（mermaid 22 类 golden diff 全绿，
+   setext 后处理未回归 code-block schema override）
+4. 459 case protocol/session/serializer/tracker/working-copy 单测集全绿
+   （包含在 Gate E 264 内）
+5. roundtrip verify（entry.template.js 内嵌）与 gate-f-2026-07-06T09-33-57 报告
+   已入库
+
+实施选择说明
+─────────────────────────────────────
+首选路线（setext-aware serializer 轻量变体）已跑通，未撞墙 → 不走 R5「块级
+track + 未编辑块整块 substring 替换」降级路径。降级路径的兜底仍在 pickSavePath
+的 path=A / path=C 分支里保留（session unsafe 时 setext 与其他文本一样走整篇
+回写），本 commit 的 setext 后处理只影响 path=B / stringify 产物层。
+
+review-required：本 commit 只在本地，未 push。coordinator review 通过后再入
+远端。相关 kanban 任务 t_77343d3c。

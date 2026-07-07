@@ -42,6 +42,9 @@ const STEPS = [
 		id: 'build',
 		title: 'build-milkdown-editor.cjs（webview bundle + verify.template.mjs 全量断言）',
 		file: path.join(CODE_OSS, 'src/vs/workbench/contrib/vsword/browser/milkdownEditor/build-milkdown-editor.cjs'),
+		// T-3.5b-seq.2c: build.cjs 内部 `codeOssRoot = process.cwd()`，必须从 code-oss/ 目录跑，
+		// 否则 workspaceRoot 计算错位、esbuild alias `empty-shim.js` 找不到。
+		cwd: CODE_OSS,
 		summarize(out) {
 			try {
 				// build script 最后一段 stdout 是 verify.template.mjs 的 JSON。
@@ -127,7 +130,7 @@ function runStep(step) {
 	const args = [step.file, ...(step.args || [])];
 	const res = cp.spawnSync(process.execPath, args, {
 		encoding: 'utf8',
-		cwd: REPO_ROOT,
+		cwd: step.cwd || REPO_ROOT,
 		env: process.env,
 		maxBuffer: 32 * 1024 * 1024,
 	});

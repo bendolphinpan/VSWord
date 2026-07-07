@@ -80,6 +80,19 @@ import {
 	offsetOfLine,
 	buildFlowchartOptions,
 } from './flowchart-view-helpers.mjs';
+// T-3.5b-seq.2: js-sequence-diagrams NodeView + helpers 断言。别名避免与 flowchart 同名冲突。
+import {
+	sequenceIsEmpty,
+	normalizeSequenceSource,
+	extractSequenceError,
+	buildSequenceOptions,
+	getCodeBlockSource as seqGetCodeBlockSource,
+	autoSizeTextareaPx as seqAutoSizeTextareaPx,
+	formatErrorHeadline as seqFormatErrorHeadline,
+	parseErrorLineNumber as seqParseErrorLineNumber,
+	formatErrorStack as seqFormatErrorStack,
+	offsetOfLine as seqOffsetOfLine,
+} from './sequence-view-helpers.mjs';
 
 // Must match webview/entry.template.js — kept literally in sync for round-trip parity.
 const TYPORA_STRINGIFY_OPTIONS = {
@@ -622,6 +635,41 @@ const checks = {
 	flowchartOptionsDarkHasContrast: (() => {
 		const o = buildFlowchartOptions(true);
 		return typeof o['font-color'] === 'string' && typeof o['fill'] === 'string' && o['font-color'] !== o['fill'];
+	})(),
+	// T-3.5b-seq.2 · js-sequence-diagrams helpers 断言（纯函数 · 无需 sequence-diagram runtime）。
+	seqGetCodeBlockSource:           seqGetCodeBlockSource({ textContent: 'title: t\nA->B: hi' }) === 'title: t\nA->B: hi',
+	seqGetCodeBlockSourceNullSafe:   seqGetCodeBlockSource(null) === '' && seqGetCodeBlockSource({}) === '',
+	seqIsEmptyEmpty:                 sequenceIsEmpty('') === true && sequenceIsEmpty('  \n	\n') === true && sequenceIsEmpty(null) === true,
+	seqIsEmptyNonEmpty:              sequenceIsEmpty('A->B: hi') === false,
+	seqAutoSizeClampsMin:            seqAutoSizeTextareaPx('a') === 96,
+	seqAutoSizeClampsMax:            seqAutoSizeTextareaPx('a\n'.repeat(50)) === 480,
+	seqNormalizeStripsTrailingBlanks: normalizeSequenceSource('a\nb\n\n\n') === 'a\nb',
+	seqNormalizeKeepsInternal:       normalizeSequenceSource('a\n\nb\n') === 'a\n\nb',
+	seqNormalizeNullSafe:            normalizeSequenceSource(null) === '' && normalizeSequenceSource(undefined) === '',
+	seqExtractParseError:            extractSequenceError(new Error("Parse error on line 3:\n  bad\nExpecting 'PARTICIPANT'")) === "Parse error on line 3:",
+	seqExtractLexicalError:          extractSequenceError(new Error('Lexical error on line 5. Unrecognized text.')) === 'Lexical error on line 5. Unrecognized text.',
+	seqExtractErrorNullSafe:         extractSequenceError(null) === null,
+	seqHeadlineTrims:                seqFormatErrorHeadline(new Error('x'.repeat(200)), 40).length <= 40 && seqFormatErrorHeadline(new Error('x'.repeat(200)), 40).endsWith('…'),
+	seqHeadlineFallback:             seqFormatErrorHeadline(null) === 'Sequence 渲染失败',
+	seqParseErrorLineHit:            seqParseErrorLineNumber(new Error('Parse error on line 7: bad token')) === 7,
+	seqLexicalErrorLineHit:          seqParseErrorLineNumber(new Error('Lexical error on line 12. Unrecognized text.')) === 12,
+	seqParseErrorLineMiss:           seqParseErrorLineNumber(new Error('no line info')) === null,
+	seqFormatStackHasMessage:        (() => {
+		const s = seqFormatErrorStack(new Error('boom'));
+		return typeof s === 'string' && s.includes('boom');
+	})(),
+	seqFormatStackNullSafe:          seqFormatErrorStack(null) === '' && seqFormatErrorStack(undefined) === '',
+	seqOffsetOfLineOne:              seqOffsetOfLine('a\nb\nc', 1) === 0,
+	seqOffsetOfLineThree:            seqOffsetOfLine('a\nb\nc', 3) === 4,
+	seqOffsetOfLineClamped:          seqOffsetOfLine('a\nb', 99) === 3,
+	seqOptionsSimpleTheme:           (() => {
+		const o = buildSequenceOptions(false);
+		return typeof o === 'object' && o.theme === 'simple';
+	})(),
+	seqOptionsDarkStillSimple:       (() => {
+		// D-5：dark 主题暂仍走 simple（外层 CSS 覆盖颜色），不加载 WebFont。
+		const o = buildSequenceOptions(true);
+		return o.theme === 'simple';
 	})(),
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);

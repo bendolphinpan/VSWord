@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-07T02:25:21.225Z
+Generated: 2026-07-07T15:42:15.657Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
@@ -139,6 +139,10 @@ Generated: 2026-07-07T02:25:21.225Z
 | prosemirror-schema-list | 1.5.1 | MIT | https://registry.npmjs.org/prosemirror-schema-list/-/prosemirror-schema-list-1.5.1.tgz |
 | prosemirror-tables | 1.8.5 | MIT | https://registry.npmjs.org/prosemirror-tables/-/prosemirror-tables-1.8.5.tgz |
 | remark | 15.0.1 | MIT | https://registry.npmjs.org/remark/-/remark-15.0.1.tgz |
+| @rokt33r/js-sequence-diagrams | 2.0.6-2 | BSD-2-Clause | https://registry.npmjs.org/@rokt33r/js-sequence-diagrams/-/js-sequence-diagrams-2.0.6-2.tgz |
+| raphael | 2.1.4 | MIT | https://registry.npmjs.org/raphael/-/raphael-2.1.4.tgz |
+| eve | 0.4.1 |  | git+ssh://git@github.com/adobe-webplatform/eve.git#eef80ed8d188423c2272746fb8ae5cc8dad84cb1 |
+| underscore | 1.4.4 |  | https://registry.npmjs.org/underscore/-/underscore-1.4.4.tgz |
 | esbuild | 0.27.0 | MIT | https://registry.npmjs.org/esbuild/-/esbuild-0.27.0.tgz |
 | @esbuild/aix-ppc64 |  |  |  |
 | @esbuild/android-arm |  |  |  |
@@ -166,6 +170,8 @@ Generated: 2026-07-07T02:25:21.225Z
 | @esbuild/win32-arm64 |  |  |  |
 | @esbuild/win32-ia32 |  |  |  |
 | @esbuild/win32-x64 | 0.27.0 | MIT | https://registry.npmjs.org/@esbuild/win32-x64/-/win32-x64-0.27.0.tgz |
+| flowchart.js | 1.18.0 | MIT | https://registry.npmjs.org/flowchart.js/-/flowchart.js-1.18.0.tgz |
+| raphael | 2.3.0 | MIT | https://registry.npmjs.org/raphael/-/raphael-2.3.0.tgz |
 | js-yaml | 4.1.0 | MIT | https://registry.npmjs.org/js-yaml/-/js-yaml-4.1.0.tgz |
 | argparse | 2.0.1 | Python-2.0 | https://registry.npmjs.org/argparse/-/argparse-2.0.1.tgz |
 | jsdom | 27.3.0 | MIT | https://registry.npmjs.org/jsdom/-/jsdom-27.3.0.tgz |
@@ -348,8 +354,16 @@ Generated: 2026-07-07T02:25:21.225Z
 | emojilib | 2.4.0 | MIT | https://registry.npmjs.org/emojilib/-/emojilib-2.4.0.tgz |
 | skin-tone | 2.0.0 | MIT | https://registry.npmjs.org/skin-tone/-/skin-tone-2.0.0.tgz |
 | unicode-emoji-modifier-base | 1.0.0 | MIT | https://registry.npmjs.org/unicode-emoji-modifier-base/-/unicode-emoji-modifier-base-1.0.0.tgz |
+| eve-raphael | 0.5.0 |  | https://registry.npmjs.org/eve-raphael/-/eve-raphael-0.5.0.tgz |
+| remark-flexible-markers | 1.3.5 | MIT | https://registry.npmjs.org/remark-flexible-markers/-/remark-flexible-markers-1.3.5.tgz |
+| unist-builder | 4.0.0 | MIT | https://registry.npmjs.org/unist-builder/-/unist-builder-4.0.0.tgz |
+| unist-util-find-after | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-after/-/unist-util-find-after-5.0.0.tgz |
+| unist-util-find-all-after | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-all-after/-/unist-util-find-all-after-5.0.0.tgz |
+| unist-util-find-all-before | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-all-before/-/unist-util-find-all-before-5.0.0.tgz |
+| unist-util-find-between | 1.2.2 | MIT | https://registry.npmjs.org/unist-util-find-between/-/unist-util-find-between-1.2.2.tgz |
 | remark-frontmatter | 5.0.0 | MIT | https://registry.npmjs.org/remark-frontmatter/-/remark-frontmatter-5.0.0.tgz |
 | mdast-util-frontmatter | 2.0.1 | MIT | https://registry.npmjs.org/mdast-util-frontmatter/-/mdast-util-frontmatter-2.0.1.tgz |
 | micromark-extension-frontmatter | 2.0.0 | MIT | https://registry.npmjs.org/micromark-extension-frontmatter/-/micromark-extension-frontmatter-2.0.0.tgz |
 | fault | 2.0.1 | MIT | https://registry.npmjs.org/fault/-/fault-2.0.1.tgz |
 | format | 0.2.2 |  | https://registry.npmjs.org/format/-/format-0.2.2.tgz |
+| underscore | 1.13.7 | MIT | https://registry.npmjs.org/underscore/-/underscore-1.13.7.tgz |

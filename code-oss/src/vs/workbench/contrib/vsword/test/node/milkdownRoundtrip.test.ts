@@ -820,10 +820,13 @@ suite('VSWord Roundtrip · Qqa3 perf 采样', () => {
 // 验证）。
 // T-3.5b-flow.2: fixture 总数由 34 → 37（新增 typora/flowchart-basic.md /
 // flowchart-condition.md / flowchart-mixed.md 用于 code_block[lang=flow] fence Round-trip
+// 与 P0 语法保真验证）。
+// T-3.5b-seq.2: fixture 总数由 37 → 40（新增 typora/sequence-basic.md /
+// sequence-actors.md / sequence-notes.md 用于 code_block[lang=sequence] fence Round-trip
 // 与 P0 语法保真验证）。这里 sanity 只保证矩阵仍在增长且未回退。
-suite('VSWord Roundtrip · sanity 37 fixture 全体 build 不抛', () => {
-	test('37 fixtures 全部可 build', () => {
-		assert.strictEqual(FIXTURES.length, 37, `expected 37, got ${FIXTURES.length}`);
+suite('VSWord Roundtrip · sanity 40 fixture 全体 build 不抛', () => {
+	test('40 fixtures 全部可 build', () => {
+		assert.strictEqual(FIXTURES.length, 40, `expected 40, got ${FIXTURES.length}`);
 		for (const f of FIXTURES) {
 			const { session } = buildFor(f.text);
 			assert.ok(session);

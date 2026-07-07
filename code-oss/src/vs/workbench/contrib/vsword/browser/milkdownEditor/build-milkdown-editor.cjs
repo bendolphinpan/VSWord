@@ -50,6 +50,10 @@ const mermaidViewHelpersPath = path.join(srcDir, 'mermaid-view-helpers.mjs');
 // chunk 拆分延后到 T-3.5b-flowseq.3）。
 const flowchartViewPath = path.join(srcDir, 'flowchart-view.mjs');
 const flowchartViewHelpersPath = path.join(srcDir, 'flowchart-view-helpers.mjs');
+// T-3.5b-seq.2: js-sequence-diagrams NodeView + underscore + raphael 共享。
+// raphael 与 flowchart.js 复用同一份 2.3.0 版本（内联进主 bundle）。
+const sequenceViewPath = path.join(srcDir, 'sequence-view.mjs');
+const sequenceViewHelpersPath = path.join(srcDir, 'sequence-view-helpers.mjs');
 const wikilinkPath = path.join(srcDir, 'wikilink.mjs');
 const wikilinkHelpersPath = path.join(srcDir, 'wikilink-helpers.mjs');
 const wikilinkAutocompletePath = path.join(srcDir, 'wikilink-autocomplete.mjs');
@@ -104,6 +108,11 @@ const packages = [
 	// 通过 npm overrides 强制统一版本，此处直接对齐。
 	'flowchart.js@1.18.0',
 	'raphael@2.3.0',
+	// T-3.5b-seq.2: js-sequence-diagrams (rokt33r fork) 加 underscore。
+	// raphael 与 flowchart.js 声明的 dep 一致；`sequence-diagram-raphael-min.js`
+	// 顶层读全局 `Raphael` / `_`，sequence-view.mjs 的 loader 会把它们挂到 globalThis 上。
+	'@rokt33r/js-sequence-diagrams@2.0.6-2',
+	'underscore@1.13.7',
 	// T-3.5c.1: emoji shortcode → unicode 查表（自研 remark plugin 消费）。
 	'node-emoji@2.2.0',
 	// T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
@@ -172,6 +181,9 @@ fs.writeFileSync(mermaidViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir
 // T-3.5b-flow.2: flowchart-view NodeView + helpers。
 fs.writeFileSync(flowchartViewPath, fs.readFileSync(path.join(webviewSrcDir, 'flowchart-view.template.js'), 'utf8'));
 fs.writeFileSync(flowchartViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'flowchart-view-helpers.template.js'), 'utf8'));
+// T-3.5b-seq.2: sequence-view NodeView + helpers。
+fs.writeFileSync(sequenceViewPath, fs.readFileSync(path.join(webviewSrcDir, 'sequence-view.template.js'), 'utf8'));
+fs.writeFileSync(sequenceViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'sequence-view-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkAutocompletePath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-autocomplete.template.js'), 'utf8'));
@@ -206,6 +218,13 @@ esbuild.buildSync({
 	legalComments: 'linked',
 	minify: true,
 	define: { 'process.env.NODE_ENV': '"production"' },
+	// T-3.5b-seq.2: rokt33r/js-sequence-diagrams UMD wrapper 里含 `require("fs")` /
+	// `require("path")`（webfontloader 的 CJS 兼容分支 dead-code）；webview 不走这条
+	// 路径，用 alias 指向空存根让 esbuild resolve 过。
+	alias: {
+		fs: path.join(builderDir, 'src', 'empty-shim.js'),
+		path: path.join(builderDir, 'src', 'empty-shim.js'),
+	},
 });
 
 // T-3.3.4: copy KaTeX stylesheet + fonts into vendor/katex/ so the webview can load them

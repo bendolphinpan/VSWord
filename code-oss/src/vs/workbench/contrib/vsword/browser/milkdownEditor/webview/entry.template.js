@@ -56,6 +56,9 @@ import { mathViewPlugins, configureMathKatex } from './math-view.mjs';
 import { broadcastMermaidTheme } from './mermaid-view.mjs';
 // T-3.5b-flow.2: flowchart-view 也需要主题广播。
 import { broadcastFlowchartTheme } from './flowchart-view.mjs';
+// T-3.5b-seq.2: sequence-view 也需要主题广播（虽然当前 buildSequenceOptions 恒返回 simple，
+// 但保留广播链路，方便后续 dark 主题接入 / hand 主题 opt-in）。
+import { broadcastSequenceTheme } from './sequence-view.mjs';
 import { wikilinkPlugins, configureWikilinkHost, ingestResolutions, invalidateWikilinkCache } from './wikilink.mjs';
 import {
 	wikilinkAutocompletePlugins,
@@ -525,6 +528,8 @@ window.addEventListener('message', event => {
 		try { broadcastMermaidTheme(isDark); } catch (err) { reportError('mermaid-theme', err); }
 		// T-3.5b-flow.2: 同款转发给 flowchart-view。
 		try { broadcastFlowchartTheme(isDark); } catch (err) { reportError('flowchart-theme', err); }
+		// T-3.5b-seq.2: 同款转发给 sequence-view（当前 simple 主题下无实际变化，链路预留）。
+		try { broadcastSequenceTheme(isDark); } catch (err) { reportError('sequence-theme', err); }
 		return;
 	}
 	if (msg.type === 'hostError') {
