@@ -89,6 +89,8 @@ import { frontmatterPlugins } from './frontmatter.mjs';
 // T-3.7c.1.a: [TOC] 占位符 remark 层 + PM schema（NodeView 由 b 卡负责）。
 import { tocRemarkPlugin } from './toc-remark.mjs';
 import { tocNode } from './toc-node.mjs';
+// T-3.7c.1.b: TOC NodeView + 事务级集中重算 Plugin。
+import { tocViewPlugins } from './toc-view.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -323,6 +325,10 @@ async function createEditor(markdown) {
 		// frontmatter 等消耗掉自己的目标节点），最后再来识别纯 `[TOC]` paragraph。
 		.use(tocRemarkPlugin)
 		.use(tocNode)
+		// T-3.7c.1.b: NodeView + 事务级集中重算 Plugin。必须紧跟 tocNode（$view 依赖
+		// schema 已注册）；$prose 里的 recompute plugin 走 appendTransaction，与
+		// tracker plugin 一样在 milkdown 6.x prosemirror 插件链末尾生效。
+		.use(tocViewPlugins)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;

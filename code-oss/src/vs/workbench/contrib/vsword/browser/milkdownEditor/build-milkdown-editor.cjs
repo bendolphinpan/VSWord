@@ -81,6 +81,8 @@ const frontmatterHelpersPath = path.join(srcDir, 'frontmatter-helpers.mjs');
 // T-3.7c.1.a: [TOC] 占位符 remark + PM schema。
 const tocRemarkPath = path.join(srcDir, 'toc-remark.mjs');
 const tocNodePath = path.join(srcDir, 'toc-node.mjs');
+// T-3.7c.1.b: TOC NodeView + 事务级集中重算 Plugin。
+const tocViewPath = path.join(srcDir, 'toc-view.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -218,6 +220,7 @@ fs.writeFileSync(frontmatterHelpersPath, fs.readFileSync(path.join(webviewSrcDir
 // T-3.7c.1.a: [TOC] 占位符 remark + PM schema。
 fs.writeFileSync(tocRemarkPath, fs.readFileSync(path.join(webviewSrcDir, 'toc-remark.template.js'), 'utf8'));
 fs.writeFileSync(tocNodePath, fs.readFileSync(path.join(webviewSrcDir, 'toc-node.template.js'), 'utf8'));
+fs.writeFileSync(tocViewPath, fs.readFileSync(path.join(webviewSrcDir, 'toc-view.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);
