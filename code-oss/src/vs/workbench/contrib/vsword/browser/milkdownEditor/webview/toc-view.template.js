@@ -43,7 +43,7 @@
 import { Plugin, PluginKey } from '@milkdown/prose/state';
 import { $view, $prose } from '@milkdown/utils';
 import { tocNode } from './toc-node.mjs';
-import { extractHeadings } from './outline-extractor.mjs';
+import { extractHeadings, slugify } from './outline-extractor.mjs';
 
 // ---------------------------------------------------------------------------
 // 模块级共享状态（单点广播源 · 多 TOC 共存）
@@ -89,6 +89,47 @@ export function headingsShallowHash(headings) {
 		const text = typeof h?.text === 'string' ? h.text.trim() : '';
 		return `${level}|${text}`;
 	}).join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// 点击跳转：slug → heading pos（PRD §4.7 · T-3.7c.1.c）
+// ---------------------------------------------------------------------------
+
+/**
+ * 遍历 PM doc，找到第一个 `slugify(heading.textContent) === slug` 的 heading，
+ * 返回该 heading 节点的 pos（PM 文档偏移）。
+ * 未命中或 doc 不含 heading → 返回 null。
+ *
+ * 独立纯函数，方便单测：
+ *   · 不依赖 EditorView（只吃 doc）
+ *   · 无副作用（不改 selection、不 dispatch）
+ *   · 与 outline-extractor.slugify 语义一致（决策 D-9：不额外定义 slug 规则）
+ *
+ * @param {import('@milkdown/prose/model').Node} doc - PM 根节点
+ * @param {string} slug - `<a data-heading-id="slug">` 的目标 slug
+ * @returns {number | null}
+ */
+export function resolveHeadingPos(doc, slug) {
+	if (!doc || typeof doc.descendants !== 'function') { return null; }
+	if (typeof slug !== 'string' || slug.length === 0) { return null; }
+	// 同 outline-extractor：重名 heading 会在同一 base 上追加 `-1 / -2` 后缀。
+	// 我们这里从 doc 顺序扫描，用同样的计数算法产生每个 heading 的最终 slug，
+	// 命中 slug 时返回其 pos。
+	const seen = new Map();
+	let hit = null;
+	doc.descendants((node, pos) => {
+		if (hit !== null) { return false; }
+		if (node?.type?.name !== 'heading') { return true; }
+		const text = (node.textContent || '').trim();
+		const level = Number(node.attrs?.level) || 1;
+		const baseSlug = slugify(text) || `h${level}`;
+		const count = seen.get(baseSlug) ?? 0;
+		seen.set(baseSlug, count + 1);
+		const id = count === 0 ? baseSlug : `${baseSlug}-${count}`;
+		if (id === slug) { hit = pos; return false; }
+		return false; // heading 内部不含子 heading
+	});
+	return hit;
 }
 
 // ---------------------------------------------------------------------------
@@ -159,6 +200,47 @@ export function createTocView(node, view, _getPos) {
 		}
 		dom.appendChild(ul);
 	}
+
+	// T-3.7c.1.c · 点击跳转（PRD §4.7 + AC-2）：
+	//   · nav 上一次性委托 click（不给每个 <a> 单绑）；
+	//   · target.closest('a[data-heading-id]') 拿 slug；
+	//   · 走 resolveHeadingPos + view.dispatch(setSelection(pos+1).scrollIntoView())；
+	//   · pos+1 = heading 内容开头（heading 本身是块，+1 落入 inline）；
+	//   · 找不到 pos → fallback getElementById(slug).scrollIntoView()（预览态兜底）。
+	//   · preventDefault + stopPropagation：屏蔽浏览器默认 `#hash` 导航破坏 SPA 路由。
+	dom.addEventListener('click', (ev) => {
+		const anchor = ev.target && typeof ev.target.closest === 'function'
+			? ev.target.closest('a[data-heading-id]')
+			: null;
+		if (!anchor) { return; }
+		ev.preventDefault();
+		ev.stopPropagation();
+		const slug = anchor.getAttribute('data-heading-id') || '';
+		if (!slug) { return; }
+		let hit = null;
+		try { hit = resolveHeadingPos(view.state?.doc, slug); } catch { hit = null; }
+		if (typeof hit === 'number' && hit >= 0) {
+			try {
+				const state = view.state;
+				const $target = state.doc.resolve(Math.min(hit + 1, state.doc.content.size));
+				// 复用当前 selection 的构造器：TextSelection.near 等价于 near-safe 选点，
+				// 与 entry.template.js 的 revealHeading 分支一致，避免直接 import TextSelection
+				// 造成 @milkdown/prose 双实例。
+				const nextSel = state.selection.constructor.near($target);
+				const tr = state.tr.setSelection(nextSel).scrollIntoView();
+				view.dispatch(tr);
+				if (typeof view.focus === 'function') { view.focus(); }
+				return;
+			} catch { /* 落到 fallback */ }
+		}
+		// fallback：预览态 / 只读态 / 找不到 heading pos
+		try {
+			const el = doc.getElementById && doc.getElementById(slug);
+			if (el && typeof el.scrollIntoView === 'function') {
+				el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+			}
+		} catch { /* noop */ }
+	});
 
 	const handle = {
 		dom,

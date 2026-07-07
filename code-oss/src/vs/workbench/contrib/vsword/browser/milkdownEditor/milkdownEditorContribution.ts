@@ -39,6 +39,7 @@ import {
 	VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY,
 	VSWORD_MILKDOWN_FORMAT_DOCUMENT_ACTION_ID,
 	VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID,
+	VSWORD_MILKDOWN_TOC_INSERT_ACTION_ID,
 	WikilinkResolveResult,
 	VSWORD_MILKDOWN_EDITOR_ID,
 	VSWORD_MILKDOWN_MODE_STORAGE_KEY,
@@ -199,6 +200,26 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				const active = editorSvc.activeEditor;
 				if (!(active instanceof MilkdownEditorInput)) { return; }
 				self.triggerFormat(active, 'selection');
+			}
+		}));
+
+		// T-3.7c.1.c · 命令 `vsword.toc.insertToc`：命令面板 / 快捷键触发，
+		// host 只做 activeEditor guard + post tocInsert 消息；webview 侧承担
+		// 「在当前光标所在段落后插入 toc_marker 节点」的实际编辑逻辑。
+		this._register(registerAction2(class extends Action2 {
+			constructor() {
+				super({
+					id: VSWORD_MILKDOWN_TOC_INSERT_ACTION_ID,
+					title: localize2('vsword.toc.insertToc', 'VSWord: Insert Table of Contents'),
+					category: localize2('vsword', 'VSWord'),
+					f1: true,
+				});
+			}
+			async run(accessor: ServicesAccessor): Promise<void> {
+				const editorSvc = accessor.get(IEditorService);
+				const active = editorSvc.activeEditor;
+				if (!(active instanceof MilkdownEditorInput)) { return; }
+				self.post(active, { type: 'tocInsert' });
 			}
 		}));
 	}

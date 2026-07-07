@@ -335,6 +335,15 @@ export interface HostFormatSelectionMessage {
 	readonly type: 'formatSelection';
 }
 
+/**
+ * T-3.7c.1.c · Qa2=c 派生：`vsword.toc.insertToc` 命令的 host→webview 载荷。
+ * webview 收到后在当前光标（或选区起点）所在段落之**后**插入一个 `toc_marker` 节点，
+ * 序列化为 `[TOC]` 字面量（决策 D-11 字节一致）。
+ */
+export interface HostTocInsertMessage {
+	readonly type: 'tocInsert';
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -352,7 +361,8 @@ export type HostToWebviewMessage =
 	| HostWikilinkPreviewResponseMessage
 	| HostWikilinkBacklinksResponseMessage
 	| HostFormatDocumentMessage
-	| HostFormatSelectionMessage;
+	| HostFormatSelectionMessage
+	| HostTocInsertMessage;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -378,3 +388,6 @@ export const VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY = 'vsword.milkdown.typewrite
 /** T-3.8.2 · Qa2=c: 两条 format 命令的 action id（命令面板 / 快捷键绑定用）。 */
 export const VSWORD_MILKDOWN_FORMAT_DOCUMENT_ACTION_ID = 'vsword.milkdown.formatDocument';
 export const VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID = 'vsword.milkdown.formatSelection';
+
+/** T-3.7c.1.c: 命令 `vsword.toc.insertToc`（命令面板可见；仅在活跃 Milkdown 编辑器上生效）。 */
+export const VSWORD_MILKDOWN_TOC_INSERT_ACTION_ID = 'vsword.toc.insertToc';

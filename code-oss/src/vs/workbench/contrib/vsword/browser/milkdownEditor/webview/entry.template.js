@@ -393,6 +393,51 @@ function requestSave() {
 }
 
 /**
+ * T-3.7c.1.c · 命令 `vsword.toc.insertToc` 的 webview 实现。
+ *
+ * 语义（PRD §5 AC-4 + 决策 D-3/D-8）：
+ *   1) 编辑器未 ready / source 模式 → no-op（避免脏 tr）；
+ *   2) 光标 / 选区起点所在**顶层块**之后插入一个 toc_marker 节点；
+ *      · toc_marker 是 group:'block' + atom + selectable=false（toc-node.template.js）；
+ *      · 插入位置为 `$from.after(1)` —— 落在 doc 顶层，紧跟当前段落 / heading 结束边界，
+ *        避免落进 list-item / blockquote 内部造成结构穿透；
+ *   3) 插入后光标停在新节点之后（PM 常规约定：插入不动选区，用户体验可控）；
+ *   4) 触发 dirty + markdownUpdated（save 由 host 侧 auto-save 或用户 Ctrl+S 承担）。
+ *
+ * 挂载点是 `editor.action`，保证在 milkdown ctx 下拿到 view / schema。
+ */
+function insertTocAtCursor() {
+	try {
+		if (modeController?.isSourceMode()) { return; }
+		if (!editor) { return; }
+		editor.action(ctx => {
+			const view = ctx.get(editorViewCtx);
+			const state = view.state;
+			const schema = state.schema;
+			const type = schema.nodes.toc_marker;
+			if (!type) { return; }
+			const $from = state.selection.$from;
+			// depth 1 = 顶层块的父级；.after(1) = 该顶层块结束位置。
+			const insertPos = $from.depth >= 1 ? $from.after(1) : state.doc.content.size;
+			const tr = state.tr.insert(insertPos, type.create());
+			view.dispatch(tr);
+			// 触发 currentMarkdown 同步（listener 会随即 markdownUpdated；这里立即刷一次
+			// 保证 host 侧 dirty 状态可视）。
+			try {
+				const md = ctx.get(serializerCtx)(view.state.doc);
+				if (md !== currentMarkdown) {
+					currentMarkdown = md;
+					dirty = true;
+					vscode?.postMessage({ type: 'markdownUpdated', markdown: md });
+				}
+			} catch { /* serialize 失败不阻塞插入本身 */ }
+		});
+	} catch (err) {
+		reportError('tocInsert', err);
+	}
+}
+
+/**
  * T-3.8.2 · Qa2=c 格式化整篇。
  * 语义：`parse → stringify` 得到规范化 markdown，把结果重灌进编辑器（保守起见走 reload），
  * 再触发一次 save；host 侧已在派发前 `setPendingFormatPath` 到 'C'，本次 save 强制走全文 remark。
@@ -585,6 +630,11 @@ window.addEventListener('message', event => {
 		// T-3.8.2 · Qa2=c 选区格式化：host 已把 workingCopy._pendingForcePath 设为 'B'；
 		// 当前 webview 侧尚未挂 tracker，先与整篇同路径，session 不安全时 host 自动降级 C。
 		formatSelectionInPlace().catch(err => reportError('formatSelection', err));
+		return;
+	}
+	if (msg.type === 'tocInsert') {
+		// T-3.7c.1.c · 命令 `vsword.toc.insertToc`：在光标所在顶层块后插入 toc_marker。
+		insertTocAtCursor();
 		return;
 	}
 	if (msg.type === 'revealHeading') {
