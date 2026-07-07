@@ -292,3 +292,33 @@ plan 主表 T-号对账建议在 T-3.5c 全套 push 后统一补一次（类比 
 ---
 
 **PRD 结束 · v1 · 2026-07-05 · 待用户 Q1~Q5 决策后进入实现阶段**
+
+---
+
+## 14. 完成日志
+
+### T-3.5c.6 · Gate G 收官（2026-07-07）
+
+- **交付物**：
+  - `code-oss/test/scripts/gate-g.mjs` — 一键跑 6 步汇总 gate：build-milkdown-editor（webview bundle + verify.template.mjs 全量断言）· gate-e · gate-f · roundtrip-perf-baseline · roundtrip-selfcheck · mermaid-selfcheck。
+  - `code-oss/src/vs/workbench/contrib/vsword/browser/milkdownEditor/webview/slash-menu.template.js` — F-24 追加 3 个 syntax-completion 入口（emoji/footnote/frontmatter），`GROUP_ORDER` 加 Syntax；SLASH_ITEMS 12 → 15。
+  - `code-oss/src/vs/workbench/contrib/vsword/browser/milkdownEditor/webview/verify.template.mjs` — 断言 `slashHasTwelveItems` 更名 `slashHasFifteenItems`；`slashGroupsCorrect` 加 Syntax；新增 `slashHasEmojiEntry` / `slashHasFootnoteEntry` / `slashHasFrontmatterEntry`。
+  - `code-oss/test/scripts/roundtrip-selfcheck.mjs` — fixture 期望 30 → 34（含 T-3.5c 阶段新增 4 类 fixture），`.mjs → .template.js` esbuild alias。
+  - `code-oss/src/vs/workbench/contrib/vsword/browser/milkdownEditor/vendor/THIRD_PARTY_LICENSES.md` — 追加本轮新增 vendor 依赖（`node-emoji` · `remark-frontmatter` · `js-yaml` · `@iarna/toml`）的 license 归属。
+- **Gate G 结果（2026-07-07T02:25 · exitCode=0 · totalElapsed=36.3s）**：
+
+  | # | 步骤 | 状态 | 摘要 |
+  |---|---|:-:|---|
+  | 1 | build-milkdown-editor.cjs | ✅ | roundTrip.ok=true · failed=0 · bytes=1404 · bundle=4358484B |
+  | 2 | gate-e.mjs | ✅ | tests=264 · passes=264 · failures=0 |
+  | 3 | gate-f.mjs | ✅ | tests=70 · passes=70 · failures=0 |
+  | 4 | roundtrip-perf-baseline.mjs | ✅ | A/B/C p95 均在 1500ms 阈值内 |
+  | 5 | roundtrip-selfcheck.mjs | ✅ | fixture=34 · 稳定=34 |
+  | 6 | mermaid-selfcheck.mjs | ✅ | stable=22/22 |
+
+- **tsc baseline**：`code-oss/src/tsconfig.json` 全项目 tsc --noEmit 0 error（保持 T-3.11.4 建立的干净基线）。
+- **F-22（`build-result.json` 新增 syntax-completion fixture 覆盖）**：由 `verify.template.mjs` 在每次 build-milkdown-editor.cjs 执行时全量跑 4 大类语法断言（emoji 22 项 · footnote 26 项 · frontmatter 21 项 · sub/sup 5 项 · code-block info meta 5 项）实现；断言结果通过 `roundTrip.ok/failed` 字段进入 `build-result.json`。
+- **F-23（definition list P2 兜底）**：`code-oss/src/vs/workbench/contrib/vsword/test/fixtures/roundtrip/pandoc/def-list.md` fixture 参与 gate-e AC-1/AC-2/AC-3/AC-8 全通道，remark-parse 把 `term\n:  def` 结构识别为普通段落，byte-for-byte 保源码；不做 NodeView 交互（Could · P2 · 兜底"识别不改写"）。
+- **F-24（slash-menu 快速入口）**：3 个新入口在 verify.template.mjs 里由 `slashHasFifteenItems` / `slashHasEmojiEntry` / `slashHasFootnoteEntry` / `slashHasFrontmatterEntry` 断言覆盖。
+
+**模块 c（T-3.5c）至此收官，1~6 全部落地并全绿。**

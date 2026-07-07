@@ -194,15 +194,20 @@ const checks = {
 	// T-3.3.3 Slash menu: 12 standard-Markdown commands across 4 groups, no on-disk format
 	// changes (round-trip output above already proves .md bytes are unaffected).
 	slashPluginExists: !!slash && typeof slash === 'object' && !!slash.key,
-	slashHasTwelveItems: Array.isArray(SLASH_ITEMS) && SLASH_ITEMS.length === 12,
+	// T-3.5c.6 F-24：slash-menu 从 12 项扩到 15 项（+/emoji /footnote /frontmatter），新增 Syntax 组。
+	slashHasFifteenItems: Array.isArray(SLASH_ITEMS) && SLASH_ITEMS.length === 15,
 	slashGroupsCorrect: (() => {
 		const groups = new Set(SLASH_ITEMS.map(it => it.group));
-		return ['Text', 'List', 'Media', 'Advanced'].every(g => groups.has(g));
+		return ['Text', 'List', 'Media', 'Advanced', 'Syntax'].every(g => groups.has(g));
 	})(),
 	slashItemsWellFormed: SLASH_ITEMS.every(it =>
 		typeof it.id === 'string' && typeof it.label === 'string' &&
 		typeof it.group === 'string' && typeof it.hint === 'string' && typeof it.run === 'function'
 	),
+	// F-24 三个新入口存在。
+	slashHasEmojiEntry:       SLASH_ITEMS.some(it => it.id === 'emoji' && it.group === 'Syntax'),
+	slashHasFootnoteEntry:    SLASH_ITEMS.some(it => it.id === 'footnote' && it.group === 'Syntax'),
+	slashHasFrontmatterEntry: SLASH_ITEMS.some(it => it.id === 'frontmatter' && it.group === 'Syntax'),
 	// T-3.3.7 Typora shortcuts & smart input: complete 1:1 keymap + highlight/underline round-trip.
 	shortcutsHaveAll21Bindings: !!typoraShortcuts && TYPORA_SHORTCUT_IDS.length === 21,
 	shortcutsCoverTyporaHeadings:

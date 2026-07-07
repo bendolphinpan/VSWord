@@ -25,7 +25,8 @@ import { insertTableCommand } from '@milkdown/preset-gfm';
 export const slash = slashFactory('vsword-slash');
 
 // ---- Q1=b: 12 standard-Markdown commands, grouped per Q2=b -----------------------------------
-const GROUP_ORDER = ['Text', 'List', 'Media', 'Advanced'];
+// T-3.5c.6 F-24: 追加 3 个 syntax-completion 快速入口（emoji/footnote/frontmatter），新增 Syntax 分组。
+const GROUP_ORDER = ['Text', 'List', 'Media', 'Advanced', 'Syntax'];
 
 function item(id, label, group, hint, run) {
 	return { id, label, group, hint, run };
@@ -66,6 +67,35 @@ export const SLASH_ITEMS = [
 	}),
 	item('quote', 'Quote', 'Advanced', '> ', ctx => ctx.get(commandsCtx).call(wrapInBlockquoteCommand.key)),
 	item('divider', 'Divider', 'Advanced', '---', ctx => ctx.get(commandsCtx).call(insertHrCommand.key)),
+	// T-3.5c.6 F-24: syntax-completion 三个快速入口。emoji/footnote/frontmatter 都是
+	// remark round-trip 建立的节点（不是编辑内插入的 schema），最稳妥的做法是直接把
+	// 保源码文本插到选区，让保存 → 重解析路径自动接管；用户当下也能看到 shortcode。
+	item('emoji', 'Emoji', 'Syntax', ':smile:', ctx => {
+		const view = ctx.get(editorViewCtx);
+		const { state } = view;
+		// 保源码策略：插入 `:smile: ` 让 emoji inputRule (空格触发) 直接转成 atom。
+		view.dispatch(state.tr.insertText(':smile: '));
+	}),
+	item('footnote', 'Footnote', 'Syntax', '[^1]', ctx => {
+		const view = ctx.get(editorViewCtx);
+		const { state } = view;
+		// 引用 `[^1]` 由 preset-gfm 在下次 parse 时识别为 footnote_reference；
+		// 光标定位在引用后。用户需自行在文末补 `[^1]: 定义`。
+		view.dispatch(state.tr.insertText('[^1]'));
+	}),
+	item('frontmatter', 'Frontmatter', 'Syntax', '---', ctx => {
+		const view = ctx.get(editorViewCtx);
+		const { state } = view;
+		// F-10 语义：frontmatter 必须在文档最顶部（前无非空白）才识别。
+		// 只在光标位于文档第一个空段落时才插入完整 YAML 骨架 + 空行；
+		// 否则退化为普通 `---\ntitle: \n---` 文本（保源码，下次保存-重解析视位置识别）。
+		const skeleton = '---\ntitle: \n---\n\n';
+		const { $from } = state.selection;
+		const atDocStart = $from.pos <= 2 && $from.parent.isTextblock
+			&& $from.parent.textContent.length <= 1; // 允许只剩一个 `/` 触发字符
+		const text = atDocStart ? skeleton : '---\ntitle: \n---';
+		view.dispatch(state.tr.insertText(text));
+	}),
 ];
 
 // ---- Q3=a: only trigger at start of an empty text block, with `/` as the first char ----------
