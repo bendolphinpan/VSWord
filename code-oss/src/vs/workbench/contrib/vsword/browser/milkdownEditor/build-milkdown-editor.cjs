@@ -78,6 +78,9 @@ const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 const frontmatterPath = path.join(srcDir, 'frontmatter.mjs');
 const frontmatterHelpersPath = path.join(srcDir, 'frontmatter-helpers.mjs');
+// T-3.7c.1.a: [TOC] 占位符 remark + PM schema。
+const tocRemarkPath = path.join(srcDir, 'toc-remark.mjs');
+const tocNodePath = path.join(srcDir, 'toc-node.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -212,6 +215,9 @@ fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'se
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 fs.writeFileSync(frontmatterPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter.template.js'), 'utf8'));
 fs.writeFileSync(frontmatterHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter-helpers.template.js'), 'utf8'));
+// T-3.7c.1.a: [TOC] 占位符 remark + PM schema。
+fs.writeFileSync(tocRemarkPath, fs.readFileSync(path.join(webviewSrcDir, 'toc-remark.template.js'), 'utf8'));
+fs.writeFileSync(tocNodePath, fs.readFileSync(path.join(webviewSrcDir, 'toc-node.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);

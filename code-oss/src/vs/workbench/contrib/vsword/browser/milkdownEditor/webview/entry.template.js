@@ -86,6 +86,9 @@ import { footnotePlugins, configureFootnoteHost } from './footnote.mjs';
 import { configureFootnotePreview, _resetFootnotePreview } from './footnote-preview.mjs';
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 import { frontmatterPlugins } from './frontmatter.mjs';
+// T-3.7c.1.a: [TOC] 占位符 remark 层 + PM schema（NodeView 由 b 卡负责）。
+import { tocRemarkPlugin } from './toc-remark.mjs';
+import { tocNode } from './toc-node.mjs';
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -316,6 +319,10 @@ async function createEditor(markdown) {
 		.use(wikilinkAutocompletePlugins)
 		.use(footnotePlugins)
 		.use(frontmatterPlugins)
+		// T-3.7c.1.a: TOC remark 变换要在其他 mdast 转换器之后跑（先让 image-lift /
+		// frontmatter 等消耗掉自己的目标节点），最后再来识别纯 `[TOC]` paragraph。
+		.use(tocRemarkPlugin)
+		.use(tocNode)
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
