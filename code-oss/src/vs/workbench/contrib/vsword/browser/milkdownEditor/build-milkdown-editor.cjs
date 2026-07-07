@@ -27,6 +27,7 @@ const shortcutsPath = path.join(srcDir, 'shortcuts.mjs');
 const inputRulesPath = path.join(srcDir, 'input-rules.mjs');
 const focusModePath = path.join(srcDir, 'focus-mode.mjs');
 const modeControllerPath = path.join(srcDir, 'mode-controller.mjs');
+const viewModeEditablePath = path.join(srcDir, 'view-mode-editable.mjs');
 const themesPath = path.join(srcDir, 'themes.mjs');
 const outlineExtractorPath = path.join(srcDir, 'outline-extractor.mjs');
 const imageUploadPath = path.join(srcDir, 'image-upload.mjs');
@@ -160,6 +161,7 @@ fs.writeFileSync(shortcutsPath, fs.readFileSync(path.join(webviewSrcDir, 'shortc
 fs.writeFileSync(inputRulesPath, fs.readFileSync(path.join(webviewSrcDir, 'input-rules.template.js'), 'utf8'));
 fs.writeFileSync(focusModePath, fs.readFileSync(path.join(webviewSrcDir, 'focus-mode.template.js'), 'utf8'));
 fs.writeFileSync(modeControllerPath, fs.readFileSync(path.join(webviewSrcDir, 'mode-controller.template.js'), 'utf8'));
+fs.writeFileSync(viewModeEditablePath, fs.readFileSync(path.join(webviewSrcDir, 'view-mode-editable.template.js'), 'utf8'));
 fs.writeFileSync(themesPath, fs.readFileSync(path.join(webviewSrcDir, 'themes.template.js'), 'utf8'));
 fs.writeFileSync(outlineExtractorPath, fs.readFileSync(path.join(webviewSrcDir, 'outline-extractor.template.js'), 'utf8'));
 fs.writeFileSync(imageUploadPath, fs.readFileSync(path.join(webviewSrcDir, 'image-upload.template.js'), 'utf8'));

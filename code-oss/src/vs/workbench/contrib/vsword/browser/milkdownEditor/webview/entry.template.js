@@ -16,6 +16,7 @@ import {
 	rootCtx,
 	serializerCtx,
 	editorViewCtx,
+	editorViewOptionsCtx,
 	parserCtx,
 	remarkStringifyOptionsCtx,
 } from '@milkdown/core';
@@ -34,6 +35,7 @@ import { typoraShortcutPlugins } from './shortcuts.mjs';
 import { inputRulePlugins } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
 import { createModeController } from './mode-controller.mjs';
+import { createViewModeApplier } from './view-mode-editable.mjs';
 import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs';
 import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
 import { imageResizePlugins } from './image-node-view.mjs';
@@ -123,6 +125,14 @@ let saveSeq = 0;
 let slashController;
 let blockHandleController;
 let modeController;
+// T-3.7b.c: 视图模式 → editable 切换器。整个 webview 一份，跨 createEditor 重建。
+// createEditor 拆掉旧 Editor 时先 setSessionReady(false)，新 editor.create() 完成后再 setSessionReady(true)。
+const viewModeApplier = createViewModeApplier({
+	getEditor: () => editor,
+	editorViewCtx,
+	editorViewOptionsCtx,
+	log: (msg, err) => reportError('view-mode-editable/' + msg, err),
+});
 // Debounce timer for source-mode textarea → host autosave (mirrors WYSIWYG behaviour).
 let sourceDebounce = 0;
 // T-3.4: cached outline snapshot so cursor-only moves don't rebuild the tree.
@@ -174,6 +184,9 @@ function reportError(prefix, err) {
 
 async function createEditor(markdown) {
 	if (!root) throw new Error('Missing #milkdown-root');
+	// T-3.7b.c: 旧 editor 拆掉 + 新 editor 未 create() 完毕的空档期 apply 会踩空 ctx，
+	// 先关 sessionReady，等到 initialized = true 后再打开并 replay。
+	viewModeApplier.setSessionReady(false);
 	root.textContent = '';
 	currentMarkdown = markdown;
 	dirty = false;
@@ -325,6 +338,18 @@ async function createEditor(markdown) {
 		editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
 	} catch (err) {
 		reportError('outline-seed', err);
+	}
+	// T-3.7b.c: 新 editor 就绪，打开 sessionReady 闸门并把当前视图模式立即刷进 editable。
+	// modeController 若已存在（重新加载场景）→ 立即 apply；首次加载它尚未构造，走 pendingMode 通道，
+	// 等 modeController 首次 onModeChange / applyPersistedPreference 时补上。
+	try {
+		viewModeApplier.setSessionReady(true);
+		const currentMode = modeController?.getMode?.();
+		if (typeof currentMode === 'string' && currentMode.length > 0) {
+			viewModeApplier.apply(currentMode);
+		}
+	} catch (err) {
+		reportError('view-mode-editable/seed', err);
 	}
 }
 
@@ -577,6 +602,15 @@ modeController = createModeController({
 	getMarkdown: () => serialize(),
 	setMarkdown: (md, reason) => reloadEditorFromMarkdown(md, reason),
 	vscode,
+	// T-3.7b.c: 视图模式切换唯一 hook——host preferenceResponse 和 webview 快捷键都走 switchTo，
+	// switchTo 最后一步触发 onModeChange，applier 在这里把 editable 切成 () => next !== 'reading'。
+	onModeChange: (next) => {
+		try {
+			viewModeApplier.apply(next);
+		} catch (err) {
+			reportError('view-mode-editable/onModeChange', err);
+		}
+	},
 });
 
 vscode?.postMessage({ type: 'ready' });
