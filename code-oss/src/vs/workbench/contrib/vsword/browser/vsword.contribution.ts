@@ -22,6 +22,8 @@ import './milkdownEditor/milkdownEditorThemeRegistrations.js';
 import './milkdownEditor/milkdownEditorOutline.js';
 // T-3.7b.a: register IVSWordViewModeService singleton (视图模式中央状态服务 · ContextKey 5 项)
 import './milkdownEditor/viewMode/vswordViewModeService.contribution.js';
+// T-3.7b.b: register 7 Action2 + 4 keybindings + milkdown editor active tracker
+import './milkdownEditor/viewMode/vswordViewModeActions.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
