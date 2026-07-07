@@ -320,6 +320,24 @@
 
 ---
 
+### 11.1 v1.1 锁定：用户全部按默认拍板 · Q1..Q5 全 a
+
+**用户回帖（2026-07-07）**：Q1=a · Q2=a · Q3=a · Q4=a · Q5=a — 全部沿用 §10 D-1..D-13 默认假设，无一推翻。
+
+**锁定含义**：
+
+- **Q1=a** → Flowchart.js 与 js-sequence-diagrams 同时交付，F-1=B 全套决策严格执行；两库对等优先级，两 spike（T-3.5b-flow.1 + T-3.5b-seq.1）并行启动。
+- **Q2=a** → CSP 阻塞兜底路径确定为 **vendor 化托管 + 构建时预编译 PEG parser**；iframe 沙箱与砍 sequence 两条兜底路线均不采用（若 seq.1 spike 发现 rokt33r fork 未预编译，直接走 `pegjs --format globals` 一次性预编译方案，产物纳入 vendor 目录）。
+- **Q3=a** → raphael 走**共享 chunk**（一份 raphael 服务两库，D-3 生效）；懒加载策略：首屏 stub 0 KB · 打开首个含 flow/sequence 的文档时按需拉取 raphael 共享 chunk · 之后两库共用。
+- **Q4=a** → 主题联动固定 **light/dark 二档**（Phase 3 policy "好看放一放"）；high-contrast 与 Code OSS 全主题联动均延后到最后 UI 统一调优阶段处理，本模块不承诺。
+- **Q5=a** → **接受 js-sequence-diagrams 生态未维护现状**，走 rokt33r fork（D-8 生效），不 fork 自建（D-13 生效），不引导用户迁移到 mermaid；产品定位明确为"读旧 Typora 文档兼容"，不承诺新功能与长期演进。
+
+**§10 D-1..D-13 全部沿用不动**，本 v1.1 仅在 §11 追加本节锁定记录，其他章节内容与 v1 完全一致。
+
+**下一步**：dev 启动 **T-3.5b-flow.1** 与 **T-3.5b-seq.1** 并行 spike；spike 通过后按 §8 建议顺序继续 `flow.2 → seq.2 → flowseq.3`；spike 失败按 §7 C-2 与本节 Q2=a 定义的兜底路径（vendor + 预编译 PEG）执行。
+
+---
+
 ## 附：与 `003b-mermaid.md` 的差异速览
 
 | 章节 | mermaid 独有 | flow+seq 独有 |
