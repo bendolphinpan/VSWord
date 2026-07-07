@@ -28,6 +28,9 @@ const inputRulesPath = path.join(srcDir, 'input-rules.mjs');
 const focusModePath = path.join(srcDir, 'focus-mode.mjs');
 const modeControllerPath = path.join(srcDir, 'mode-controller.mjs');
 const viewModeEditablePath = path.join(srcDir, 'view-mode-editable.mjs');
+// T-3.7b.d: ModeSwitchComponent + IMilkdownUIComponent contract。
+const uiComponentPath = path.join(srcDir, 'ui-component.mjs');
+const modeSwitchPath = path.join(srcDir, 'mode-switch.mjs');
 const themesPath = path.join(srcDir, 'themes.mjs');
 const outlineExtractorPath = path.join(srcDir, 'outline-extractor.mjs');
 const imageUploadPath = path.join(srcDir, 'image-upload.mjs');
@@ -162,6 +165,9 @@ fs.writeFileSync(inputRulesPath, fs.readFileSync(path.join(webviewSrcDir, 'input
 fs.writeFileSync(focusModePath, fs.readFileSync(path.join(webviewSrcDir, 'focus-mode.template.js'), 'utf8'));
 fs.writeFileSync(modeControllerPath, fs.readFileSync(path.join(webviewSrcDir, 'mode-controller.template.js'), 'utf8'));
 fs.writeFileSync(viewModeEditablePath, fs.readFileSync(path.join(webviewSrcDir, 'view-mode-editable.template.js'), 'utf8'));
+// T-3.7b.d
+fs.writeFileSync(uiComponentPath, fs.readFileSync(path.join(webviewSrcDir, 'ui-component.template.js'), 'utf8'));
+fs.writeFileSync(modeSwitchPath, fs.readFileSync(path.join(webviewSrcDir, 'mode-switch.template.js'), 'utf8'));
 fs.writeFileSync(themesPath, fs.readFileSync(path.join(webviewSrcDir, 'themes.template.js'), 'utf8'));
 fs.writeFileSync(outlineExtractorPath, fs.readFileSync(path.join(webviewSrcDir, 'outline-extractor.template.js'), 'utf8'));
 fs.writeFileSync(imageUploadPath, fs.readFileSync(path.join(webviewSrcDir, 'image-upload.template.js'), 'utf8'));

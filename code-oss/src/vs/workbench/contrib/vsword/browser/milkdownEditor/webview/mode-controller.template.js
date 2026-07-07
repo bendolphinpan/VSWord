@@ -45,6 +45,10 @@ export function createModeController(opts) {
 		setMarkdown,
 		vscode,
 		onModeChange,          // (mode, prevMode) => void
+		// T-3.7b.d: 当上层用 ModeSwitchComponent 接管 click 派发时，把这里设为 false 关掉
+		// controller 内部的 click listener，避免与 component 内的 handler 双触发。
+		// aria-pressed 与 disabled 依旧由 applyDom() 更新（不影响现有 viewModes.test.ts）。
+		wireButtons = true,
 	} = opts;
 
 	let currentMode = DEFAULT_MODE;
@@ -128,22 +132,24 @@ export function createModeController(opts) {
 	}
 
 	// Wire mode buttons.
-	buttons?.forEach(btn => {
-		btn.addEventListener('click', () => {
-			const m = btn.getAttribute('data-mode');
-			if (isValidMode(m)) switchTo(m);
+	if (wireButtons) {
+		buttons?.forEach(btn => {
+			btn.addEventListener('click', () => {
+				const m = btn.getAttribute('data-mode');
+				if (isValidMode(m)) switchTo(m);
+			});
 		});
-	});
 
-	// Wire toggle buttons.
-	toggleButtons?.forEach(btn => {
-		btn.addEventListener('click', () => {
-			if (currentMode === 'source') return;
-			const kind = btn.getAttribute('data-toggle');
-			if (kind === 'focus') setToggle('focus', !focusOn);
-			else if (kind === 'typewriter') setToggle('typewriter', !typewriterOn);
+		// Wire toggle buttons.
+		toggleButtons?.forEach(btn => {
+			btn.addEventListener('click', () => {
+				if (currentMode === 'source') return;
+				const kind = btn.getAttribute('data-toggle');
+				if (kind === 'focus') setToggle('focus', !focusOn);
+				else if (kind === 'typewriter') setToggle('typewriter', !typewriterOn);
+			});
 		});
-	});
+	}
 
 	// Keyboard shortcuts. Ctrl+/ cycles mode (existing). Ctrl+Shift+F / T flip toggles.
 	window.addEventListener('keydown', event => {

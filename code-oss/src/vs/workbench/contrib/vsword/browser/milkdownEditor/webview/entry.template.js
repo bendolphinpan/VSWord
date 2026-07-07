@@ -36,6 +36,8 @@ import { inputRulePlugins } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
 import { createModeController } from './mode-controller.mjs';
 import { createViewModeApplier } from './view-mode-editable.mjs';
+// T-3.7b.d: ModeSwitchComponent 接管 #milkdown-mode-switch + #milkdown-toggle-group 的 click 派发。
+import { createModeSwitchComponent } from './mode-switch.mjs';
 import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs';
 import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
 import { imageResizePlugins } from './image-node-view.mjs';
@@ -594,10 +596,13 @@ window.addEventListener('message', event => {
 });
 
 // T-3.3.2: create mode controller after DOM handles are grabbed. It owns Ctrl+/ and button clicks.
+// T-3.7b.d: click 派发下沉到 ModeSwitchComponent（wireButtons:false）；controller 仍持有状态机 +
+// aria-pressed 更新（applyDom → buttons） + keybinding，行为等价。
 modeController = createModeController({
 	shell,
 	buttons: modeButtons,
 	toggleButtons,
+	wireButtons: false,
 	sourceTextarea,
 	getMarkdown: () => serialize(),
 	setMarkdown: (md, reason) => reloadEditorFromMarkdown(md, reason),
@@ -612,6 +617,30 @@ modeController = createModeController({
 		}
 	},
 });
+
+// T-3.7b.d: mount ModeSwitchComponent —— click 派发交给 component，
+// 语义调用回 controller.switchTo / setFocus / setTypewriter，保持行为等价。
+const modeSwitchComponent = createModeSwitchComponent({
+	onSetMode: (m) => { try { modeController?.switchTo(m); } catch (err) { reportError('mode-switch/setMode', err); } },
+	onToggleFocus: () => {
+		try {
+			if (modeController?.getMode() === 'source') return;
+			modeController?.setFocus(!modeController.isFocusOn());
+		} catch (err) { reportError('mode-switch/toggleFocus', err); }
+	},
+	onToggleTypewriter: () => {
+		try {
+			if (modeController?.getMode() === 'source') return;
+			modeController?.setTypewriter(!modeController.isTypewriterOn());
+		} catch (err) { reportError('mode-switch/toggleTypewriter', err); }
+	},
+	getState: () => ({
+		mode: modeController?.getMode() || 'realtime',
+		focus: !!modeController?.isFocusOn(),
+		typewriter: !!modeController?.isTypewriterOn(),
+	}),
+});
+if (shell) modeSwitchComponent.mount(shell);
 
 vscode?.postMessage({ type: 'ready' });
 window.__vswordMilkdown = {
