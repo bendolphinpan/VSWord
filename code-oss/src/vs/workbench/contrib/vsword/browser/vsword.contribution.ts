@@ -20,6 +20,8 @@ import './vswordWriterModeDefaults.js';
 import './milkdownEditor/milkdownEditorThemeRegistrations.js';
 // T-3.4: register Outline creator so the built-in Outline pane populates for VSWord Markdown editors.
 import './milkdownEditor/milkdownEditorOutline.js';
+// T-3.7b.a: register IVSWordViewModeService singleton (视图模式中央状态服务 · ContextKey 5 项)
+import './milkdownEditor/viewMode/vswordViewModeService.contribution.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
