@@ -62,10 +62,10 @@ VSWord = Code OSS 1.124.2 基线
 | T-3.7.1 | 块拖拽手柄 | **T-3.8**（commit） | 00daab60 | block hover handle (drag + transform menu) | ⚠️ 编号漂移 | commit T-3.8 语义 ≠ plan T-3.8（Round-trip） |
 | T-3.7.2 | 块转换菜单（H1↔H2↔段落↔引用等） | **T-3.8**（commit） | 00daab60 | transform menu | ⚠️ 编号漂移 | 与拖拽手柄同 commit 落地 |
 | T-3.7.3 | 表格可视化操作（增删行列 / 对齐） | **T-3.6**（commit） | fe241cb1 | table chrome (col/row/align/resize) | ⚠️ 编号漂移 | commit T-3.6 语义 ≠ plan T-3.6（双链） |
-| T-3.7b.1 | 源码模式 | — | — | 未启动 | ⛔ | |
-| T-3.7b.2 | 预览/阅读模式 | — | — | 未启动 | ⛔ | |
-| T-3.7b.3 | 专注模式 | **T-3.10**（commit） | ce03f41f | decoupled focus + typewriter toggles | ⚠️ 编号漂移 | commit T-3.10 语义 ≠ plan T-3.9（性能收口） |
-| T-3.7b.4 | 打字机模式 | **T-3.10**（commit） | ce03f41f | typewriter toggle | ⚠️ 编号漂移 | 与专注模式同 commit |
+| T-3.7b.1 | 源码模式 | **T-3.7b** | 900c94cc + da77750e | Action2 `toggleSource` + Milkdown editable 切换 · reading 真只读 | ✅ 已交付 | T-3.7b.a…f 收官 · Gate D/E/F 全绿 |
+| T-3.7b.2 | 预览/阅读模式 | **T-3.7b** | da77750e | editable=false + shell aria-pressed | ✅ 已交付 | T-3.7b.a…f 收官 |
+| T-3.7b.3 | 专注模式 | **T-3.7b** | ce03f41f + 0dffffa7 | decoupled focus toggle · 服务化收敛到 `IVSWordViewModeService` | ✅ 已交付（服务化） | 从 commit T-3.10 起 · T-3.7b.a 服务化收敛 |
+| T-3.7b.4 | 打字机模式 | **T-3.7b** | ce03f41f + 0dffffa7 | typewriter toggle · 服务化收敛到 `IVSWordViewModeService` | ✅ 已交付（服务化） | 与专注模式同 commit + T-3.7b.a 服务化 |
 | T-3.7c.1 | TOC 自动生成（`[TOC]`） | — | — | 未启动 | ⛔ | |
 | T-3.7c.2 | 大纲面板（Outline View） | T-3.4（commit 附带） | 9f76d3e0 | Outline 面板 | ⚠️ 编号漂移 | commit T-3.4 里同时含 T-3.3 全套 + 本项 |
 | T-3.7c.3 | 查找替换 | — | — | 未启动 | ⛔ | |
