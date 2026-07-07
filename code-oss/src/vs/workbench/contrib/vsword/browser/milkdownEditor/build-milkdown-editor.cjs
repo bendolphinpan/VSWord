@@ -208,15 +208,40 @@ fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.te
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);
 const esbuild = require(path.join(builderDir, 'node_modules', 'esbuild'));
-console.log('[milkdown-prod] esbuild webview bundle');
-esbuild.buildSync({
-	entryPoints: [entryPath],
+
+// T-3.5b-flowseq.3b: 首屏 stub 剥离 mermaid / flowchart+raphael / js-sequence-diagrams。
+//   entry.template.js 里三个可视化 NodeView 用 `await import('mermaid')` /
+//   `await import('flowchart.js')` / `await import('@rokt33r/js-sequence-diagrams/...')`
+//   动态引入，esbuild `splitting:true` 会把每条 dynamic import 拆到独立 chunk；
+//   共享依赖 raphael 会被自动抽成第 4 个共享 chunk 只加载一次。
+//
+//   输出结构（vendor/）：
+//     index.js         —— 首屏 stub（Milkdown + PM + KaTeX + 全部 NodeView 骨架）
+//     chunk-XXXX.js    —— 三个可视化库 + raphael 共享 chunk（懒加载）
+//     THIRD_PARTY_LICENSES.md · build-result.json · katex/**  —— 其他保持不变
+//
+//   构建前必须清一次 vendor/*.js，否则上一轮的 chunk 残留会污染结果。
+console.log('[milkdown-prod] cleaning stale bundle chunks from vendor/');
+for (const name of fs.readdirSync(vendorDir)) {
+	// 只清 .js 与 .js.LEGAL.txt，保留 build-result.json / THIRD_PARTY_LICENSES.md / katex/。
+	if (name.endsWith('.js') || name.endsWith('.js.map') || name.endsWith('.js.LEGAL.txt')) {
+		fs.rmSync(path.join(vendorDir, name), { force: true });
+	}
+}
+
+console.log('[milkdown-prod] esbuild webview bundle (splitting on · mermaid / flowchart+raphael / sequence lazy)');
+const esbuildResult = esbuild.buildSync({
+	entryPoints: { index: entryPath },
 	bundle: true,
 	format: 'esm',
 	target: 'es2022',
-	outfile: bundlePath,
+	outdir: vendorDir,
+	splitting: true,
+	entryNames: '[name]',
+	chunkNames: 'chunk-[hash]',
 	legalComments: 'linked',
 	minify: true,
+	metafile: true,
 	define: { 'process.env.NODE_ENV': '"production"' },
 	// T-3.5b-seq.2: rokt33r/js-sequence-diagrams UMD wrapper 里含 `require("fs")` /
 	// `require("path")`（webfontloader 的 CJS 兼容分支 dead-code）；webview 不走这条
@@ -243,15 +268,55 @@ console.log('[milkdown-prod] run roundtrip verifier');
 const verifyJson = JSON.parse(cp.execFileSync(process.execPath, [verifyPath], { cwd: builderDir, encoding: 'utf8' }));
 const bundleText = fs.readFileSync(bundlePath, 'utf8');
 const bundle = Buffer.from(bundleText);
+
+// T-3.5b-flowseq.3b: 收集所有 chunk 尺寸 + 分类（stub / mermaid / flow+raphael / sequence / shared）。
+//   分类靠 esbuild metafile 里 chunk 的 inputs 特征库：
+//     - 含 mermaid/dist/*     → mermaid chunk
+//     - 含 flowchart.js/*     → flowchart chunk
+//     - 含 raphael/*          → raphael chunk（若被 flow+sequence 共享则单独抽出）
+//     - 含 js-sequence-diagrams/* → sequence chunk
+//     - 其他 dynamic-import 产物 → misc chunk
+//   首屏 stub 增量 = index.js gzip（相对 flowseq.3 之前基线 1.27MB gzip / 4.62MB 明文）。
+const meta = esbuildResult.metafile;
+function classifyChunk(inputsObj) {
+	const keys = Object.keys(inputsObj);
+	const contains = (needle) => keys.some((k) => k.replace(/\\/g, '/').includes(needle));
+	if (contains('/mermaid/')) return 'mermaid';
+	if (contains('/flowchart.js/') || contains('/flowchart/release/')) return 'flowchart';
+	if (contains('/js-sequence-diagrams/') || contains('@rokt33r/js-sequence-diagrams')) return 'sequence';
+	if (contains('/raphael/')) return 'raphael';
+	return 'misc';
+}
+const chunkBreakdown = [];
+for (const [outFile, info] of Object.entries(meta.outputs)) {
+	if (!outFile.endsWith('.js') || outFile.endsWith('.LEGAL.txt')) continue;
+	const rel = path.relative(vendorDir, path.resolve(codeOssRoot, outFile)).replace(/\\/g, '/');
+	const buf = fs.readFileSync(path.join(vendorDir, rel));
+	const category = rel === 'index.js' ? 'stub' : classifyChunk(info.inputs || {});
+	chunkBreakdown.push({
+		file: rel,
+		bytes: buf.length,
+		gzipBytes: zlib.gzipSync(buf).length,
+		category,
+	});
+}
+chunkBreakdown.sort((a, b) => b.bytes - a.bytes);
+const stubEntry = chunkBreakdown.find((c) => c.file === 'index.js');
+
 const result = {
 	builtAt: new Date().toISOString(),
 	milkdownVersion: '7.21.2',
 	webviewBundleBytes: bundle.length,
 	webviewBundleGzipBytes: zlib.gzipSync(bundle).length,
+	// T-3.5b-flowseq.3b: 首屏 stub（index.js）明文 + gzip 尺寸，便于 gate-g 断言 ≤20KB gzip。
+	stubBundleBytes: stubEntry ? stubEntry.bytes : bundle.length,
+	stubBundleGzipBytes: stubEntry ? stubEntry.gzipBytes : zlib.gzipSync(bundle).length,
+	chunkBreakdown,
 	roundTrip: verifyJson,
 	cspNotes: {
 		format: 'esm',
 		minified: true,
+		splitting: true,
 		dynamicEvalScan: {
 			evalToken: /\beval\s*\(/.test(bundleText),
 			newFunctionToken: /new Function\s*\(/.test(bundleText),
