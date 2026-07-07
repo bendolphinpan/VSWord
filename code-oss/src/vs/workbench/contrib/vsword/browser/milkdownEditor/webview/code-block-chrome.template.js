@@ -63,6 +63,8 @@ import {
 
 // T-3.5b.2: mermaid NodeView 分派。
 import { createMermaidNodeView } from './mermaid-view.mjs';
+// T-3.5b-flow.2: flowchart.js NodeView 分派（language=flow）。
+import { createFlowchartNodeView } from './flowchart-view.mjs';
 
 export { CODE_LANGS, labelForLang, normalizeLangKey, searchLangs, refractorLangIds };
 
@@ -209,6 +211,10 @@ function codeBlockNodeViewFactory(ctx) {
 		if ((node.attrs.language || '') === 'mermaid') {
 			return createMermaidNodeView(node, view, getPos);
 		}
+		// T-3.5b-flow.2: flow code_block 走独立 NodeView。
+		if ((node.attrs.language || '') === 'flow') {
+			return createFlowchartNodeView(node, view, getPos);
+		}
 
 		const doc = view.dom.ownerDocument;
 		const wrap = doc.createElement('div');
@@ -306,6 +312,10 @@ function codeBlockNodeViewFactory(ctx) {
 				const wasMermaid = (node.attrs.language || '') === 'mermaid';
 				const isMermaid = (next.attrs.language || '') === 'mermaid';
 				if (wasMermaid !== isMermaid) return false;
+				// T-3.5b-flow.2: language 从/到 flow 的切换同款处理。
+				const wasFlow = (node.attrs.language || '') === 'flow';
+				const isFlow = (next.attrs.language || '') === 'flow';
+				if (wasFlow !== isFlow) return false;
 				langBtn.textContent = labelForLang(next.attrs.language);
 				return true;
 			},

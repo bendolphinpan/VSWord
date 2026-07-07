@@ -54,6 +54,8 @@ import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chro
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
 import { mathViewPlugins, configureMathKatex } from './math-view.mjs';
 import { broadcastMermaidTheme } from './mermaid-view.mjs';
+// T-3.5b-flow.2: flowchart-view 也需要主题广播。
+import { broadcastFlowchartTheme } from './flowchart-view.mjs';
 import { wikilinkPlugins, configureWikilinkHost, ingestResolutions, invalidateWikilinkCache } from './wikilink.mjs';
 import {
 	wikilinkAutocompletePlugins,
@@ -521,6 +523,8 @@ window.addEventListener('message', event => {
 			isDark = theme === 'night';
 		}
 		try { broadcastMermaidTheme(isDark); } catch (err) { reportError('mermaid-theme', err); }
+		// T-3.5b-flow.2: 同款转发给 flowchart-view。
+		try { broadcastFlowchartTheme(isDark); } catch (err) { reportError('flowchart-theme', err); }
 		return;
 	}
 	if (msg.type === 'hostError') {

@@ -46,6 +46,10 @@ const mathViewPath = path.join(srcDir, 'math-view.mjs');
 const mathViewHelpersPath = path.join(srcDir, 'math-view-helpers.mjs');
 const mermaidViewPath = path.join(srcDir, 'mermaid-view.mjs');
 const mermaidViewHelpersPath = path.join(srcDir, 'mermaid-view-helpers.mjs');
+// T-3.5b-flow.2: flowchart.js NodeView + raphael 共享依赖（内联进主 bundle,
+// chunk 拆分延后到 T-3.5b-flowseq.3）。
+const flowchartViewPath = path.join(srcDir, 'flowchart-view.mjs');
+const flowchartViewHelpersPath = path.join(srcDir, 'flowchart-view-helpers.mjs');
 const wikilinkPath = path.join(srcDir, 'wikilink.mjs');
 const wikilinkHelpersPath = path.join(srcDir, 'wikilink-helpers.mjs');
 const wikilinkAutocompletePath = path.join(srcDir, 'wikilink-autocomplete.mjs');
@@ -95,6 +99,11 @@ const packages = [
 	// splitting，`import('mermaid')` 会被内联进主 bundle（≈2-3MB），T-3.5b.2.b 遗留
 	// 做代码分割 + 独立 chunk 懒加载。
 	'mermaid@11.14.0',
+	// T-3.5b-flow.2: Flowchart.js + raphael (spike T-3.5b-flow.1 GO 无条件放行)。
+	// raphael 2.3.0 与 flowchart.js@1.18.0 声明的 dep 一致；后续 seq.2 落地后
+	// 通过 npm overrides 强制统一版本，此处直接对齐。
+	'flowchart.js@1.18.0',
+	'raphael@2.3.0',
 	// T-3.5c.1: emoji shortcode → unicode 查表（自研 remark plugin 消费）。
 	'node-emoji@2.2.0',
 	// T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
@@ -160,6 +169,9 @@ fs.writeFileSync(mathViewPath, fs.readFileSync(path.join(webviewSrcDir, 'math-vi
 fs.writeFileSync(mathViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'math-view-helpers.template.js'), 'utf8'));
 fs.writeFileSync(mermaidViewPath, fs.readFileSync(path.join(webviewSrcDir, 'mermaid-view.template.js'), 'utf8'));
 fs.writeFileSync(mermaidViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'mermaid-view-helpers.template.js'), 'utf8'));
+// T-3.5b-flow.2: flowchart-view NodeView + helpers。
+fs.writeFileSync(flowchartViewPath, fs.readFileSync(path.join(webviewSrcDir, 'flowchart-view.template.js'), 'utf8'));
+fs.writeFileSync(flowchartViewHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'flowchart-view-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-helpers.template.js'), 'utf8'));
 fs.writeFileSync(wikilinkAutocompletePath, fs.readFileSync(path.join(webviewSrcDir, 'wikilink-autocomplete.template.js'), 'utf8'));

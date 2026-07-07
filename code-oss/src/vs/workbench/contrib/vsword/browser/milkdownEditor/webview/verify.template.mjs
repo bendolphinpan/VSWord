@@ -67,6 +67,19 @@ import { remarkLiftImgHtmlPlugin, imageSchemaOverride } from './image-schema-ove
 import { codeBlockSchemaOverride } from './code-block-schema-override.mjs';
 import { normalizeAlign, parseAlignWrapper, renderAlignedImg } from './image-resize.mjs';
 import { clampWidth, widthFromDrag, parseImgTag, renderImgTag, IMAGE_RESIZE_MIN_PX, IMAGE_RESIZE_MAX_PX } from './image-resize.mjs';
+// T-3.5b-flow.2: flowchart.js NodeView + helpers 断言。
+import {
+	getCodeBlockSource,
+	flowchartIsEmpty,
+	autoSizeTextareaPx,
+	normalizeFlowchartSource,
+	extractFlowchartError,
+	formatErrorHeadline,
+	parseErrorLineNumber,
+	formatErrorStack,
+	offsetOfLine,
+	buildFlowchartOptions,
+} from './flowchart-view-helpers.mjs';
 
 // Must match webview/entry.template.js — kept literally in sync for round-trip parity.
 const TYPORA_STRINGIFY_OPTIONS = {
@@ -576,6 +589,40 @@ const checks = {
 	fmStripFenceToml:                stripFence('+++\ntitle = "x"\n+++', 'toml') === 'title = "x"',
 	fmAddFenceYaml:                  addFence('title: x', 'yaml') === '---\ntitle: x\n---',
 	fmAddFenceRespectsTrailingNl:    addFence('title: x\n', 'yaml') === '---\ntitle: x\n---',
+	// T-3.5b-flow.2 · Flowchart.js helpers 断言（纯函数 · 无需 flowchart.js runtime）。
+	flowchartGetCodeBlockSource:     getCodeBlockSource({ textContent: 'st=>start: S\nst->e' }) === 'st=>start: S\nst->e',
+	flowchartGetCodeBlockSourceNullSafe: getCodeBlockSource(null) === '' && getCodeBlockSource({}) === '',
+	flowchartIsEmptyEmpty:           flowchartIsEmpty('') === true && flowchartIsEmpty('   \n	\n') === true && flowchartIsEmpty(null) === true,
+	flowchartIsEmptyNonEmpty:        flowchartIsEmpty('st=>start: X') === false,
+	flowchartAutoSizeClampsMin:      autoSizeTextareaPx('a') === 96,
+	flowchartAutoSizeClampsMax:      autoSizeTextareaPx('a\n'.repeat(50)) === 480,
+	flowchartAutoSizeCustomBounds:   autoSizeTextareaPx('a\n'.repeat(9), { lineHeightPx: 20, padPx: 20, minPx: 96, maxPx: 480 }) === 220,
+	flowchartNormalizeStripsTrailingBlanks: normalizeFlowchartSource('a\nb\n\n\n') === 'a\nb',
+	flowchartNormalizeKeepsInternal: normalizeFlowchartSource('a\n\nb\n') === 'a\n\nb',
+	flowchartNormalizeNullSafe:      normalizeFlowchartSource(null) === '' && normalizeFlowchartSource(undefined) === '',
+	flowchartExtractError:           extractFlowchartError(new Error('Wrong char in flowchart definition: !')) === 'Wrong char in flowchart definition: !',
+	flowchartExtractErrorNullSafe:   extractFlowchartError(null) === null,
+	flowchartHeadlineTrims:          formatErrorHeadline(new Error('x'.repeat(200)), 40).length <= 40 && formatErrorHeadline(new Error('x'.repeat(200)), 40).endsWith('…'),
+	flowchartHeadlineShortAsIs:      formatErrorHeadline(new Error('short')) === 'short',
+	flowchartParseErrorLineHit:      parseErrorLineNumber(new Error('Error on line 7: bad token')) === 7,
+	flowchartParseErrorLineMiss:     parseErrorLineNumber(new Error('no line info')) === null,
+	flowchartFormatStackHasMessage:  (() => {
+		const s = formatErrorStack(new Error('boom'));
+		return typeof s === 'string' && s.includes('boom');
+	})(),
+	flowchartFormatStackNullSafe:    formatErrorStack(null) === '' && formatErrorStack(undefined) === '',
+	flowchartOffsetOfLineOne:        offsetOfLine('a\nb\nc', 1) === 0,
+	flowchartOffsetOfLineThree:      offsetOfLine('a\nb\nc', 3) === 4,
+	flowchartOffsetOfLineClamped:    offsetOfLine('a\nb', 99) === 3,
+	flowchartOffsetOfLineNullSafe:   offsetOfLine('', 1) === 0 && offsetOfLine('', NaN) === 0,
+	flowchartOptionsLightNoColors:   (() => {
+		const o = buildFlowchartOptions(false);
+		return typeof o === 'object' && !('font-color' in o) && !('fill' in o) && o['line-width'] === 2;
+	})(),
+	flowchartOptionsDarkHasContrast: (() => {
+		const o = buildFlowchartOptions(true);
+		return typeof o['font-color'] === 'string' && typeof o['fill'] === 'string' && o['font-color'] !== o['fill'];
+	})(),
 };
 const failed = Object.entries(checks).filter(([, ok]) => !ok).map(([name]) => name);
 const result = { ok: failed.length === 0, failed, outputBytes: Buffer.byteLength(output), parserRoundTripBytes: Buffer.byteLength(parserRoundTrip), output };

@@ -3,7 +3,7 @@
  *  T-3.8.4 · roundtrip-selfcheck
  *
  *  QA 方案里的 spy 回归自检：
- *    - 对 34 fixture 每一份跑 pickSavePath 3 遍，验证结果稳定（同输入 → 同输出）
+ *    - 对 37 fixture 每一份跑 pickSavePath 3 遍，验证结果稳定（同输入 → 同输出）
  *    - blockId 每次 build session 都不同（session 内稳定 / 跨 session 重分配），
  *      但 dirtyBlocks 空的情况下必须都走 A 分支
  *    - 输出 self-check 报告到 code-oss/test/reports/selfcheck-<timestamp>.md
@@ -182,8 +182,8 @@ async function main() {
 	const { outdir, outfile } = await buildSut(esbuild);
 	const sut = await import(pathToFileURL(outfile).href);
 	const fixtures = loadFixtures();
-	if (fixtures.length !== 34) {
-		process.stderr.write(`[selfcheck] 期望 34 fixture，实际 ${fixtures.length}\n`);
+	if (fixtures.length !== 37) {
+		process.stderr.write(`[selfcheck] 期望 37 fixture，实际 ${fixtures.length}\n`);
 	}
 
 	const rows = [];
