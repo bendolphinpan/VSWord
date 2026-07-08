@@ -7,7 +7,7 @@ import { Action2, registerAction2 } from '../../../../../platform/actions/common
 import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IConfigurationRegistry, Extensions as ConfigExtensions } from '../../../../../platform/configuration/common/configurationRegistry.js';
-import { IQuickInputService } from '../../../../../platform/quickinput/common/quickInput.js';
+import { IQuickInputService, IQuickPickItem, QuickPickInput } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import {
@@ -21,6 +21,9 @@ import {
 	VSWORD_IMAGE_STRATEGY_CONFIG,
 	VSWORD_IMAGE_STRATEGY_DEFAULT,
 } from './imageStorageStrategy.js';
+import { buildThemeQuickPickItems } from './milkdownEditorThemeQuickPick.js';
+import { getExternalThemes } from './milkdownEditorExternalThemeRegistry.js';
+import { isExternalThemeId } from './milkdownEditorExternalThemes.js';
 
 /**
  * T-3.3.1: register the Settings schema for the three theme-related keys.
@@ -96,17 +99,30 @@ class SelectMarkdownThemeAction extends Action2 {
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const quickInput = accessor.get(IQuickInputService);
 		const storage = accessor.get(IStorageService);
-		const items = (VSWORD_MILKDOWN_THEME_IDS as readonly string[]).map(id => ({
-			id,
-			label: id === 'default'
-				? localize('vsword.theme.default', 'Default (follow Code OSS)')
-				: id,
-		}));
-		const picked = await quickInput.pick(items, {
+		const current = storage.get(VSWORD_MILKDOWN_THEME_STORAGE_KEY, StorageScope.APPLICATION, 'default');
+		// T-3.7d.3 · quick-pick 分组化：内置 + separator + workspace/user 外挂。
+		// items 构造走纯函数 buildThemeQuickPickItems（单测独立回归）。
+		const items = buildThemeQuickPickItems({
+			builtinIds: VSWORD_MILKDOWN_THEME_IDS,
+			external: getExternalThemes(),
+			currentThemeId: current,
+			labels: {
+				defaultLabel: localize('vsword.theme.default', 'Default (follow Code OSS)'),
+				workspaceSeparator: localize('vsword.theme.externalWorkspaceGroup', 'External themes · Workspace'),
+				userSeparator: localize('vsword.theme.externalUserGroup', 'External themes · User'),
+				fromWorkspaceDescription: localize('vsword.theme.fromWorkspace', 'From workspace'),
+				fromUserDescription: localize('vsword.theme.fromUser', 'From user'),
+				currentSuffix: localize('vsword.theme.currentSuffix', '(current)'),
+			},
+		});
+		const picked = await quickInput.pick(items as QuickPickInput<IQuickPickItem>[], {
 			placeHolder: localize('vsword.theme.pickPlaceholder', 'Select Markdown theme'),
 		});
-		if (!picked || !isValidTheme(picked.id)) return;
-		storage.store(VSWORD_MILKDOWN_THEME_STORAGE_KEY, picked.id, StorageScope.APPLICATION, StorageTarget.USER);
+		if (!picked || typeof picked.id !== 'string') return;
+		// 内置 id 走原有校验；外挂 id（ext:*）单独放行 —— readEffectiveTheme 会再校验一次是否命中缓存。
+		if (isExternalThemeId(picked.id) || isValidTheme(picked.id)) {
+			storage.store(VSWORD_MILKDOWN_THEME_STORAGE_KEY, picked.id, StorageScope.APPLICATION, StorageTarget.USER);
+		}
 	}
 }
 registerAction2(SelectMarkdownThemeAction);

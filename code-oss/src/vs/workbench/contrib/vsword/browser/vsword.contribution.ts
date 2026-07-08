@@ -8,6 +8,7 @@ import { VswordWorkbenchShellContribution } from './vswordHomeView.js';
 import { VswordWordCountContribution } from './vswordWordCount.js';
 import { VswordMindmapAutoOpenContribution } from './vswordMindmapAutoOpen.js';
 import { VswordMilkdownEditorContribution } from './milkdownEditor/milkdownEditorContribution.js';
+import { VswordMilkdownThemeStatusContribution } from './milkdownEditor/vswordMilkdownThemeStatus.js';
 
 // Effects-only imports. Each sub-module is responsible for its own registration.
 import './vswordHelloAction.js';
@@ -32,3 +33,5 @@ registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbe
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordMindmapAutoOpenContribution.ID, VswordMindmapAutoOpenContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordMilkdownEditorContribution.ID, VswordMilkdownEditorContribution, WorkbenchPhase.BlockStartup);
+// T-3.7d.3 · 状态栏 item：仅在 Milkdown editor 激活时展示，命令入口 vsword.selectMarkdownTheme
+registerWorkbenchContribution2(VswordMilkdownThemeStatusContribution.ID, VswordMilkdownThemeStatusContribution, WorkbenchPhase.AfterRestored);

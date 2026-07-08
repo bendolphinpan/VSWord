@@ -38,6 +38,7 @@ import {
 } from './milkdownEditorExternalThemes.js';
 import { discoverExternalThemes, extractThemeDisplayName } from './milkdownEditorExternalThemeDiscovery.js';
 import { buildExternalThemePayload } from './milkdownEditorExternalThemePayload.js';
+import { setExternalThemes as publishExternalThemes } from './milkdownEditorExternalThemeRegistry.js';
 import { IVSWordFindService } from '../../common/vswordFindService.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
 import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
@@ -611,9 +612,11 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				}
 			}));
 			this.externalThemes = enriched;
+			publishExternalThemes(enriched);
 		} catch (err) {
 			this.logService.warn('[VSWord Milkdown] external theme discovery failed: ' + String(err));
 			this.externalThemes = [];
+			publishExternalThemes([]);
 		}
 		if (opts.broadcast) {
 			await this.broadcastTheme();
