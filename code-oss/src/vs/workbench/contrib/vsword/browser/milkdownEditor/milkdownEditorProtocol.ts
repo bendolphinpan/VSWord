@@ -257,6 +257,18 @@ export interface HostThemeChangedMessage {
 	readonly isDark?: boolean;
 }
 
+/**
+ * T-3.7d.2 · host → webview：切换到外挂（`ext:*`）主题时，先推送 CSS 文本再 broadcast themeChanged。
+ *
+ * webview 收到后把 `cssText` 挂到 `<style id="vsword-external-theme">` 之类的容器上；随后配合
+ * `HostThemeChangedMessage` 让 body[data-theme] 变化触发内置 CSS 让位。b/c 子卡实现该流。
+ */
+export interface HostThemeCssPayloadMessage {
+	readonly type: 'themeCssPayload';
+	readonly themeId: string;
+	readonly cssText: string;
+}
+
 /** T-3.4: host asks the webview to move the cursor to a ProseMirror doc position. */
 export interface HostRevealHeadingMessage {
 	readonly type: 'revealHeading';
@@ -395,6 +407,7 @@ export type HostToWebviewMessage =
 	| HostErrorMessage
 	| HostPreferenceResponseMessage
 	| HostThemeChangedMessage
+	| HostThemeCssPayloadMessage
 	| HostRevealHeadingMessage
 	| HostImageUploadedMessage
 	| HostImageUploadFailedMessage
