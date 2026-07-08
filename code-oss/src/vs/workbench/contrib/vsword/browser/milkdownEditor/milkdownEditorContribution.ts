@@ -29,7 +29,15 @@ import { IEditorGroup } from '../../../../services/editor/common/editorGroupsSer
 import { IWebviewService } from '../../../webview/browser/webview.js';
 import { asWebviewUri } from '../../../webview/common/webview.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
+import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
+import {
+	ExternalTheme,
+	isExternalThemeId,
+	VSWORD_EXTERNAL_THEMES_DIRNAME,
+} from './milkdownEditorExternalThemes.js';
+import { discoverExternalThemes, extractThemeDisplayName } from './milkdownEditorExternalThemeDiscovery.js';
+import { buildExternalThemePayload } from './milkdownEditorExternalThemePayload.js';
 import { IVSWordFindService } from '../../common/vswordFindService.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
 import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
@@ -54,7 +62,6 @@ import {
 	VSWORD_MILKDOWN_DEFAULT_THEME,
 	VSWORD_MILKDOWN_THEME_STORAGE_KEY,
 	VSWORD_THEME_CONFIG,
-	VswordMilkdownTheme,
 	isValidTheme,
 } from './milkdownEditorThemes.js';
 import {
@@ -97,6 +104,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IThemeService private readonly themeService: IThemeService,
 		@IFileService private readonly fileService: IFileService,
 		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
+		@IEnvironmentService private readonly environmentService: IEnvironmentService,
 		@IVSWordFindService private readonly findService: IVSWordFindService,
 	) {
 		super();
@@ -123,17 +131,39 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				e.affectsConfiguration(VSWORD_THEME_CONFIG.light) ||
 				e.affectsConfiguration(VSWORD_THEME_CONFIG.dark)
 			) {
-				this.broadcastTheme();
+				void this.broadcastTheme();
 			}
 		}));
 		this._register(this.themeService.onDidColorThemeChange(() => {
 			if (this.configurationService.getValue<boolean>(VSWORD_THEME_CONFIG.followWorkbench)) {
-				this.broadcastTheme();
+				void this.broadcastTheme();
 			}
 		}));
 		// T-3.3.1: user picked a new theme via the command palette → rebroadcast.
 		this._register(this.storageService.onDidChangeValue(StorageScope.APPLICATION, VSWORD_MILKDOWN_THEME_STORAGE_KEY, this._store)(() => {
-			this.broadcastTheme();
+			void this.broadcastTheme();
+		}));
+		// T-3.7d.2.c · 外挂主题接线：启动跑一次 discovery；后续 `.vsword/themes` 目录里
+		// 任意变更（增/删/改 .css）→ 裸重扫 + broadcast。选择裸重扫（不 debounce）是本卡
+		// 预算自救 §3 的取舍：多 broadcast 一次也不会造成视觉抖动（webview 端幂等注入 style）。
+		void this.refreshExternalThemes({ broadcast: false });
+		this._register(this.fileService.onDidFilesChange(e => {
+			const dirs = this.externalThemeWatchDirs();
+			if (dirs.length === 0) return;
+			const affects = (u: URI): boolean => {
+				const p = u.path.toLowerCase();
+				return dirs.some(d => p === d || p.startsWith(d + '/'));
+			};
+			const hit =
+				e.rawAdded.some(affects) ||
+				e.rawUpdated.some(affects) ||
+				e.rawDeleted.some(affects);
+			if (!hit) return;
+			void this.refreshExternalThemes({ broadcast: true });
+		}));
+		// workspace folders 变更也重扫（新开的 folder 可能带 .vsword/themes）。
+		this._register(this.workspaceService.onDidChangeWorkspaceFolders(() => {
+			void this.refreshExternalThemes({ broadcast: true });
 		}));
 		// T-3.11.1: invalidate wiki-link file index on any .md workspace change.
 		this._register(this.fileService.onDidFilesChange(e => {
@@ -231,6 +261,12 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	private wikilinkIndexPromise: Promise<WikilinkIndexEntry[]> | null = null;
 	private wikilinkGraph: Map<string, WikilinkBackref[]> | null = null;
 	private wikilinkGraphPromise: Promise<Map<string, WikilinkBackref[]>> | null = null;
+
+	// ---- T-3.7d.2.c 外挂主题缓存 -----------------------------------------
+	// discovery 结果本身是廉价的（只 stat 不读文件），但 buildExternalThemeCssPayload 里
+	// 需要通过 id → uri 反查 → 读 CSS，所以把最近一次 discovery 结果缓存在这里。
+	// broadcast 前若已过期由 onDidFilesChange 触发 refresh，本次 broadcast 直接读缓存拿 URI。
+	private externalThemes: ExternalTheme[] = [];
 
 	private createEditorInput(resource: URI, group: IEditorGroup): EditorInputWithOptions {
 		const { vendorRoot, scriptUri, katexCssUri } = getMilkdownWebviewResources();
@@ -348,7 +384,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				if (msg.typewriter !== undefined) this.writeToggle(VSWORD_MILKDOWN_TYPEWRITER_STORAGE_KEY, msg.typewriter);
 				return;
 			case 'themeRequest':
-				this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme(), isDark: this.readIsDark() });
+				await this.sendThemeToInput(input);
 				return;
 			case 'outlineChanged':
 				input.updateOutlineData({ headings: msg.headings, activeId: msg.activeId });
@@ -401,7 +437,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			markdown,
 		});
 		this.post(input, { type: 'dirtyChanged', dirty: input.workingCopy.isDirty() });
-		this.post(input, { type: 'themeChanged', theme: this.readEffectiveTheme(), isDark: this.readIsDark() });
+		await this.sendThemeToInput(input);
 	}
 
 	private async onExternalChange(input: MilkdownEditorInput, changeType: FileChangeType): Promise<void> {
@@ -469,11 +505,16 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	}
 
 	/**
-	 * T-3.3.1 effective theme resolution:
-	 *   - if followWorkbench=true → pick config.light or config.dark based on the workbench kind
+	 * T-3.3.1 / T-3.7d.2.c effective theme resolution:
+	 *   - followWorkbench=true → pick config.light or config.dark based on the workbench kind
 	 *   - else → return the last-selected theme from IStorageService (default 'default')
+	 *
+	 * 返回类型从 `VswordMilkdownTheme` 放宽到 `string`：ext:workspace:* / ext:user:* 类外挂
+	 * 主题 id 也应该直通 webview，caller（webview）只按前缀判断处理路径。
+	 * follow-workbench 只走内置主题；外挂主题只能通过 storage（`vsword.theme.set` 命令写入）
+	 * 显式选中。
 	 */
-	private readEffectiveTheme(): VswordMilkdownTheme {
+	private readEffectiveTheme(): string {
 		const follow = this.configurationService.getValue<boolean>(VSWORD_THEME_CONFIG.followWorkbench) === true;
 		if (follow) {
 			const kind = this.themeService.getColorTheme().type;
@@ -483,15 +524,111 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			return isValidTheme(raw) ? raw : (isDark ? 'night' : 'github');
 		}
 		const stored = this.storageService.get(VSWORD_MILKDOWN_THEME_STORAGE_KEY, StorageScope.APPLICATION, VSWORD_MILKDOWN_DEFAULT_THEME);
+		if (isExternalThemeId(stored) && this.externalThemes.some(t => t.id === stored)) {
+			return stored;
+		}
 		return isValidTheme(stored) ? stored : VSWORD_MILKDOWN_DEFAULT_THEME;
 	}
 
-	private broadcastTheme(): void {
+	private async broadcastTheme(): Promise<void> {
 		const theme = this.readEffectiveTheme();
 		const isDark = this.readIsDark();
+		if (isExternalThemeId(theme)) {
+			const payload = await this.buildExternalThemeCssPayload(theme);
+			if (payload) {
+				for (const input of this.liveInputs) {
+					this.post(input, payload);
+				}
+			}
+		}
 		for (const input of this.liveInputs) {
 			this.post(input, { type: 'themeChanged', theme, isDark });
 		}
+	}
+
+	/**
+	 * T-3.7d.2.c · 给单个 input 推当前主题（含 ext:* CSS payload）。
+	 *
+	 * postInit / themeRequest 都走这条：外挂主题时先送 CSS，再送 themeChanged；
+	 * 内置主题跳过 payload 步骤。异常静默（外挂主题 CSS 读失败不应阻塞编辑器加载）。
+	 */
+	private async sendThemeToInput(input: MilkdownEditorInput): Promise<void> {
+		const theme = this.readEffectiveTheme();
+		const isDark = this.readIsDark();
+		if (isExternalThemeId(theme)) {
+			const payload = await this.buildExternalThemeCssPayload(theme);
+			if (payload) {
+				this.post(input, payload);
+			}
+		}
+		this.post(input, { type: 'themeChanged', theme, isDark });
+	}
+
+	/**
+	 * T-3.7d.2.c · 根据 ext:* id 从缓存里查 URI → 读原始 CSS → rebase url() → wrap scope → asWebviewUri。
+	 *
+	 * 返回 undefined 的三种情况：id 对不上任何已发现主题、文件读取抛错、CSS 解码抛错。
+	 * caller（broadcastTheme / sendThemeToInput）拿到 undefined 时跳过 payload 一步，仅广播
+	 * themeChanged —— webview 端幂等：若 style 元素已存在但没新 CSS，body[data-theme] 变化
+	 * 后旧 CSS 依然生效直到下一次成功 payload。
+	 */
+	private async buildExternalThemeCssPayload(themeId: string): Promise<HostToWebviewMessage | undefined> {
+		const payload = await buildExternalThemePayload({
+			themeId,
+			themes: this.externalThemes,
+			fileService: this.fileService,
+			toWebviewUri: dirUri => asWebviewUri(dirUri),
+		});
+		if (!payload) {
+			this.logService.warn('[VSWord Milkdown] external theme CSS payload not produced for ' + themeId);
+		}
+		return payload;
+	}
+
+	/**
+	 * T-3.7d.2.c · 重跑一次 discovery，替换缓存。
+	 * `broadcast=true` 时若当前 effective theme 是 ext:*，重发一次 CSS payload + themeChanged。
+	 */
+	private async refreshExternalThemes(opts: { broadcast: boolean }): Promise<void> {
+		try {
+			const roots = this.workspaceService.getWorkspace().folders;
+			const workspaceUri = roots[0]?.uri;
+			const userConfigDirUri = this.environmentService.userRoamingDataHome;
+			const themes = await discoverExternalThemes({
+				fileService: this.fileService,
+				workspaceUri,
+				userConfigDirUri,
+			});
+			// T-3.7d.2.c · 尝试从 CSS 头注释里取 `Theme Name:` 作为显示名（可选，
+			// 失败沉默：discovery 层已经给了 basename fallback）。
+			const enriched = await Promise.all(themes.map(async t => {
+				try {
+					const raw = await this.fileService.readFile(t.uri, { position: 0, length: 4096 });
+					const name = extractThemeDisplayName(raw.value.toString());
+					return name ? { ...t, displayName: name } : t;
+				} catch {
+					return t;
+				}
+			}));
+			this.externalThemes = enriched;
+		} catch (err) {
+			this.logService.warn('[VSWord Milkdown] external theme discovery failed: ' + String(err));
+			this.externalThemes = [];
+		}
+		if (opts.broadcast) {
+			await this.broadcastTheme();
+		}
+	}
+
+	/** 返回受监听的 `.vsword/themes` 目录路径列表（小写、无尾斜杠），用于 onDidFilesChange 过滤。 */
+	private externalThemeWatchDirs(): string[] {
+		const dirs: string[] = [];
+		const roots = this.workspaceService.getWorkspace().folders;
+		for (const f of roots) {
+			dirs.push((f.uri.path + '/' + VSWORD_EXTERNAL_THEMES_DIRNAME).toLowerCase());
+		}
+		dirs.push((this.environmentService.userRoamingDataHome.path + '/' + VSWORD_EXTERNAL_THEMES_DIRNAME).toLowerCase());
+		return dirs;
 	}
 
 	/** T-3.5b.2: 从 workbench color theme 抽取暗色标记，用于 mermaid 主题联动。 */

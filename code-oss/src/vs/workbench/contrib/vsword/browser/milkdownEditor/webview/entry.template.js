@@ -630,6 +630,24 @@ window.addEventListener('message', event => {
 		refreshBacklinks();
 		return;
 	}
+	if (msg.type === 'themeCssPayload') {
+		// T-3.7d.2.c · 外挂主题 CSS 到位：把 cssText 挂到 <style id="vsword-external-theme"> 上，
+		// data-theme-id 记录当前生效外挂 id 便于调试。随后的 themeChanged 会通过 body[data-theme]
+		// 切换让本段 scope（`body[data-theme="ext:*"] { ... }`）生效。
+		try {
+			let styleEl = document.getElementById('vsword-external-theme');
+			if (!styleEl) {
+				styleEl = document.createElement('style');
+				styleEl.id = 'vsword-external-theme';
+				document.head.appendChild(styleEl);
+			}
+			styleEl.setAttribute('data-theme-id', String(msg.themeId || ''));
+			styleEl.textContent = String(msg.cssText || '');
+		} catch (err) {
+			reportError('themeCssPayload', err);
+		}
+		return;
+	}
 	if (msg.type === 'themeChanged') {
 		// T-3.3.1: set body[data-theme] so the CSS layer swaps tokens. `default` = drop the attr.
 		const theme = String(msg.theme || 'default');
@@ -637,6 +655,16 @@ window.addEventListener('message', event => {
 			document.body.removeAttribute('data-theme');
 		} else {
 			document.body.setAttribute('data-theme', theme);
+		}
+		// T-3.7d.2.c · 切换到非 ext:* 主题（含 default）时，清空外挂 <style> 内容，
+		// 避免旧外挂主题的 scope 规则残留匹配 body[data-theme="ext:*"]（虽已不匹配）
+		// 或未来 ext scope 内滥用 :root 时污染其他主题。幂等清空。
+		if (!theme.startsWith('ext:')) {
+			const styleEl = document.getElementById('vsword-external-theme');
+			if (styleEl) {
+				styleEl.textContent = '';
+				styleEl.removeAttribute('data-theme-id');
+			}
 		}
 		// T-3.5b.2: 转发 isDark 给 mermaid-view，触发所有活着的 mermaid 图表 re-render。
 		// 兼容旧版 host（缺 isDark 字段）：从 data-theme 名字 fallback 判断。
