@@ -357,7 +357,7 @@ async function createEditor(markdown) {
 		// 每次 createEditor 都构造一次 plugin/keymap 实例；widget 单例（getFindWidget
 		// 保证），跨 editor 重建复用 → widget DOM 不闪、mount 不重复。
 		.use($prose(() => createFindPlugin(() => getFindWidget().getFindState())))
-		.use($prose(() => createFindKeymap(getFindWidget())))
+		.use($prose(() => createFindKeymap(getFindWidget(), { getMode: () => (modeController?.getMode?.() || 'wysiwyg') })))
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;

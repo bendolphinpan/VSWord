@@ -173,11 +173,40 @@ function _isReadOnly(state) {
 }
 
 /**
+ * 内部：把用户输入的 replacement 展开为**最终写入 doc 的字符串**。
+ *
+ * · useRegex=false：原样返回（不做 $1 / $& 展开）
+ * · useRegex=true：在 match.text 上用「非 global」重编译的同规则 regex 跑一次
+ *   `String.prototype.replace`，让原生 backref（$1 $2 $& $`）生效。
+ *   命中失败（比如 regex 编译失败）→ 退化为字面量。
+ *
+ * 参考 PRD §4.7 无方向决策 a：正则 backref 走 RegExp[Symbol.replace] 默认语义。
+ *
+ * @param {FindMatch} match
+ * @param {FindState} state
+ * @param {string} replacement
+ * @returns {string}
+ */
+function _expandReplacement(match, state, replacement) {
+	const raw = typeof replacement === 'string' ? replacement : '';
+	if (!state || !state.options || !state.options.useRegex) { return raw; }
+	if (!match || typeof match.text !== 'string' || match.text.length === 0) { return raw; }
+	// 重编译一次「非 global」regex，让 String.replace 只替换首个命中（等价于当前 match）。
+	let re;
+	try {
+		re = new RegExp(state.query, state.options.caseSensitive ? '' : 'i');
+	} catch { return raw; }
+	try { return match.text.replace(re, raw); }
+	catch { return raw; }
+}
+
+/**
  * 单条替换：把 state.matches[state.activeIndex] 的 [from, to] 替换成 replacement。
  *
  * 语义：
  *   · state.matches 为空 / activeIndex 越界 → return -1，不 dispatch
  *   · reading mode → return -1，不 dispatch（PRD §8 风险 6 兜底）
+ *   · useRegex=true 时 replacement 支持 `$1` / `$&` 等原生 backref（PRD §4.7 默认 a）
  *   · 替换后返回的 hint 是 `min(activeIndex, matches.length - 2)`，caller 侧
  *     应在 doc-changed listener 里重算 matches / clamp activeIndex；本函数
  *     只做单条替换 · 不重算
@@ -193,7 +222,7 @@ export function applyReplaceOne(view, state, replacement) {
 	if (typeof state.activeIndex !== 'number' || state.activeIndex < 0 || state.activeIndex >= state.matches.length) { return -1; }
 	if (_isReadOnly(state)) { return -1; }
 	const m = state.matches[state.activeIndex];
-	const replText = typeof replacement === 'string' ? replacement : '';
+	const replText = _expandReplacement(m, state, replacement);
 	const schema = view.state.schema;
 	let tr = view.state.tr;
 	if (replText.length === 0) {
@@ -216,6 +245,7 @@ export function applyReplaceOne(view, state, replacement) {
  *     的匹配，它的替换不影响前面 match 的 from/to（PRD §6 坑 · §8 风险 2）
  *   · 单 tr 累积 → undo 一次撤销全部（PRD §4.7）
  *   · replacement 为空 → 走 tr.delete；否则 tr.replaceWith(schema.text(...))
+ *   · useRegex=true 时逐条走 `_expandReplacement` 让 $1/$& 生效（PRD §4.7 默认 a）
  *   · replacement 含 `\n` → 单条 text node 存不下，本 PR 不做（PRD §4.7 P2）
  *
  * @param {{ state: any, dispatch: (tr: any) => void }} view
@@ -227,7 +257,6 @@ export function applyReplaceAll(view, state, replacement) {
 	if (!view || !view.state || typeof view.dispatch !== 'function') { return 0; }
 	if (!state || !Array.isArray(state.matches) || state.matches.length === 0) { return 0; }
 	if (_isReadOnly(state)) { return 0; }
-	const replText = typeof replacement === 'string' ? replacement : '';
 	const schema = view.state.schema;
 	let tr = view.state.tr;
 	let count = 0;
@@ -235,6 +264,7 @@ export function applyReplaceAll(view, state, replacement) {
 	for (let i = state.matches.length - 1; i >= 0; i--) {
 		const m = state.matches[i];
 		if (!m || typeof m.from !== 'number' || typeof m.to !== 'number') { continue; }
+		const replText = _expandReplacement(m, state, replacement);
 		if (replText.length === 0) {
 			tr = tr.delete(m.from, m.to);
 		} else {

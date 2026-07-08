@@ -423,6 +423,87 @@ suite('T-3.7c.3.a · applyReplaceAll', () => {
 });
 
 // ---------------------------------------------------------------------------
+// T-3.7c.3.c · replacement backref 展开（PRD §4.7 无方向决策 a）
+// ---------------------------------------------------------------------------
+
+suite('T-3.7c.3.c · replacement backref（regex $1 / $&）', () => {
+	test('applyReplaceOne · useRegex=true · $1 backref 展开', () => {
+		const view = makeView();
+		const state = {
+			widgetOpen: true,
+			query: '(foo)(bar)',
+			options: { caseSensitive: true, wholeWord: false, useRegex: true },
+			matches: [{ from: 5, to: 11, text: 'foobar' }],
+			activeIndex: 0, invalidRegex: false,
+		};
+		applyReplaceOne(view as any, state as any, '$2-$1');
+		assert.strictEqual(view.dispatched.length, 1);
+		assert.strictEqual(view.dispatched[0].__replacements[0].text, 'bar-foo');
+	});
+
+	test('applyReplaceOne · useRegex=true · $& = 整段匹配', () => {
+		const view = makeView();
+		const state = {
+			widgetOpen: true,
+			query: '\\d+',
+			options: { caseSensitive: true, wholeWord: false, useRegex: true },
+			matches: [{ from: 5, to: 8, text: '123' }],
+			activeIndex: 0, invalidRegex: false,
+		};
+		applyReplaceOne(view as any, state as any, '[$&]');
+		assert.strictEqual(view.dispatched[0].__replacements[0].text, '[123]');
+	});
+
+	test('applyReplaceOne · useRegex=false · $1 保持字面（不做展开）', () => {
+		const view = makeView();
+		const state = {
+			widgetOpen: true, query: 'foo',
+			options: { caseSensitive: true, wholeWord: false, useRegex: false },
+			matches: [{ from: 5, to: 8, text: 'foo' }],
+			activeIndex: 0, invalidRegex: false,
+		};
+		applyReplaceOne(view as any, state as any, '$1-x');
+		assert.strictEqual(view.dispatched[0].__replacements[0].text, '$1-x');
+	});
+
+	test('applyReplaceAll · useRegex=true · 逐条 backref 展开（12 条独立求值）', () => {
+		const view = makeView();
+		const matches = [
+			{ from: 10, to: 15, text: 'a1' },
+			{ from: 30, to: 35, text: 'b2' },
+			{ from: 50, to: 55, text: 'c3' },
+		];
+		const state = {
+			widgetOpen: true,
+			query: '([a-z])(\\d)',
+			options: { caseSensitive: true, wholeWord: false, useRegex: true },
+			matches, activeIndex: 0, invalidRegex: false,
+		};
+		const count = applyReplaceAll(view as any, state as any, '$2$1');
+		assert.strictEqual(count, 3);
+		const tr = view.dispatched[0];
+		// 反向遍历：先替换最后一个
+		assert.strictEqual(tr.__replacements[0].text, '3c');
+		assert.strictEqual(tr.__replacements[1].text, '2b');
+		assert.strictEqual(tr.__replacements[2].text, '1a');
+	});
+
+	test('applyReplaceAll · useRegex=true · regex 编译失败 → 退化字面量', () => {
+		const view = makeView();
+		const state = {
+			widgetOpen: true,
+			query: '(unbalanced', // 非法 regex
+			options: { caseSensitive: true, wholeWord: false, useRegex: true },
+			matches: [{ from: 5, to: 8, text: 'foo' }],
+			activeIndex: 0, invalidRegex: true,
+		};
+		applyReplaceAll(view as any, state as any, '$1');
+		// 编译失败 → replacement 按字面 '$1' 写入
+		assert.strictEqual(view.dispatched[0].__replacements[0].text, '$1');
+	});
+});
+
+// ---------------------------------------------------------------------------
 // _buildDecorationSet · createFindPlugin（结构级 sanity）
 // ---------------------------------------------------------------------------
 

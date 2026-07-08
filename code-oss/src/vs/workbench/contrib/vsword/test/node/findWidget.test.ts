@@ -479,3 +479,180 @@ suite('T-3.7c.3.b · createFindKeymap · Plugin handleKeyDown', () => {
 		assert.doesNotThrow(() => assert.strictEqual(handle(null, ev), true));
 	});
 });
+
+// ---------------------------------------------------------------------------
+// T-3.7c.3.c · reading mode 二次防护 + 替换按钮真事务
+// ---------------------------------------------------------------------------
+
+suite('T-3.7c.3.c · createFindKeymap · reading mode Ctrl+H 二次防护', () => {
+	test('15. reading mode → Ctrl+H 拦截但 openReplace 不被调（no-op）', () => {
+		bootstrap();
+		const spy = makeWidgetSpy();
+		const plugin: any = createFindKeymap(spy, { getMode: () => 'reading' });
+		const handle = plugin.spec.props.handleKeyDown;
+
+		let prevented = false;
+		const e = {
+			key: 'h', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false,
+			preventDefault() { prevented = true; },
+		};
+		// reading 下**仍返回 true**（拦截冒泡，避免 Ctrl+H 撞 shell 默认），但 openReplace 不被调
+		assert.strictEqual(handle(null, e), true, 'reading 下 Ctrl+H 仍拦截');
+		assert.strictEqual(spy.openReplaceCount, 0, 'reading 下 openReplace 不被调');
+		assert.strictEqual(prevented, true, '仍 preventDefault 避免冒泡');
+	});
+
+	test('16. wysiwyg mode → Ctrl+H 正常呼出替换栏', () => {
+		bootstrap();
+		const spy = makeWidgetSpy();
+		const plugin: any = createFindKeymap(spy, { getMode: () => 'wysiwyg' });
+		const handle = plugin.spec.props.handleKeyDown;
+
+		const e = { key: 'h', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, preventDefault() { } };
+		assert.strictEqual(handle(null, e), true);
+		assert.strictEqual(spy.openReplaceCount, 1);
+	});
+
+	test('17. getMode 抛错 → fallback wysiwyg · openReplace 仍被调', () => {
+		bootstrap();
+		const spy = makeWidgetSpy();
+		const plugin: any = createFindKeymap(spy, { getMode: () => { throw new Error('boom'); } });
+		const handle = plugin.spec.props.handleKeyDown;
+
+		const e = { key: 'h', ctrlKey: true, metaKey: false, shiftKey: false, altKey: false, preventDefault() { } };
+		assert.strictEqual(handle(null, e), true);
+		assert.strictEqual(spy.openReplaceCount, 1, 'getMode 抛错时 fallback wysiwyg → 正常呼出');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// T-3.7c.3.c · widget 替换按钮 → 真事务
+// ---------------------------------------------------------------------------
+
+/**
+ * 强化版 fake view：state.tr 支持 replaceWith / delete 的 fluent 链，
+ * 并把每步累加到 __replacements 里以便断言。
+ */
+function makeRichView(docSegments: Array<{ pos: number; text: string }>) {
+	const view: any = {
+		dispatched: [] as any[],
+		focusedCount: 0,
+		focus() { view.focusedCount++; },
+		state: {
+			doc: makeDoc(docSegments),
+			schema: { text: (t: string) => ({ text: t }) },
+		},
+		dispatch(tr: any) { view.dispatched.push(tr); },
+	};
+	// state.tr 需要既支持 recompute meta（setMeta）又支持 replaceWith/delete
+	// 用 lazy getter：同一次 dispatch 前多次访问返回同一个 tr。
+	let cached: any = null;
+	Object.defineProperty(view.state, 'tr', {
+		configurable: true,
+		get() {
+			if (cached) { return cached; }
+			cached = {
+				__replacements: [] as any[],
+				__meta: new Map<any, any>(),
+				setMeta(k: any, v: any) { this.__meta.set(k, v); return this; },
+				replaceWith(from: number, to: number, node: any) {
+					this.__replacements.push({ from, to, text: node.text, op: 'replace' });
+					return this;
+				},
+				delete(from: number, to: number) {
+					this.__replacements.push({ from, to, text: '', op: 'delete' });
+					return this;
+				},
+			};
+			return cached;
+		},
+	});
+	const origDispatch = view.dispatch.bind(view);
+	view.dispatch = (tr: any) => { origDispatch(tr); cached = null; };
+	return view;
+}
+
+suite('T-3.7c.3.c · widget 替换按钮 → applyReplaceOne / All 真事务', () => {
+	test('18. 点「替换」按钮 → view.dispatch 被调 · tr 里有 1 条 replaceWith', () => {
+		const dom = new JSDOM(`<!DOCTYPE html><html><body><div class="vsword-md-shell"></div></body></html>`, { url: 'http://localhost/' });
+		// @ts-ignore
+		globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.CustomEvent = dom.window.CustomEvent;
+		const container = dom.window.document.querySelector('.vsword-md-shell') as HTMLElement;
+		const richView = makeRichView([{ pos: 1, text: 'foo bar foo' }]);
+		const w = createFindWidget({ getEditorView: () => richView, getMode: () => 'wysiwyg' } as any);
+		w.mount(container);
+		w.openReplace();
+
+		const findInput = w.el!.querySelector('.vsword-find-input') as HTMLInputElement;
+		findInput.value = 'foo';
+		findInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.strictEqual(w.getState().total, 2, '两处 foo');
+
+		const replaceInput = w.el!.querySelector('.vsword-replace-input') as HTMLInputElement;
+		replaceInput.value = 'BAR';
+
+		// 记下点击**前**的 dispatched.length —— openReplace 会 kickPlugin 一次
+		const before = richView.dispatched.length;
+		const btnOne = w.el!.querySelector('.vsword-replace-one') as HTMLButtonElement;
+		btnOne.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+		// 「替换」会 dispatch 两次：一次是替换 tr，另一次是 recompute meta
+		const replaceTr = richView.dispatched.find((tr: any) => tr.__replacements && tr.__replacements.length > 0);
+		assert.ok(replaceTr, '应存在一个含 replaceWith 的 tr');
+		assert.strictEqual(replaceTr.__replacements.length, 1);
+		assert.strictEqual(replaceTr.__replacements[0].text, 'BAR');
+		assert.ok(richView.dispatched.length > before, 'dispatch 应至少多一次');
+	});
+
+	test('19. 点「全部替换」→ tr 里有 N 条 replaceWith（反向 · 单 tr）', () => {
+		const dom = new JSDOM(`<!DOCTYPE html><html><body><div class="vsword-md-shell"></div></body></html>`, { url: 'http://localhost/' });
+		// @ts-ignore
+		globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.CustomEvent = dom.window.CustomEvent;
+		const container = dom.window.document.querySelector('.vsword-md-shell') as HTMLElement;
+		const richView = makeRichView([{ pos: 1, text: 'x y x y x' }]);
+		const w = createFindWidget({ getEditorView: () => richView, getMode: () => 'wysiwyg' } as any);
+		w.mount(container);
+		w.openReplace();
+
+		const findInput = w.el!.querySelector('.vsword-find-input') as HTMLInputElement;
+		findInput.value = 'x';
+		findInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		assert.strictEqual(w.getState().total, 3);
+
+		const replaceInput = w.el!.querySelector('.vsword-replace-input') as HTMLInputElement;
+		replaceInput.value = 'Z';
+
+		const btnAll = w.el!.querySelector('.vsword-replace-all') as HTMLButtonElement;
+		btnAll.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+		const replaceTr = richView.dispatched.find((tr: any) => tr.__replacements && tr.__replacements.length >= 3);
+		assert.ok(replaceTr, '应存在含 3 条 replace 的 tr');
+		assert.strictEqual(replaceTr.__replacements.length, 3);
+		// 反向：第一条应是最后一个 match（pos 最大）
+		assert.ok(replaceTr.__replacements[0].from > replaceTr.__replacements[2].from, '反向遍历');
+	});
+
+	test('20. reading mode → 点「替换」不 dispatch replace tr（三重保险最外层）', () => {
+		const dom = new JSDOM(`<!DOCTYPE html><html><body><div class="vsword-md-shell"></div></body></html>`, { url: 'http://localhost/' });
+		// @ts-ignore
+		globalThis.window = dom.window; globalThis.document = dom.window.document; globalThis.CustomEvent = dom.window.CustomEvent;
+		const container = dom.window.document.querySelector('.vsword-md-shell') as HTMLElement;
+		const richView = makeRichView([{ pos: 1, text: 'foo bar foo' }]);
+		const w = createFindWidget({ getEditorView: () => richView, getMode: () => 'reading' } as any);
+		w.mount(container);
+		w.openReplace();
+
+		const findInput = w.el!.querySelector('.vsword-find-input') as HTMLInputElement;
+		findInput.value = 'foo';
+		findInput.dispatchEvent(new dom.window.Event('input', { bubbles: true }));
+		const replaceInput = w.el!.querySelector('.vsword-replace-input') as HTMLInputElement;
+		replaceInput.value = 'BAR';
+
+		const btnOne = w.el!.querySelector('.vsword-replace-one') as HTMLButtonElement;
+		btnOne.dispatchEvent(new dom.window.MouseEvent('click', { bubbles: true, cancelable: true }));
+
+		// reading 下 doReplace() 静默 return，没有含 __replacements 的 tr
+		const hasReplaceTr = richView.dispatched.some((tr: any) => tr.__replacements && tr.__replacements.length > 0);
+		assert.strictEqual(hasReplaceTr, false, 'reading 模式下不应产生 replace tr');
+	});
+});

@@ -46,12 +46,15 @@ function isCmdOrCtrl(event) {
  * 创建 find keymap PM plugin。
  *
  * @param {import('./find-widget.mjs').IFindWidgetComponent | { open: Function, openReplace: Function, close: Function, isOpen: Function }} widget
+ * @param {Object} [opts]
+ * @param {() => string} [opts.getMode]  —— 视图模式读取器；'reading' 时 Ctrl+H 完全 no-op（T-3.7c.3.c 二次防护）
  * @returns {Plugin}
  */
-export function createFindKeymap(widget) {
+export function createFindKeymap(widget, opts) {
 	if (!widget) {
 		throw new Error('createFindKeymap: widget 不能为空');
 	}
+	const getMode = (opts && typeof opts.getMode === 'function') ? opts.getMode : () => 'wysiwyg';
 	return new Plugin({
 		key: findKeymapKey,
 		props: {
@@ -71,8 +74,16 @@ export function createFindKeymap(widget) {
 					} catch { /* noop */ }
 					return true;
 				}
-				// Ctrl/Cmd + H → open find+replace
+				// Ctrl/Cmd + H → open find+replace（reading mode 下**完全 no-op** —— 不呼出替换栏）
 				if (isCmdOrCtrl(event) && !event.shiftKey && !event.altKey && (key === 'h' || key === 'H')) {
+					let mode = 'wysiwyg';
+					try { mode = getMode() || 'wysiwyg'; } catch { /* noop */ }
+					if (mode === 'reading') {
+						// 二次防护：reading 模式下 Ctrl+H 不呼出替换栏；但仍拦截，避免冒泡触发
+						// 浏览器/VS Code shell 默认（Ctrl+H 在部分平台 = history）。
+						try { event.preventDefault?.(); } catch { /* noop */ }
+						return true;
+					}
 					try {
 						widget.openReplace?.();
 						event.preventDefault?.();

@@ -55,7 +55,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { VSWORD_UI_COMPONENT_DISPOSED_EVENT } from './ui-component.mjs';
-import { computeMatches } from './find-widget-helpers.mjs';
+import { computeMatches, applyReplaceOne, applyReplaceAll } from './find-widget-helpers.mjs';
 import { findPluginKey } from './find-plugin.mjs';
 
 /**
@@ -420,26 +420,43 @@ export function createFindWidget(deps) {
 		if (btnNext) { bind(btnNext, 'click', () => next()); }
 		if (btnClose) { bind(btnClose, 'click', () => close()); }
 
-		// 替换按钮：本卡先只 dispatch 一个自定义 event 供 c 卡接管；reading gate 已在
-		// openReplace() 里通过 disabled 生效，若强制点击也直接吞掉。
+		// 替换按钮：本卡（T-3.7c.3.c）真正执行 tr —— 调用 helpers 的
+		// applyReplaceOne / applyReplaceAll。reading gate 三重保险：
+		//   1) find-keymap 拦截 Ctrl+H 不呼出（read-only 二次防护）
+		//   2) openReplace 里给 button 加 disabled 属性 + `.vsword-find-replace-disabled` class
+		//   3) 本 handler 里 getMode()==='reading' 静默 return（即使 disabled 被 DOM 层绕过）
+		//   4) helpers.applyReplaceOne/All 内部 _isReadOnly 兜底 return 0/-1
 		const btnReplaceOne = el.querySelector('.vsword-replace-one');
 		const btnReplaceAll = el.querySelector('.vsword-replace-all');
-		function dispatchReplaceEvent(kind) {
+		function doReplace(kind) {
 			if (getMode() === 'reading') { return; }
-			const detail = {
-				kind,
-				replacement: replaceInputEl ? replaceInputEl.value : '',
-				state,
-			};
+			const view = getView();
+			if (!view || !view.state || typeof view.dispatch !== 'function') { return; }
+			// 每次替换前把当前 mode 同步进 state —— helpers 里 _isReadOnly 依赖 state.mode。
+			state.mode = getMode() || 'wysiwyg';
+			const replacement = replaceInputEl ? (replaceInputEl.value || '') : '';
+			if (kind === 'one') {
+				const hint = applyReplaceOne(view, state, replacement);
+				// doc 变了：重算 matches → clamp activeIndex 到 hint（-1 表示无匹配）
+				if (hint >= 0) { state.activeIndex = hint; }
+				recompute();
+			} else if (kind === 'all') {
+				applyReplaceAll(view, state, replacement);
+				// 全部替换后原 matches 全失效；recompute 会拉出新的（应为 0）
+				state.activeIndex = -1;
+				recompute();
+			}
+			// 保留 vsword-find-replace 事件（host 状态服务化 c2 卡消费；本卡先广播 kind + total 供
+			// 外部 spy）。event 不再是**唯一**执行途径 —— 事务由 helpers 已即时完成。
 			try {
 				el?.dispatchEvent(new (doc.defaultView?.CustomEvent || CustomEvent)('vsword-find-replace', {
 					bubbles: true,
-					detail,
+					detail: { kind, replacement, total: state.matches.length, activeIndex: state.activeIndex },
 				}));
 			} catch { /* noop */ }
 		}
-		if (btnReplaceOne) { bind(btnReplaceOne, 'click', () => dispatchReplaceEvent('one')); }
-		if (btnReplaceAll) { bind(btnReplaceAll, 'click', () => dispatchReplaceEvent('all')); }
+		if (btnReplaceOne) { bind(btnReplaceOne, 'click', () => doReplace('one')); }
+		if (btnReplaceAll) { bind(btnReplaceAll, 'click', () => doReplace('all')); }
 
 		renderOptionButtons();
 		renderCount();
