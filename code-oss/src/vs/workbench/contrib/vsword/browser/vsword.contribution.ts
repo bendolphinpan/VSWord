@@ -28,6 +28,8 @@ import './milkdownEditor/viewMode/vswordViewModeActions.js';
 // T-3.7c.3.c2: register IVSWordFindService singleton (find/replace host 镜像) + 3 条 Action2
 import './milkdownEditor/find/vswordFindService.contribution.js';
 import './milkdownEditor/find/vswordFindCommands.js';
+// T-3.8b.1.b: register `Export as HTML` Action2 + host-side SaveAs / writeFile 通道
+import './milkdownEditor/exportContribution.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
