@@ -60,3 +60,7 @@ code-oss/extensions/terminal-suggest/src/test/fixtures/
 # Copilot extension simulation cache: locally generated sqlite DBs (used to be LFS-tracked,
 # never actually uploaded — see chore: drop broken LFS sqlite cache)
 code-oss/extensions/copilot/test/simulation/cache/
+
+# Phase 3.9 大 fixture：脚本合成、可复现，不 commit 本体
+# T-3.9.1.a — 只 ignore ≥1MB 的合成文件，保留基准 200kb-mixed.md
+code-oss/src/vs/workbench/contrib/vsword/test/fixtures/roundtrip/perf/[1-9]*mb-mixed.md
