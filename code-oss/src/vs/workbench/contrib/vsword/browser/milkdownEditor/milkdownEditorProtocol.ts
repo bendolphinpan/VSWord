@@ -515,3 +515,43 @@ export const VSWORD_EXPORT_OUTPUT_DIR_CONFIG = 'vsword.export.outputDir';
 export type VswordExportImageMode = 'data-uri' | 'sibling-folder';
 export const VSWORD_EXPORT_IMAGE_MODES: readonly VswordExportImageMode[] = ['data-uri', 'sibling-folder'];
 export const VSWORD_EXPORT_IMAGE_MODE_DEFAULT: VswordExportImageMode = 'data-uri';
+
+// ---------------------------------------------------------------------------
+// T-3.8b.3 · Pandoc 检测 + 动态导出格式暴露
+// ---------------------------------------------------------------------------
+//
+// 决策 M-1=C：Pandoc **走扩展市场，不内置**；检测到 Pandoc 才暴露更多导出格式
+// （docx / epub / latex 等）。命令 id / context key / extension id 候选集
+// 集中定义在 protocol 层，方便测试与实现共享同一契约。
+
+/** T-3.8b.3: 命令 —— 导出为 Word（.docx）。仅 `vsword.pandocAvailable` 为 true 时可见。 */
+export const VSWORD_EXPORT_DOCX_ACTION_ID = 'vsword.export.docx';
+/** T-3.8b.3: 命令 —— 导出为 EPUB。仅 `vsword.pandocAvailable` 为 true 时可见。 */
+export const VSWORD_EXPORT_EPUB_ACTION_ID = 'vsword.export.epub';
+/** T-3.8b.3: 命令 —— 导出为 LaTeX（.tex）。仅 `vsword.pandocAvailable` 为 true 时可见。 */
+export const VSWORD_EXPORT_LATEX_ACTION_ID = 'vsword.export.latex';
+
+/**
+ * T-3.8b.3: ContextKey —— host 侧探测到当前运行环境可用 Pandoc（env var / extension / PATH 三选一）。
+ *
+ * Action2.precondition 挂 `ContextKeyExpr.equals(VSWORD_PANDOC_AVAILABLE_CTX_KEY, true)`；
+ * 未检测到 → context key 保持 `false` → 命令面板 / 菜单里彻底隐藏，不给用户假选项。
+ */
+export const VSWORD_PANDOC_AVAILABLE_CTX_KEY = 'vsword.pandocAvailable';
+
+/**
+ * T-3.8b.3: 环境变量 —— 若指向存在的可执行文件，检测立即返回 available；主要给 CI / 手动测试用。
+ */
+export const VSWORD_PANDOC_PATH_ENV_VAR = 'VSWORD_PANDOC_PATH';
+
+/**
+ * T-3.8b.3: Open VSX 上常见的 Pandoc 集成扩展 id 候选集。任意一个命中 `IExtensionService.getExtension`
+ * 即视为可用（source='extension'）。列表以社区活跃度排序；`readonly` 保护调用方不改。
+ *
+ * 后续如果需要扩容，直接 append，不要 mutate。测试也直接引用这个常量做匹配。
+ */
+export const PANDOC_EXTENSION_ID_CANDIDATES: readonly string[] = [
+	'ryzngard.vscode-pandoc',
+	'DougFinke.vscode-pandoc',
+	'chrischinchilla.vscode-pandoc',
+] as const;

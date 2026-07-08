@@ -19,6 +19,8 @@ const TEST_FILES = [
 	'test/node/exportHtmlImageMode.test.ts',
 	'test/node/exportContribution.test.ts',
 	'test/node/exportPdfContribution.test.ts',
+	'test/node/pandocDetection.test.ts',
+	'test/node/exportPandocContribution.test.ts',
 ];
 
 console.log(`[export-tests] running ${TEST_FILES.length} test files:`);
