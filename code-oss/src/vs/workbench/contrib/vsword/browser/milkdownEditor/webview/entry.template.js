@@ -112,6 +112,13 @@ function getFindWidget() {
 			catch { return null; }
 		},
 		getMode: () => (modeController?.getMode?.() || 'wysiwyg'),
+		// T-3.7c.3.c2 · state 变化上报 host。widget 每次 open/close/输入/选项/上下/替换后
+		// 折成 host FindState 增量字段发一条 'find.stateChanged'；host 侧 IVSWordFindService
+		// 会 fold 进当前镜像并 fire onDidChangeState 供命令面板 / UI 消费。
+		onStateChanged: (partial) => {
+			try { vscode?.postMessage({ type: 'find.stateChanged', ...partial }); }
+			catch { /* webview disposed */ }
+		},
 	});
 	return findWidget;
 }
@@ -664,6 +671,21 @@ window.addEventListener('message', event => {
 	if (msg.type === 'tocInsert') {
 		// T-3.7c.1.c · 命令 `vsword.toc.insertToc`：在光标所在顶层块后插入 toc_marker。
 		insertTocAtCursor();
+		return;
+	}
+	if (msg.type === 'find.open') {
+		// T-3.7c.3.c2 · 命令面板 → host command → 请求打开 find widget（不展开替换栏）。
+		try { getFindWidget().open(); } catch (err) { reportError('find.open', err); }
+		return;
+	}
+	if (msg.type === 'find.replace.open') {
+		// T-3.7c.3.c2 · 命令面板 → host command → 请求打开 find widget 并展开替换栏。
+		try { getFindWidget().openReplace(); } catch (err) { reportError('find.replace.open', err); }
+		return;
+	}
+	if (msg.type === 'find.close') {
+		// T-3.7c.3.c2 · 命令面板 → host command → 请求关闭 find widget。
+		try { getFindWidget().close(); } catch (err) { reportError('find.close', err); }
 		return;
 	}
 	if (msg.type === 'revealHeading') {

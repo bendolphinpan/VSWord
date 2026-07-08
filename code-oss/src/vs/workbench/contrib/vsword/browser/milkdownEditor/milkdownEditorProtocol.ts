@@ -163,6 +163,24 @@ export interface WebviewSessionReadyMessage {
 	readonly safe: boolean;
 }
 
+/**
+ * T-3.7c.3.c2 · webview 侧 find widget 状态变化时上报给 host。
+ *
+ * 只带增量字段（Partial<FindState>），host 侧 `IVSWordFindService.setState` 会
+ * 把它 fold 进当前镜像。webview 每次 open/close/输入/切开关/切匹配都触发一次。
+ */
+export interface WebviewFindStateChangedMessage {
+	readonly type: 'find.stateChanged';
+	readonly open?: boolean;
+	readonly query?: string;
+	readonly replaceQuery?: string;
+	readonly caseSensitive?: boolean;
+	readonly wholeWord?: boolean;
+	readonly regex?: boolean;
+	readonly matchCount?: number;
+	readonly activeIndex?: number;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -180,7 +198,8 @@ export type WebviewToHostMessage =
 	| WebviewWikilinkIndexRequestMessage
 	| WebviewWikilinkPreviewRequestMessage
 	| WebviewWikilinkBacklinksRequestMessage
-	| WebviewSessionReadyMessage;
+	| WebviewSessionReadyMessage
+	| WebviewFindStateChangedMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -344,6 +363,30 @@ export interface HostTocInsertMessage {
 	readonly type: 'tocInsert';
 }
 
+/**
+ * T-3.7c.3.c2 · host → webview：请求打开 find widget（只查找，不带替换栏）。
+ * webview 收到后调用 `findWidget.open({ replace: false })` 或等价接口。
+ */
+export interface HostFindOpenMessage {
+	readonly type: 'find.open';
+}
+
+/**
+ * T-3.7c.3.c2 · host → webview：请求打开 find widget 并展开替换栏。
+ * webview 收到后调用 `findWidget.open({ replace: true })` 或等价接口。
+ */
+export interface HostFindReplaceOpenMessage {
+	readonly type: 'find.replace.open';
+}
+
+/**
+ * T-3.7c.3.c2 · host → webview：请求关闭 find widget。
+ * webview 收到后调用 `findWidget.close()`。
+ */
+export interface HostFindCloseMessage {
+	readonly type: 'find.close';
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -362,7 +405,10 @@ export type HostToWebviewMessage =
 	| HostWikilinkBacklinksResponseMessage
 	| HostFormatDocumentMessage
 	| HostFormatSelectionMessage
-	| HostTocInsertMessage;
+	| HostTocInsertMessage
+	| HostFindOpenMessage
+	| HostFindReplaceOpenMessage
+	| HostFindCloseMessage;
 
 // ---------------------------------------------------------------------------
 // Constants

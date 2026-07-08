@@ -24,6 +24,9 @@ import './milkdownEditor/milkdownEditorOutline.js';
 import './milkdownEditor/viewMode/vswordViewModeService.contribution.js';
 // T-3.7b.b: register 7 Action2 + 4 keybindings + milkdown editor active tracker
 import './milkdownEditor/viewMode/vswordViewModeActions.js';
+// T-3.7c.3.c2: register IVSWordFindService singleton (find/replace host 镜像) + 3 条 Action2
+import './milkdownEditor/find/vswordFindService.contribution.js';
+import './milkdownEditor/find/vswordFindCommands.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);

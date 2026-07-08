@@ -30,6 +30,7 @@ import { IWebviewService } from '../../../webview/browser/webview.js';
 import { asWebviewUri } from '../../../webview/common/webview.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
+import { IVSWordFindService } from '../../common/vswordFindService.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
 import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
 import {
@@ -96,6 +97,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IThemeService private readonly themeService: IThemeService,
 		@IFileService private readonly fileService: IFileService,
 		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
+		@IVSWordFindService private readonly findService: IVSWordFindService,
 	) {
 		super();
 		this._register(editorResolverService.registerEditor(
@@ -375,6 +377,14 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'openWikilinkPath':
 				await this.handleOpenWikilinkPath(input, msg.path, msg.newSplit);
 				return;
+			case 'find.stateChanged': {
+				// T-3.7c.3.c2 · webview 侧 find widget 每次 state 变化上报增量字段；
+				// host service 内部 fold 进当前镜像并 fire onDidChangeState。
+				// eslint-disable-next-line @typescript-eslint/no-unused-vars
+				const { type: _type, ...partial } = msg;
+				this.findService.setState(partial);
+				return;
+			}
 		}
 	}
 

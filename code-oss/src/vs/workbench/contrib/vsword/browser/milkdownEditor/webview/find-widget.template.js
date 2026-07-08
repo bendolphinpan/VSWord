@@ -118,11 +118,15 @@ function isInvalidRegex(query, opts) {
  *   —— 返回当前 EditorView。首次 mount 时 view 可能还没 attach，函数式取值以便后绑。
  * @param {() => string} [deps.getMode]
  *   —— 视图模式读取器（'reading' / 'wysiwyg' / 'source'）。用于 openReplace 拒绝 + no-op 替换。
+ * @param {(partial: Partial<{open:boolean,query:string,replaceQuery:string,caseSensitive:boolean,wholeWord:boolean,regex:boolean,matchCount:number,activeIndex:number}>) => void} [deps.onStateChanged]
+ *   —— T-3.7c.3.c2 · 状态变化广播（host 镜像消费）。widget 每次 open/close/输入/选项切换/
+ *      上下匹配/替换/setQuery 内部 state 变更后调一次；未提供则完全 no-op。
  * @returns {IFindWidgetComponent}
  */
 export function createFindWidget(deps) {
 	const getView = (deps && typeof deps.getEditorView === 'function') ? deps.getEditorView : () => null;
 	const getMode = (deps && typeof deps.getMode === 'function') ? deps.getMode : () => 'wysiwyg';
+	const onStateChanged = (deps && typeof deps.onStateChanged === 'function') ? deps.onStateChanged : null;
 
 	/** @type {FindState} */
 	let state = makeInitialState();
@@ -141,6 +145,26 @@ export function createFindWidget(deps) {
 	let countEl = null;
 	/** @type {Array<{target: EventTarget, type: string, handler: any}>} */
 	let listeners = [];
+
+	/**
+	 * T-3.7c.3.c2 · 把内部 state 折成 host FindState 形状后广播。
+	 * 每次 state 有变更的操作末尾调用一次，作为唯一出口。
+	 */
+	function broadcast() {
+		if (!onStateChanged) { return; }
+		try {
+			onStateChanged({
+				open: !!state.widgetOpen,
+				query: state.query || '',
+				replaceQuery: replaceInputEl ? (replaceInputEl.value || '') : '',
+				caseSensitive: !!state.options.caseSensitive,
+				wholeWord: !!state.options.wholeWord,
+				regex: !!state.options.useRegex,
+				matchCount: state.matches.length,
+				activeIndex: state.activeIndex,
+			});
+		} catch { /* onStateChanged 由 host 桥接，不应抛；防御一层 */ }
+	}
 
 	function bind(target, type, handler) {
 		target.addEventListener(type, handler);
@@ -190,6 +214,7 @@ export function createFindWidget(deps) {
 		}
 		renderCount();
 		kickPlugin();
+		broadcast();
 	}
 
 	function renderCount() {
@@ -229,12 +254,14 @@ export function createFindWidget(deps) {
 		state.activeIndex = (state.activeIndex + 1) % state.matches.length;
 		renderCount();
 		kickPlugin();
+		broadcast();
 	}
 	function prev() {
 		if (state.matches.length === 0) { return; }
 		state.activeIndex = (state.activeIndex - 1 + state.matches.length) % state.matches.length;
 		renderCount();
 		kickPlugin();
+		broadcast();
 	}
 
 	function open() {
@@ -273,6 +300,7 @@ export function createFindWidget(deps) {
 		if (replaceRowEl) { replaceRowEl.classList.add('vsword-hidden'); }
 		renderCount();
 		kickPlugin();
+		broadcast();
 		// 把焦点交还给编辑器 —— 用户 Esc 后期望立即恢复打字。
 		try { getView()?.focus?.(); } catch { /* noop */ }
 	}
@@ -395,6 +423,7 @@ export function createFindWidget(deps) {
 			});
 		}
 		if (replaceInputEl) {
+			bind(replaceInputEl, 'input', () => { broadcast(); });
 			bind(replaceInputEl, 'keydown', (ev) => {
 				if (ev.key === 'Escape') { ev.preventDefault(); close(); }
 			});
