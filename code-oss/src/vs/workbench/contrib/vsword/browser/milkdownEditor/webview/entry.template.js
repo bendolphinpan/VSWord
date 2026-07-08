@@ -91,6 +91,21 @@ import { tocRemarkPlugin } from './toc-remark.mjs';
 import { tocNode } from './toc-node.mjs';
 // T-3.7c.1.b: TOC NodeView + 事务级集中重算 Plugin。
 import { tocViewPlugins } from './toc-view.mjs';
+// T-3.7c.3.a: Find plugin（decoration 高亮 · b 卡接管真 state 前挂 stub）。
+import { $prose } from '@milkdown/utils';
+import { createFindPlugin } from './find-plugin.mjs';
+
+// T-3.7c.3.a: 模块级 stub state · widgetOpen=false → plugin.apply 恒返回
+// DecorationSet.empty · doc 不受任何影响。b 卡 FindWidgetComponent 落地时
+// 会替换成真源（closure 通过 mutable 引用共享，此处的 __findStateStub 只是占位）。
+const __findStateStub = Object.freeze({
+	widgetOpen: false,
+	query: '',
+	options: Object.freeze({ caseSensitive: false, wholeWord: false, useRegex: false }),
+	matches: Object.freeze([]),
+	activeIndex: -1,
+	invalidRegex: false,
+});
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -329,6 +344,9 @@ async function createEditor(markdown) {
 		// schema 已注册）；$prose 里的 recompute plugin 走 appendTransaction，与
 		// tracker plugin 一样在 milkdown 6.x prosemirror 插件链末尾生效。
 		.use(tocViewPlugins)
+		// T-3.7c.3.a: Find plugin 骨架 · 本卡先挂空 stub state，真 state 由 b 卡的
+		// FindWidgetComponent 接管；DecorationSet 恒空 → 不影响 doc，也不影响 Gate E。
+		.use($prose(() => createFindPlugin(() => __findStateStub)))
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;

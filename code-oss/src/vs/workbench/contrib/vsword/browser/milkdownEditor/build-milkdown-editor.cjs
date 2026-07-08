@@ -83,6 +83,9 @@ const tocRemarkPath = path.join(srcDir, 'toc-remark.mjs');
 const tocNodePath = path.join(srcDir, 'toc-node.mjs');
 // T-3.7c.1.b: TOC NodeView + 事务级集中重算 Plugin。
 const tocViewPath = path.join(srcDir, 'toc-view.mjs');
+// T-3.7c.3.a: Find plugin + 纯函数 helpers（widget UI 由 b 卡挂载）。
+const findWidgetHelpersPath = path.join(srcDir, 'find-widget-helpers.mjs');
+const findPluginPath = path.join(srcDir, 'find-plugin.mjs');
 const verifyPath = path.join(srcDir, 'roundtrip-verify.mjs');
 const bundlePath = path.join(vendorDir, 'index.js');
 const resultPath = path.join(vendorDir, 'build-result.json');
@@ -221,7 +224,15 @@ fs.writeFileSync(frontmatterHelpersPath, fs.readFileSync(path.join(webviewSrcDir
 fs.writeFileSync(tocRemarkPath, fs.readFileSync(path.join(webviewSrcDir, 'toc-remark.template.js'), 'utf8'));
 fs.writeFileSync(tocNodePath, fs.readFileSync(path.join(webviewSrcDir, 'toc-node.template.js'), 'utf8'));
 fs.writeFileSync(tocViewPath, fs.readFileSync(path.join(webviewSrcDir, 'toc-view.template.js'), 'utf8'));
+// T-3.7c.3.a: Find plugin + 纯函数 helpers。widget UI/keymap 由 b 卡挂载。
+fs.writeFileSync(findWidgetHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'find-widget-helpers.template.js'), 'utf8'));
+fs.writeFileSync(findPluginPath, fs.readFileSync(path.join(webviewSrcDir, 'find-plugin.template.js'), 'utf8'));
 fs.writeFileSync(verifyPath, fs.readFileSync(path.join(webviewSrcDir, 'verify.template.mjs'), 'utf8'));
+// T-3.5b-seq.2 遗留：esbuild alias fs/path → empty-shim.js（rokt33r sequence UMD dead-code
+// 分支的静态 require("fs")/require("path") 走这里）。历史上手工塞进 .tmp/ 但 build 脚本没
+// 创建它 → 一旦有人清 .tmp/src cache 就会 resolve 失败。T-3.7c.3.a 补齐幂等写入。
+fs.writeFileSync(path.join(srcDir, 'empty-shim.js'),
+	'// esbuild alias 空存根：rokt33r sequence UMD dead-code 分支的 require("fs")/require("path") 出口。\nmodule.exports = {};\n');
 
 run(`npm install ${packages.join(' ')} --prefer-offline --no-audit --no-fund`);
 const esbuild = require(path.join(builderDir, 'node_modules', 'esbuild'));
