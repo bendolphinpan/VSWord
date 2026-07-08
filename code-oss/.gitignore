@@ -5,6 +5,7 @@ Thumbs.db
 node_modules/
 .tmp/
 .tmp-vsword-*/
+.tmp-perf-3.9.1-*/
 .build/
 .vscode/extensions/**/out/
 extensions/**/dist/

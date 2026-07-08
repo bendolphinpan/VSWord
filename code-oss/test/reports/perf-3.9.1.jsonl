@@ -1,0 +1,4 @@
+{"ts":"2026-07-08T14:36:48.725Z","commit":"7fedc7a6","fixture":"1mb-mixed.md","phase":"open","ms":11909.23,"samples":[6316.96,11909.23,11881.71,10836,10951.01],"p95":11909.23,"p50":10951.01,"bytes":1000356}
+{"ts":"2026-07-08T14:36:48.725Z","commit":"7fedc7a6","fixture":"1mb-mixed.md","phase":"type","ms":0,"samples":[0.01,0,0,0,0],"p95":0,"p50":0,"keystrokes":200,"totalKeystrokes":1000}
+{"ts":"2026-07-08T14:51:12.077Z","commit":"7fedc7a6","fixture":"5mb-mixed.md","phase":"open","ms":466051.08,"samples":[403612.55,415102.52,422993.69,435245.08,466051.08],"p95":466051.08,"p50":422993.69,"bytes":5000293}
+{"ts":"2026-07-08T14:51:12.077Z","commit":"7fedc7a6","fixture":"5mb-mixed.md","phase":"type","ms":0.01,"samples":[0.02,0,0.01,0,0.01],"p95":0.01,"p50":0,"keystrokes":200,"totalKeystrokes":1000}
