@@ -181,6 +181,40 @@ export interface WebviewFindStateChangedMessage {
 	readonly activeIndex?: number;
 }
 
+/**
+ * T-3.8b.1 · webview → host：HTML 导出 snapshot 响应。
+ *
+ * PRD §4.1 契约调整 —— 「webview 侧组装、host 侧只落盘」的原始描述
+ * 在 workbench browser layer 的实际运行时是错位的：webview 是隔离
+ * iframe，assemble 的字符串工具无法直接跨壁使用。所以协议改为
+ * webview 发**装配原料**（body innerHTML + 主题 blob + 图片资源），
+ * host 侧 `assembleExportHtml` 拼装成完整 `<!doctype html>` 后落盘。
+ *
+ * 兼容旧协议：如果 `bodyInnerHtml` 缺省而 `html` 存在，host 直接把
+ * `html` 视为已装配完成的文档写盘（fallback，用于早期 webview stub）。
+ */
+export interface WebviewExportHtmlResponseMessage {
+	readonly type: 'export.html.response';
+	readonly requestId: string;
+	/** editor DOM 根节点 innerHTML —— host 侧交给 `assembleExportHtml` 前先 `sanitizeExportedBodyHtml`。 */
+	readonly bodyInnerHtml?: string;
+	/** 当前生效主题 CSS blob（内置 getThemesCss + 外挂 cssText 合并串）。 */
+	readonly themeCss?: string;
+	/** Prism 高亮 CSS —— 目前 webview 复用 milkdownEditorHtml 的 token 段。 */
+	readonly prismCss?: string;
+	/** 当前生效主题 id（body[data-theme] 值）。 */
+	readonly themeId?: string;
+	/** 兼容旧 stub：如果 webview 已自行组装好完整 HTML，直接透传落盘。 */
+	readonly html?: string;
+	/** sibling-folder 模式的图片资源清单（相对目录名 + base64 字节）。 */
+	readonly assets?: ReadonlyArray<{
+		readonly relativePath: string;
+		readonly base64: string;
+	}>;
+	/** 可选：webview 侧遇到不可恢复错误时的说明，host 侧转 notification。 */
+	readonly error?: string;
+}
+
 export type WebviewToHostMessage =
 	| WebviewReadyMessage
 	| WebviewMarkdownUpdatedMessage
@@ -199,7 +233,8 @@ export type WebviewToHostMessage =
 	| WebviewWikilinkPreviewRequestMessage
 	| WebviewWikilinkBacklinksRequestMessage
 	| WebviewSessionReadyMessage
-	| WebviewFindStateChangedMessage;
+	| WebviewFindStateChangedMessage
+	| WebviewExportHtmlResponseMessage;
 
 // ---------------------------------------------------------------------------
 // Host → Webview
@@ -399,6 +434,22 @@ export interface HostFindCloseMessage {
 	readonly type: 'find.close';
 }
 
+/**
+ * T-3.8b.1 · host → webview：请求生成 HTML 导出 snapshot。
+ * webview 收到后：
+ *  1) 读 editor 根节点 innerHTML 作为 body 主体
+ *  2) 读当前主题 CSS blob（内置/外挂 · 复用 T-3.7d 广播链路）
+ *  3) 按 `imageMode` 收集图片资源（相对路径 → base64）
+ *  4) 调 `assembleExportHtml` 拼装 → 回 `export.html.response`
+ */
+export interface HostExportHtmlRequestMessage {
+	readonly type: 'export.html.request';
+	readonly requestId: string;
+	readonly imageMode: 'data-uri' | 'sibling-folder';
+	/** 主文件 stem（无扩展名），webview 侧写进 `<title>` + sibling-folder 前缀。 */
+	readonly title: string;
+}
+
 export type HostToWebviewMessage =
 	| HostInitMessage
 	| HostDirtyChangedMessage
@@ -421,7 +472,8 @@ export type HostToWebviewMessage =
 	| HostTocInsertMessage
 	| HostFindOpenMessage
 	| HostFindReplaceOpenMessage
-	| HostFindCloseMessage;
+	| HostFindCloseMessage
+	| HostExportHtmlRequestMessage;
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -450,3 +502,14 @@ export const VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID = 'vsword.milkdown.forma
 
 /** T-3.7c.1.c: 命令 `vsword.toc.insertToc`（命令面板可见；仅在活跃 Milkdown 编辑器上生效）。 */
 export const VSWORD_MILKDOWN_TOC_INSERT_ACTION_ID = 'vsword.toc.insertToc';
+
+/** T-3.8b.1: 命令 `vsword.export.html`（导出当前 Milkdown 文档为 HTML）。 */
+export const VSWORD_EXPORT_HTML_ACTION_ID = 'vsword.export.html';
+/** T-3.8b.1: 配置 key —— 图片打包策略。 */
+export const VSWORD_EXPORT_IMAGE_MODE_CONFIG = 'vsword.export.imageMode';
+/** T-3.8b.1: 配置 key —— 导出目录默认位置（当前卡未接 UI，仅注册）。 */
+export const VSWORD_EXPORT_OUTPUT_DIR_CONFIG = 'vsword.export.outputDir';
+/** T-3.8b.1: 图片模式类型。 */
+export type VswordExportImageMode = 'data-uri' | 'sibling-folder';
+export const VSWORD_EXPORT_IMAGE_MODES: readonly VswordExportImageMode[] = ['data-uri', 'sibling-folder'];
+export const VSWORD_EXPORT_IMAGE_MODE_DEFAULT: VswordExportImageMode = 'data-uri';

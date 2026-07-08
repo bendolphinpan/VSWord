@@ -6,7 +6,7 @@
 import { Action2, registerAction2 } from '../../../../../platform/actions/common/actions.js';
 import { ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
-import { IConfigurationRegistry, Extensions as ConfigExtensions } from '../../../../../platform/configuration/common/configurationRegistry.js';
+import { IConfigurationRegistry, Extensions as ConfigExtensions, ConfigurationScope } from '../../../../../platform/configuration/common/configurationRegistry.js';
 import { IQuickInputService, IQuickPickItem, QuickPickInput } from '../../../../../platform/quickinput/common/quickInput.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { localize, localize2 } from '../../../../../nls.js';
@@ -21,6 +21,12 @@ import {
 	VSWORD_IMAGE_STRATEGY_CONFIG,
 	VSWORD_IMAGE_STRATEGY_DEFAULT,
 } from './imageStorageStrategy.js';
+import {
+	VSWORD_EXPORT_IMAGE_MODE_CONFIG,
+	VSWORD_EXPORT_IMAGE_MODES,
+	VSWORD_EXPORT_IMAGE_MODE_DEFAULT,
+	VSWORD_EXPORT_OUTPUT_DIR_CONFIG,
+} from './milkdownEditorProtocol.js';
 import { buildThemeQuickPickItems } from './milkdownEditorThemeQuickPick.js';
 import { getExternalThemes } from './milkdownEditorExternalThemeRegistry.js';
 import { isExternalThemeId } from './milkdownEditorExternalThemes.js';
@@ -50,6 +56,24 @@ Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConf
 			],
 			default: VSWORD_IMAGE_STRATEGY_DEFAULT,
 			description: localize('vsword.markdown.imageStorage.desc', 'Where pasted/dropped images get written on disk. All strategies produce relative paths inside the Markdown — external URLs pasted from browsers are left as-is (not downloaded).'),
+		},
+		// T-3.8b.1 · HTML 导出：图片打包策略。
+		[VSWORD_EXPORT_IMAGE_MODE_CONFIG]: {
+			type: 'string',
+			enum: [...VSWORD_EXPORT_IMAGE_MODES],
+			enumDescriptions: [
+				localize('vsword.export.imageMode.dataUri', '将图片以 base64 data URI 内嵌到单个 HTML 文件里（默认，单文件便携分享）。'),
+				localize('vsword.export.imageMode.siblingFolder', '导出为 `<name>.html` + `<name>_files/` 双件（图片外置，兼容 Typora 布局）。'),
+			],
+			default: VSWORD_EXPORT_IMAGE_MODE_DEFAULT,
+			scope: ConfigurationScope.RESOURCE,
+			markdownDescription: localize('vsword.export.imageMode.desc', 'VSWord Markdown 导出 HTML 时的图片打包策略。`data-uri` 单文件内嵌；`sibling-folder` 拆成同名 `<name>_files/` 目录。'),
+		},
+		// T-3.8b.1 · HTML 导出：默认输出目录（本卡未接 UI，预留 schema）。
+		[VSWORD_EXPORT_OUTPUT_DIR_CONFIG]: {
+			type: 'string',
+			default: '',
+			markdownDescription: localize('vsword.export.outputDir.desc', 'VSWord 导出 HTML 的默认目录（绝对路径）。为空时打开 SaveAs 对话框，默认落到当前 Markdown 文件同目录。'),
 		},
 	},
 });
