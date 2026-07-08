@@ -91,21 +91,30 @@ import { tocRemarkPlugin } from './toc-remark.mjs';
 import { tocNode } from './toc-node.mjs';
 // T-3.7c.1.b: TOC NodeView + 事务级集中重算 Plugin。
 import { tocViewPlugins } from './toc-view.mjs';
-// T-3.7c.3.a: Find plugin（decoration 高亮 · b 卡接管真 state 前挂 stub）。
+// T-3.7c.3.a: Find plugin（decoration 高亮）。
+// T-3.7c.3.b: 真 widget + keymap 接管。widget 持有 mutable state，plugin
+// 通过 widget.getFindState() 读；keymap 走 PM handleKeyDown 拦截 Ctrl+F/H/Esc。
 import { $prose } from '@milkdown/utils';
 import { createFindPlugin } from './find-plugin.mjs';
+import { createFindWidget } from './find-widget.mjs';
+import { createFindKeymap } from './find-keymap.mjs';
 
-// T-3.7c.3.a: 模块级 stub state · widgetOpen=false → plugin.apply 恒返回
-// DecorationSet.empty · doc 不受任何影响。b 卡 FindWidgetComponent 落地时
-// 会替换成真源（closure 通过 mutable 引用共享，此处的 __findStateStub 只是占位）。
-const __findStateStub = Object.freeze({
-	widgetOpen: false,
-	query: '',
-	options: Object.freeze({ caseSensitive: false, wholeWord: false, useRegex: false }),
-	matches: Object.freeze([]),
-	activeIndex: -1,
-	invalidRegex: false,
-});
+// 模块级 widget 实例：跨 createEditor() 重建复用。mount 只在 host 容器出现且首次
+// 调用时执行；后续 editor 重建（source-mode 切换等）不重建 widget DOM，只切换绑定
+// 的 EditorView。widget 内部对 view 的持有是"函数式读取"，跟 mode-controller / 
+// viewModeApplier 的做法一致（entry 里 editor 变量本身也是 mutable let）。
+let findWidget = null;
+function getFindWidget() {
+	if (findWidget) { return findWidget; }
+	findWidget = createFindWidget({
+		getEditorView: () => {
+			try { return editor?.action(ctx => ctx.get(editorViewCtx)) || null; }
+			catch { return null; }
+		},
+		getMode: () => (modeController?.getMode?.() || 'wysiwyg'),
+	});
+	return findWidget;
+}
 
 // ---- T-3.3.6: Typora-flavoured remark-stringify options ------------------------------------
 // Match Typora's default output style so opening a Typora .md and re-saving through VSWord
@@ -344,9 +353,11 @@ async function createEditor(markdown) {
 		// schema 已注册）；$prose 里的 recompute plugin 走 appendTransaction，与
 		// tracker plugin 一样在 milkdown 6.x prosemirror 插件链末尾生效。
 		.use(tocViewPlugins)
-		// T-3.7c.3.a: Find plugin 骨架 · 本卡先挂空 stub state，真 state 由 b 卡的
-		// FindWidgetComponent 接管；DecorationSet 恒空 → 不影响 doc，也不影响 Gate E。
-		.use($prose(() => createFindPlugin(() => __findStateStub)))
+		// T-3.7c.3.b: Find plugin 从 widget 读真源 state，keymap 拦截 Ctrl+F/H/Esc。
+		// 每次 createEditor 都构造一次 plugin/keymap 实例；widget 单例（getFindWidget
+		// 保证），跨 editor 重建复用 → widget DOM 不闪、mount 不重复。
+		.use($prose(() => createFindPlugin(() => getFindWidget().getFindState())))
+		.use($prose(() => createFindKeymap(getFindWidget())))
 		.create();
 	currentMarkdown = serialize();
 	initialized = true;
@@ -722,6 +733,15 @@ const modeSwitchComponent = createModeSwitchComponent({
 	}),
 });
 if (shell) modeSwitchComponent.mount(shell);
+
+// T-3.7c.3.b: mount FindWidget 到 shell 顶部。widget 单例（getFindWidget 保
+// 证），mount 之后开关状态由 open()/close() 切 `.vsword-hidden` class 管理，
+// DOM 常驻不重建。若 shell 未就绪（极端 host 布局），widget 保持未挂载 —— 
+// Ctrl+F keymap 会在 open() 里因 el===null 静默 no-op，符合 D-2 悬浮语义。
+if (shell) {
+	try { getFindWidget().mount(shell); }
+	catch (err) { reportError('find-widget/mount', err); }
+}
 
 vscode?.postMessage({ type: 'ready' });
 window.__vswordMilkdown = {
