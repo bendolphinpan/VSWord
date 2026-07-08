@@ -716,6 +716,58 @@ window.addEventListener('message', event => {
 		try { getFindWidget().close(); } catch (err) { reportError('find.close', err); }
 		return;
 	}
+	if (msg.type === 'export.html.request') {
+		// T-3.8b.1.c · host 侧 `vsword.export.html` 命令请求 HTML snapshot。
+		// 本卡窄化：webview 只做「DOM 提取 + CSS 收集」，不做本地图片抓取（TODO T-3.8b.1.d）。
+		// assemble 由 host 侧 `assembleExportHtml` 完成（避免 webview bundle 依赖 host 模块）。
+		try {
+			const requestId = String(msg.requestId || '');
+			const imageMode = msg.imageMode === 'sibling-folder' ? 'sibling-folder' : 'data-uri';
+			const rootEl = document.getElementById('milkdown-root');
+			// ProseMirror 容器优先；找不到就退回 root innerHTML（极端 case）。
+			const proseEl = rootEl?.querySelector('.ProseMirror') || rootEl;
+			const bodyInnerHtml = proseEl ? proseEl.innerHTML : '';
+			// 收集所有 <style> —— milkdownEditorHtml.ts 里的样式 + 外挂主题 style（若存在）
+			// 全部合并成 themeCss；host 侧 assemble 会拼进 <head><style>...</style>。
+			let themeCss = '';
+			try {
+				const styleEls = document.querySelectorAll('style');
+				const chunks = [];
+				for (const el of styleEls) {
+					// 跳过内容为空的占位 style。
+					const txt = el.textContent || '';
+					if (txt.trim().length > 0) chunks.push(txt);
+				}
+				themeCss = chunks.join('\n');
+			} catch (err) {
+				reportError('export.themeCss', err);
+			}
+			// Prism CSS —— 本 webview 里 prism token 颜色是通过 milkdownEditorHtml.ts 的
+			// `#milkdown-root .ProseMirror .token.*` 段一并注入的，已经被 themeCss 收集了。
+			// 单独字段留空 + TODO 让 T-3.8b.1.d 若拆分独立文件时再填。
+			const prismCss = '';
+			const themeId = document.body.getAttribute('data-theme') || 'default';
+			// 本卡不做本地图片抓取，assets 恒空数组，通路先跑通（TODO T-3.8b.1.d）。
+			const assets = imageMode === 'sibling-folder' ? [] : undefined;
+			vscode?.postMessage({
+				type: 'export.html.response',
+				requestId,
+				bodyInnerHtml,
+				themeCss,
+				prismCss,
+				themeId,
+				assets,
+			});
+		} catch (err) {
+			reportError('export.html.request', err);
+			vscode?.postMessage({
+				type: 'export.html.response',
+				requestId: String(msg.requestId || ''),
+				error: err instanceof Error ? err.message : String(err),
+			});
+		}
+		return;
+	}
 	if (msg.type === 'revealHeading') {
 		// T-3.4: user clicked a heading in the Outline pane. Move selection + scroll into view.
 		const pos = Number(msg.pos);

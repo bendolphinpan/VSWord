@@ -40,6 +40,7 @@ import { discoverExternalThemes, extractThemeDisplayName } from './milkdownEdito
 import { buildExternalThemePayload } from './milkdownEditorExternalThemePayload.js';
 import { setExternalThemes as publishExternalThemes } from './milkdownEditorExternalThemeRegistry.js';
 import { IVSWordFindService } from '../../common/vswordFindService.js';
+import { resolveExportResponse } from './exportContribution.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
 import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
 import {
@@ -422,6 +423,12 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				this.findService.setState(partial);
 				return;
 			}
+			case 'export.html.response':
+				// T-3.8b.1.c · webview 侧 HTML snapshot 装配好回传；派发到 pendingExports Map
+				// 让 runHtmlExport 里挂着的 Promise 解锁。未知 requestId（e.g. 超时后到达）
+				// 静默丢弃，不影响状态机。
+				resolveExportResponse(msg);
+				return;
 		}
 	}
 
