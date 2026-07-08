@@ -30,6 +30,8 @@ import './milkdownEditor/find/vswordFindService.contribution.js';
 import './milkdownEditor/find/vswordFindCommands.js';
 // T-3.8b.1.b: register `Export as HTML` Action2 + host-side SaveAs / writeFile 通道
 import './milkdownEditor/exportContribution.js';
+// T-3.8b.2: register `Export as PDF` Action2 —— 走 webview print 桥，tmpDir HTML + @page A4
+import './milkdownEditor/exportPdfContribution.js';
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);

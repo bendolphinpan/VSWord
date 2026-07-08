@@ -54,6 +54,12 @@ export interface AssembleExportHtmlInput {
 	readonly imageMode: 'data-uri' | 'sibling-folder';
 	/** 原始 src → 资源 map（webview 侧读文件后填）。缺失的 img 保留原始 src，不报错。 */
 	readonly imageResources?: ReadonlyMap<string, ExportImageResource>;
+	/**
+	 * T-3.8b.2 · 可选：打印专用 CSS（如 `@page { size: A4; margin: 20mm; }`）。
+	 * 若非空，会以独立 `<style>` 块**追加**到 `<head>` 末尾（在主 style 之后），
+	 * 保证 `@page` 规则不被主题 CSS 覆盖。HTML 导出不传，PDF 导出走 print 桥时传。
+	 */
+	readonly pageCss?: string;
 }
 
 /** assemble 输出 —— sibling-folder 模式下 assets 非空。 */
@@ -84,6 +90,10 @@ export function assembleExportHtml(input: AssembleExportHtmlInput): AssembleExpo
 	const themeAttr = input.themeId && input.themeId !== 'default'
 		? ` data-theme="${escapeAttr(input.themeId)}"`
 		: '';
+	// T-3.8b.2: pageCss 走独立 <style> 块附加在主 style 之后，保证 @page 规则不被主题 CSS 覆盖。
+	const pageStyleBlock = input.pageCss && input.pageCss.trim().length > 0
+		? `\n<style data-vsword-role="page">\n${input.pageCss}\n</style>`
+		: '';
 	const html = `<!doctype html>
 <html lang="zh">
 <head>
@@ -92,7 +102,7 @@ export function assembleExportHtml(input: AssembleExportHtmlInput): AssembleExpo
 <title>${escapeHtml(input.title)}</title>
 <style>
 ${styleBlock}
-</style>
+</style>${pageStyleBlock}
 </head>
 <body${themeAttr}>
 <div id="milkdown-root">

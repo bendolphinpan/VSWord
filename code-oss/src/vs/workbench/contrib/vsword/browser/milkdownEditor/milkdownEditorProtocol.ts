@@ -505,6 +505,8 @@ export const VSWORD_MILKDOWN_TOC_INSERT_ACTION_ID = 'vsword.toc.insertToc';
 
 /** T-3.8b.1: 命令 `vsword.export.html`（导出当前 Milkdown 文档为 HTML）。 */
 export const VSWORD_EXPORT_HTML_ACTION_ID = 'vsword.export.html';
+/** T-3.8b.2: 命令 `vsword.export.pdf`（导出当前 Milkdown 文档为 PDF · 走 webview print 桥）。 */
+export const VSWORD_EXPORT_PDF_ACTION_ID = 'vsword.export.pdf';
 /** T-3.8b.1: 配置 key —— 图片打包策略。 */
 export const VSWORD_EXPORT_IMAGE_MODE_CONFIG = 'vsword.export.imageMode';
 /** T-3.8b.1: 配置 key —— 导出目录默认位置（当前卡未接 UI，仅注册）。 */
