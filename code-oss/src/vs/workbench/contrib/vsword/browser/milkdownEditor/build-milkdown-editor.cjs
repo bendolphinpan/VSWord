@@ -278,7 +278,12 @@ const esbuildResult = esbuild.buildSync({
 	legalComments: 'linked',
 	minify: true,
 	metafile: true,
-	define: { 'process.env.NODE_ENV': '"production"' },
+	define: {
+		'process.env.NODE_ENV': '"production"',
+		// T-3.5b-seq.2 fix: rokt33r/js-sequence-diagrams (UMD 老包) 内部引用 Node `global`，
+		// webview 里没有 global 会当场 ReferenceError 炸整个 bundle。映射到 globalThis 即可。
+		global: 'globalThis',
+	},
 	// T-3.5b-seq.2: rokt33r/js-sequence-diagrams UMD wrapper 里含 `require("fs")` /
 	// `require("path")`（webfontloader 的 CJS 兼容分支 dead-code）；webview 不走这条
 	// 路径，用 alias 指向空存根让 esbuild resolve 过。
