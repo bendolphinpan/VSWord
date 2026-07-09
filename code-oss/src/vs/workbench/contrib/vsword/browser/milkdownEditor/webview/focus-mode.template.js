@@ -2,22 +2,25 @@
 /*---------------------------------------------------------------------------------------------
  *  VSWord Milkdown focus / typewriter / edit-context plugin.
  *
- *  T-3.10 rewrite: Focus and Typewriter are now INDEPENDENT toggles, no longer
- *  bolted to reading mode.
+ *  T-3.10 rewrite: Focus and Typewriter are decoupled from reading mode.
+ *  T-3.12.3.a rewrite: focus & typewriter merged into a single `substyle` radio
+ *  (normal | focus | typewriter). The shell now exposes ONE attribute driving
+ *  both CSS gates and this plugin's decoration/scroll behaviour.
  *
- *  Shell attributes drive rendering (CSS gates on them, this plugin obeys them):
- *    data-mode        = realtime | reading | source
- *    data-focus       = on | off       (dims other blocks)
- *    data-typewriter  = on | off       (recenters active block on line change · Q2=c)
+ *  Shell attributes drive rendering:
+ *    data-mode      = realtime | reading | source
+ *    data-substyle  = normal | focus | typewriter   (mutually exclusive · reading mode always renders normal, stored value preserved)
  *
  *  What this plugin still owns:
  *    (1) Decoration: `.vsword-focus-active vsword-edit-context` on the top-level
- *        block containing the selection. CSS lights it up when data-focus=on OR
- *        when data-mode=reading (reading always dims peers).
- *    (2) Typewriter re-scroll: when data-typewriter=on AND the cursor's viewport
- *        Y coordinate crossed a line boundary since last centering, scroll the
- *        active block to viewport center. Line-change (not selection-change)
- *        avoids the "jitter every keystroke" failure mode Q2=a would have.
+ *        block containing the selection. Always emitted; CSS gates on
+ *        data-substyle=focus (or data-mode=reading kept for reading-mode
+ *        auto-dim visual — still owned by CSS layer, not by this plugin's
+ *        typewriter gate).
+ *    (2) Typewriter re-scroll: when data-substyle=typewriter AND the cursor's
+ *        viewport Y coordinate crossed a line boundary since last centering,
+ *        scroll the active block to viewport center. Line-change (not
+ *        selection-change) avoids the "jitter every keystroke" failure mode.
  *--------------------------------------------------------------------------------------------*/
 
 import { $prose } from '@milkdown/utils';
@@ -49,11 +52,9 @@ function buildDecorations(state) {
 /** True when the shell wants the typewriter recenter behaviour right now. */
 function typewriterEnabled(shell) {
 	if (!shell) return false;
-	if (shell.getAttribute('data-typewriter') === 'on') return true;
-	// Reading mode used to auto-typewriter; keep that legacy behaviour so an
-	// existing user's muscle memory doesn't regress.
-	if (shell.getAttribute('data-mode') === 'reading') return true;
-	return false;
+	// T-3.12.3.a: single-source substyle radio drives this. The old reading-mode
+	// legacy fallback (auto-typewriter under reading) is removed per PRD §6 AC-6.
+	return shell.getAttribute('data-substyle') === 'typewriter';
 }
 
 export const focusAndContextPlugin = $prose(() => {
@@ -105,7 +106,7 @@ export const focusAndContextPlugin = $prose(() => {
 			// immediate center (otherwise the user has to type a char first).
 			const attrObserver = shell ? new MutationObserver(() => maybeRecenter(true)) : null;
 			if (attrObserver && shell) {
-				attrObserver.observe(shell, { attributes: true, attributeFilter: ['data-typewriter', 'data-mode'] });
+				attrObserver.observe(shell, { attributes: true, attributeFilter: ['data-substyle', 'data-mode'] });
 			}
 
 			return {

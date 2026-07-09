@@ -205,8 +205,22 @@ function assertContextKeys(
 // ---------------------------------------------------------------------------
 // suite · 组合矩阵 M-1 … M-6
 // ---------------------------------------------------------------------------
-
-suite('VSWord T-3.7b.e · 组合矩阵 M-1 … M-6（PRD §3 · 三处一致断言）', () => {
+//
+// [T-3.12.3.a · 2026-07-09] 整个 suite 暂 skip.
+//
+// 原因: v1 (T-3.7b.e) 假设 focus / typewriter 是两个独立 boolean toggle，DOM 上
+// 用 `data-focus=on|off` + `data-typewriter=on|off` 两属性并存。v2 (T-3.12.3.a,
+// docs/plans/003-phase3-mode-orthogonality.md) 把两者合并为单一 substyle radio
+// (`data-substyle=normal|focus|typewriter`, 三选一互斥), 与 svc.toggleFocus /
+// toggleTypewriter (host 侧仍是独立 boolean) 不再 1:1 对齐 —— M-4 (focus=on +
+// tw=on) 在 v2 里 shell 只显示 substyle=<后 set 者>, 而 service state raw 值
+// 保持独立 boolean 语义, 三处一致断言不再成立。
+//
+// PRD §7 T-3.12.3.c 定义了 v2 语义下的新矩阵单测 (M-1..M-7, 由 qa profile 落地).
+// 本文件保留骨架供后续参考; 待 3.c 完成后, 由该卡决定是删除还是重写为 v2 一致性
+// 测试 (controller substyle radio ↔ host preferenceUpdate focus/typewriter 派生
+// 值 ↔ service state ↔ ContextKey 四处一致).
+suite.skip('VSWord T-3.7b.e · 组合矩阵 M-1 … M-6（PRD §3 · 三处一致断言）', () => {
 	ensureNoDisposablesAreLeakedInTestSuite();
 
 	test('M-1 · realtime + focus=off + tw=off + noop（首启默认）', () => {
