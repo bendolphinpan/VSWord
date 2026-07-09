@@ -358,6 +358,11 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'sessionReady':
 				input.workingCopy.updateSession(msg);
 				return;
+			case 'imeCompositionChanged':
+				// T-3.12.1.a · webview 侧 compositionstart/end → host 侧 auto-save gate。
+				// 参数直接透传：workingCopy 内部处理 gate + 补排 debounce。
+				input.workingCopy.updateWebviewComposing(msg.composing);
+				return;
 			case 'save': {
 				const ok = await input.workingCopy.save({ reason: SaveReason.EXPLICIT });
 				this.post(input, {

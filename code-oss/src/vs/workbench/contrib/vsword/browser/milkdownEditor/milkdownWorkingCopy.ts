@@ -117,6 +117,19 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 	 */
 	private _pendingForcePath: SavePath | null = null;
 
+	/**
+	 * T-3.12.1.a · webview 侧 IME composition 状态镜像。
+	 *
+	 * PRD §1（P0-1 · 策略 C）：
+	 *   - webview 上报 `imeCompositionChanged { composing }` 后写入本位；
+	 *   - 本位为 true 时 auto-save timer 到期后 no-op（不清 _dirty，不 flush），
+	 *     避免中文/日文输入法在候选阶段被 save 打断；
+	 *   - 从 true → false 且 _dirty=true 时，`updateWebviewComposing(false)` 会
+	 *     主动调 `scheduleAutoSave()` 重新 arm，确保 pending flush 不被永久推迟；
+	 *   - 显式 save（Ctrl+S / reason=EXPLICIT）不受本 gate 影响 —— AC-1.3 硬约束。
+	 */
+	private _webviewComposing = false;
+
 	/** Autosave debounce timer id (any because Node vs. DOM types differ). */
 	private _autoSaveTimer: any = undefined;
 
@@ -159,6 +172,8 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 	get _testSession(): IRoundtripSession | null { return this._session; }
 	/** @internal 供单测断言用。 */
 	get _testPendingForcePath(): SavePath | null { return this._pendingForcePath; }
+	/** @internal 供单测断言用。 */
+	get _testWebviewComposing(): boolean { return this._webviewComposing; }
 
 	/**
 	 * Called by the host when the webview reports new content
@@ -277,6 +292,27 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 		this._pendingForcePath = scope === 'document' ? 'C' : 'B';
 	}
 
+	/**
+	 * T-3.12.1.a · 供 contribution 层在收到 webview `imeCompositionChanged` 消息时调用。
+	 *
+	 * 语义：
+	 *   1. 更新 `_webviewComposing` 镜像；
+	 *   2. 若从 true → false 且当前仍 `_dirty=true`，主动调 {@link scheduleAutoSave}
+	 *      重新 arm debounce timer —— 上一次 timer 到期时因 gate 命中 no-op 保留了 _dirty，
+	 *      本次翻转必须重新排一次 flush，否则用户输入完成后再也不会 auto-save 直到下一次
+	 *      typing 触发 `updateContent`；
+	 *   3. 显式 save 主路径（save() 内部）不检查本位 —— AC-1.3 保证 Ctrl+S 永远即时。
+	 */
+	updateWebviewComposing(composing: boolean): void {
+		const prev = this._webviewComposing;
+		this._webviewComposing = composing;
+		if (prev && !composing && this._dirty) {
+			// 输入法结束 + 仍脏 → 重新排 auto-save。scheduleAutoSave 内部先 cancel 再 setTimeout，
+			// 保证与其他 timer 源合流不会出现双击。
+			this.scheduleAutoSave();
+		}
+	}
+
 	//#endregion
 
 	//#region IWorkingCopy — save / revert / backup
@@ -387,6 +423,11 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 		}
 		this._autoSaveTimer = setTimeout(() => {
 			this._autoSaveTimer = undefined;
+			// T-3.12.1.a · IME composition 期间不 flush，保留 _dirty，等
+			// updateWebviewComposing(false) 或下一次 markdownUpdated 重新 arm。
+			if (this._webviewComposing) {
+				return;
+			}
 			void this.save({ reason: SaveReason.AUTO });
 		}, VSWORD_MILKDOWN_AUTOSAVE_DEBOUNCE_MS);
 	}

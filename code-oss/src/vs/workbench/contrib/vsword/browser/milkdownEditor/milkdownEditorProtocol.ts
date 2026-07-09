@@ -182,6 +182,21 @@ export interface WebviewFindStateChangedMessage {
 }
 
 /**
+ * T-3.12.1.a · webview → host：IME composition 状态变化上报。
+ *
+ * webview 侧监听 ProseMirror EditorView 的 compositionstart / compositionend
+ * 事件（T-3.12.1.b 里落地），一旦 composing 位翻转就向 host 发一条本消息。
+ * host 侧 `MilkdownWorkingCopy.updateWebviewComposing` 消费此位：
+ *   - composing=true 期间 auto-save timer 到期后 no-op（保留 _dirty，不 flush 打断输入法）；
+ *   - composing 从 true → false 且 _dirty=true 时，重新 arm debounce timer，确保 flush 不被永久推迟。
+ * 与显式 save 无关：Ctrl+S 走 save() 主路径，不受本 gate 影响（PRD AC-1.3）。
+ */
+export interface WebviewImeCompositionChangedMessage {
+	readonly type: 'imeCompositionChanged';
+	readonly composing: boolean;
+}
+
+/**
  * T-3.8b.1 · webview → host：HTML 导出 snapshot 响应。
  *
  * PRD §4.1 契约调整 —— 「webview 侧组装、host 侧只落盘」的原始描述
@@ -234,6 +249,7 @@ export type WebviewToHostMessage =
 	| WebviewWikilinkBacklinksRequestMessage
 	| WebviewSessionReadyMessage
 	| WebviewFindStateChangedMessage
+	| WebviewImeCompositionChangedMessage
 	| WebviewExportHtmlResponseMessage;
 
 // ---------------------------------------------------------------------------

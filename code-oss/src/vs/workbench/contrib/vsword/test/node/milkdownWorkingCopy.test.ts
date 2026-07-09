@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import * as sinon from 'sinon';
 import { Emitter } from '../../../../../base/common/event.js';
 import { DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { URI } from '../../../../../base/common/uri.js';
@@ -13,6 +14,7 @@ import { NullLogService } from '../../../../../platform/log/common/log.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { MilkdownWorkingCopy } from '../../browser/milkdownEditor/milkdownWorkingCopy.js';
 import { SaveReason } from '../../../../common/editor.js';
+import { VSWORD_MILKDOWN_AUTOSAVE_DEBOUNCE_MS } from '../../browser/milkdownEditor/milkdownEditorProtocol.js';
 
 /**
  * Minimal fake IFileService — only implements the surface MilkdownWorkingCopy
@@ -353,6 +355,84 @@ suite('VSWord Milkdown WorkingCopy', () => {
 		assert.strictEqual(copy._testSession, null);
 		assert.strictEqual(copy._testPendingForcePath, null);
 		assert.strictEqual(new TextDecoder('utf-8').decode(copy._testOpenedBytes!), 'RELOADED\n');
+		disposables.dispose();
+	});
+
+	// ---- T-3.12.1.a · IME composition gate ---------------------------
+
+	test('T-3.12.1.a · composing=true 期间 auto-save timer 到期 no-op，_dirty 保留', async () => {
+		const clock = sinon.useFakeTimers();
+		try {
+			const { copy, fs, disposables } = make('# initial\n');
+			await copy.load();
+
+			// 进入 IME → 输入
+			copy.updateWebviewComposing(true);
+			assert.strictEqual(copy._testWebviewComposing, true);
+			copy.updateContent('# 中文候选\n');
+			assert.strictEqual(copy.isDirty(), true);
+
+			// timer 到期：本应触发 auto-save，但 gate 命中 → no-op
+			clock.tick(VSWORD_MILKDOWN_AUTOSAVE_DEBOUNCE_MS + 10);
+			// 再刷一遍 microtask 队列以防有异步 save 排队
+			await clock.tickAsync(0);
+			assert.strictEqual(fs.writeCalls.length, 0, 'composing 期间不应落盘');
+			assert.strictEqual(copy.isDirty(), true, 'composing 期间 _dirty 保留');
+			disposables.dispose();
+		} finally {
+			clock.restore();
+		}
+	});
+
+	test('T-3.12.1.a · composing=false 且 dirty → 重新 arm debounce，timer 到期后 auto-save', async () => {
+		const clock = sinon.useFakeTimers();
+		try {
+			const { copy, fs, disposables } = make('# initial\n');
+			await copy.load();
+
+			// 先进 composing + 输入
+			copy.updateWebviewComposing(true);
+			copy.updateContent('# 中文候选\n');
+			// 让 typing 排的 timer 到期一次 → 因 gate no-op
+			clock.tick(VSWORD_MILKDOWN_AUTOSAVE_DEBOUNCE_MS + 10);
+			await clock.tickAsync(0);
+			assert.strictEqual(fs.writeCalls.length, 0);
+			assert.strictEqual(copy.isDirty(), true);
+
+			// 退出 composing → 应主动重新 arm
+			copy.updateWebviewComposing(false);
+			assert.strictEqual(copy._testWebviewComposing, false);
+
+			// 新 timer 到期 → 触发 save({reason: AUTO})
+			clock.tick(VSWORD_MILKDOWN_AUTOSAVE_DEBOUNCE_MS + 10);
+			// save 内部是 async 的：等 microtask 冒完
+			await clock.tickAsync(0);
+			await clock.tickAsync(0);
+			assert.strictEqual(fs.writeCalls.length, 1, 'composing 退出后应 flush 一次');
+			assert.strictEqual(fs.writeCalls[0].contents, '# 中文候选\n');
+			assert.strictEqual(copy.isDirty(), false);
+			disposables.dispose();
+		} finally {
+			clock.restore();
+		}
+	});
+
+	test('T-3.12.1.a · AC-1.3 · composing=true 期间显式 save 立即执行，不受 gate 影响', async () => {
+		const { copy, fs, disposables } = make('# initial\n');
+		await copy.load();
+
+		copy.updateWebviewComposing(true);
+		copy.updateContent('# explicit save while composing\n');
+		assert.strictEqual(copy.isDirty(), true);
+
+		// Ctrl+S 走显式 save —— 不检查 _webviewComposing
+		const ok = await copy.save({ reason: SaveReason.EXPLICIT });
+		assert.strictEqual(ok, true);
+		assert.strictEqual(fs.writeCalls.length, 1, '显式 save 应立即落盘');
+		assert.strictEqual(fs.writeCalls[0].contents, '# explicit save while composing\n');
+		assert.strictEqual(copy.isDirty(), false, '显式 save 后 _dirty 清零');
+		// composing 位不受 save 影响，仍为 true（webview 的下一条 imeCompositionChanged 才会清）
+		assert.strictEqual(copy._testWebviewComposing, true);
 		disposables.dispose();
 	});
 });
