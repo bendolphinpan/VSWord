@@ -28,6 +28,8 @@ const inputRulesPath = path.join(srcDir, 'input-rules.mjs');
 const focusModePath = path.join(srcDir, 'focus-mode.mjs');
 const modeControllerPath = path.join(srcDir, 'mode-controller.mjs');
 const viewModeEditablePath = path.join(srcDir, 'view-mode-editable.mjs');
+// T-3.12.1.b: IME composition 状态机纯函数模块。
+const imeCompositionStatePath = path.join(srcDir, 'ime-composition-state.mjs');
 // T-3.7b.d: ModeSwitchComponent + IMilkdownUIComponent contract。
 const uiComponentPath = path.join(srcDir, 'ui-component.mjs');
 const modeSwitchPath = path.join(srcDir, 'mode-switch.mjs');
@@ -176,6 +178,8 @@ fs.writeFileSync(inputRulesPath, fs.readFileSync(path.join(webviewSrcDir, 'input
 fs.writeFileSync(focusModePath, fs.readFileSync(path.join(webviewSrcDir, 'focus-mode.template.js'), 'utf8'));
 fs.writeFileSync(modeControllerPath, fs.readFileSync(path.join(webviewSrcDir, 'mode-controller.template.js'), 'utf8'));
 fs.writeFileSync(viewModeEditablePath, fs.readFileSync(path.join(webviewSrcDir, 'view-mode-editable.template.js'), 'utf8'));
+// T-3.12.1.b: IME composition 纯函数状态机。
+fs.writeFileSync(imeCompositionStatePath, fs.readFileSync(path.join(webviewSrcDir, 'ime-composition-state.template.js'), 'utf8'));
 // T-3.7b.d
 fs.writeFileSync(uiComponentPath, fs.readFileSync(path.join(webviewSrcDir, 'ui-component.template.js'), 'utf8'));
 fs.writeFileSync(modeSwitchPath, fs.readFileSync(path.join(webviewSrcDir, 'mode-switch.template.js'), 'utf8'));

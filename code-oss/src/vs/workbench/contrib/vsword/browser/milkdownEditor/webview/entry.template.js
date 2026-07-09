@@ -36,6 +36,11 @@ import { inputRulePlugins } from './input-rules.mjs';
 import { focusModePlugins } from './focus-mode.mjs';
 import { createModeController } from './mode-controller.mjs';
 import { createViewModeApplier } from './view-mode-editable.mjs';
+// T-3.12.1.b: IME composition 状态机 + host 上报桥。事件挂在 #milkdown-root
+// 冒泡链路上（预算自救 fallback：不动 editorViewOptionsCtx，避免与
+// view-mode-editable 的 slice update 打架）。state 机做兜底 flush，防止
+// 未来 auto-save 通路走到 requestAutoSave() 时被 host gate 永久推迟。
+import { createImeCompositionState } from './ime-composition-state.mjs';
 // T-3.7b.d: ModeSwitchComponent 接管 #milkdown-mode-switch + #milkdown-toggle-group 的 click 派发。
 import { createModeSwitchComponent } from './mode-switch.mjs';
 import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs';
@@ -843,6 +848,51 @@ if (shell) modeSwitchComponent.mount(shell);
 if (shell) {
 	try { getFindWidget().mount(shell); }
 	catch (err) { reportError('find-widget/mount', err); }
+}
+
+// ---- T-3.12.1.b: IME composition state + host 事件桥 ----------------------
+// createImeCompositionState 做 flush 兜底（未来 requestAutoSave 通路接入时用），
+// compositionstart/end 翻转时向 host 上报 imeCompositionChanged，让 host 侧
+// MilkdownWorkingCopy 的 _webviewComposing gate 消费（T-3.12.1.a）。
+// 冒泡阶段挂在 #milkdown-root 上：composition 事件从 .ProseMirror 的
+// contenteditable 冒泡上来；root DOM 常驻，跨 createEditor() 重建不重复挂。
+// 走 host DOM addEventListener 而不是 ProseMirror EditorProps.handleDOMEvents
+// —— 后者需要动 editorViewOptionsCtx slice，与 view-mode-editable 的 setProps
+// 有耦合；预算自救优先保工时。
+const imeCompositionState = createImeCompositionState({
+	initialDoc: '',
+	initialCursor: 0,
+	// auto-save 主路径由 host 侧 MilkdownWorkingCopy._webviewComposing gate 保证
+	// （T-3.12.1.a），本状态机 requestAutoSave 通路暂未接入；flush 回调仅在未来
+	// 接线时用作兜底上报。当前不会被触发。
+	onAutoSaveFlush: () => {
+		try { vscode?.postMessage({ type: 'markdownUpdated', markdown: serialize() }); }
+		catch { /* webview disposed */ }
+	},
+});
+
+function postImeComposing(composing) {
+	try { vscode?.postMessage({ type: 'imeCompositionChanged', composing: !!composing }); }
+	catch { /* webview disposed */ }
+}
+
+if (root) {
+	root.addEventListener('compositionstart', (event) => {
+		try { imeCompositionState.handleCompositionStart(event?.data ?? ''); }
+		catch (err) { reportError('ime/compositionstart', err); }
+		postImeComposing(true);
+	});
+	root.addEventListener('compositionupdate', (event) => {
+		// 只更新内部 buffer，不 postMessage —— compositionupdate 每次候选变化都
+		// 触发，噪声太大；host gate 只关心翻转位。
+		try { imeCompositionState.handleCompositionUpdate(event?.data ?? ''); }
+		catch (err) { reportError('ime/compositionupdate', err); }
+	});
+	root.addEventListener('compositionend', (event) => {
+		try { imeCompositionState.handleCompositionEnd(event?.data ?? ''); }
+		catch (err) { reportError('ime/compositionend', err); }
+		postImeComposing(false);
+	});
 }
 
 vscode?.postMessage({ type: 'ready' });

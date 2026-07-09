@@ -39,6 +39,7 @@ import type {
 	WebviewMarkdownUpdatedMessage,
 	HostFormatDocumentMessage,
 	HostFormatSelectionMessage,
+	WebviewImeCompositionChangedMessage,
 } from '../../browser/milkdownEditor/milkdownEditorProtocol.js';
 
 // ---------------------------------------------------------------------------
@@ -306,6 +307,34 @@ suite('VSWord Roundtrip Protocol · case 5 format 命令消息', () => {
 	test('两个 action id 常量匹配命令面板绑定约定', () => {
 		assert.strictEqual(VSWORD_MILKDOWN_FORMAT_DOCUMENT_ACTION_ID, 'vsword.milkdown.formatDocument');
 		assert.strictEqual(VSWORD_MILKDOWN_FORMAT_SELECTION_ACTION_ID, 'vsword.milkdown.formatSelection');
+	});
+});
+
+// ---------------------------------------------------------------------------
+// case 6: imeCompositionChanged · webview → host（T-3.12.1.b）
+// ---------------------------------------------------------------------------
+
+suite('VSWord Roundtrip Protocol · case 6 imeCompositionChanged 序列化对称', () => {
+	test('composing:true / false 双向 JSON 序列化 → 反序列化 布尔位保真', () => {
+		const on: WebviewImeCompositionChangedMessage = { type: 'imeCompositionChanged', composing: true };
+		const off: WebviewImeCompositionChangedMessage = { type: 'imeCompositionChanged', composing: false };
+
+		// 走一遍 JSON round-trip（postMessage 语义等价 —— structured clone 对
+		// 纯 { type, composing:boolean } 与 JSON 等价，这里用 JSON 断言最小依赖）。
+		const onRt = JSON.parse(JSON.stringify(on)) as WebviewImeCompositionChangedMessage;
+		const offRt = JSON.parse(JSON.stringify(off)) as WebviewImeCompositionChangedMessage;
+
+		assert.strictEqual(onRt.type, 'imeCompositionChanged');
+		assert.strictEqual(offRt.type, 'imeCompositionChanged');
+		assert.strictEqual(onRt.composing, true);
+		assert.strictEqual(offRt.composing, false);
+		// 严格布尔保真：不能出现 truthy 但非 true 的情况（避免 host 侧 !!msg.composing 掩盖 bug）。
+		assert.strictEqual(typeof onRt.composing, 'boolean');
+		assert.strictEqual(typeof offRt.composing, 'boolean');
+
+		// 加入 union → 仍然 type-safe。
+		const asUnion: WebviewToHostMessage = onRt;
+		assert.strictEqual(asUnion.type, 'imeCompositionChanged');
 	});
 });
 
