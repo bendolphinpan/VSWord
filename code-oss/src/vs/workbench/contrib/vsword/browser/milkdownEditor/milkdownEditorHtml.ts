@@ -144,18 +144,18 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		/* Reading mode: hide caret + slash menu, otherwise keeps layout. */
 		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror { caret-color: transparent; }
 		.vsword-md-shell[data-mode="reading"] .vsword-slash-menu { display: none !important; }
-		/* T-3.10 Q1=a: focus dimming — active when EITHER reading mode or explicit focus toggle. */
+		/* T-3.10 + T-3.12.3.b Q1=a: focus dimming — active when EITHER reading mode or substyle=focus. */
 		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > *,
-		.vsword-md-shell[data-focus="on"] #milkdown-root .ProseMirror > * {
+		.vsword-md-shell[data-substyle="focus"] #milkdown-root .ProseMirror > * {
 			transition: opacity 180ms ease;
 			opacity: 0.35;
 		}
 		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > .vsword-focus-active,
-		.vsword-md-shell[data-focus="on"] #milkdown-root .ProseMirror > .vsword-focus-active {
+		.vsword-md-shell[data-substyle="focus"] #milkdown-root .ProseMirror > .vsword-focus-active {
 			opacity: 1;
 		}
-		/* T-3.10: toggle buttons live to the right of the mode switch and share styling. */
-		.vsword-md-toggle-group {
+		/* T-3.12.3.b: substyle radiogroup (normal | focus | typewriter, 三选一互斥) 复用一级 mode-switch 视觉规则. */
+		.vsword-md-substyle-group {
 			display: inline-flex;
 			margin-left: 6px;
 			border: 1px solid var(--vsword-border);
@@ -163,7 +163,7 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			overflow: hidden;
 			flex-shrink: 0;
 		}
-		.vsword-md-toggle-btn {
+		.vsword-md-substyle-btn {
 			border: 0;
 			background: transparent;
 			color: var(--vsword-fg);
@@ -173,13 +173,12 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 			border-left: 1px solid var(--vsword-border);
 		}
-		.vsword-md-toggle-btn:first-child { border-left: 0; }
-		.vsword-md-toggle-btn:hover:not([disabled]) { background: color-mix(in srgb, var(--vsword-fg) 8%, transparent); }
-		.vsword-md-toggle-btn[aria-pressed="true"] {
+		.vsword-md-substyle-btn:first-child { border-left: 0; }
+		.vsword-md-substyle-btn:hover { background: color-mix(in srgb, var(--vsword-fg) 8%, transparent); }
+		.vsword-md-substyle-btn[aria-pressed="true"] {
 			background: var(--vsword-accent);
 			color: var(--vscode-button-foreground, #fff);
 		}
-		.vsword-md-toggle-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
 		/* Edit-context visual feedback (Q2=b): left bar + tinted background on the block containing the cursor. */
 		#milkdown-root .ProseMirror .vsword-edit-context {
 			position: relative;
@@ -1297,14 +1296,15 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			<span class="vsword-md-resource" title="${resourceUri}">${resourceUri}</span>
 			<span id="milkdown-status" class="vsword-md-status">Loading…</span>
 			<button id="milkdown-save" class="vsword-md-button" type="button">Save</button>
-			<div id="milkdown-mode-switch" class="vsword-md-mode-switch" role="group" aria-label="Editor mode">
-				<button class="vsword-md-mode-btn" data-mode="realtime" type="button" aria-pressed="true">实时渲染</button>
-				<button class="vsword-md-mode-btn" data-mode="reading" type="button" aria-pressed="false">阅读模式</button>
-				<button class="vsword-md-mode-btn" data-mode="source" type="button" aria-pressed="false">源码模式</button>
+			<div id="milkdown-mode-switch" class="vsword-md-mode-switch" role="radiogroup" aria-label="预览模式">
+				<button class="vsword-md-mode-btn" data-mode="realtime" type="button" role="radio" aria-pressed="true" aria-checked="true">实时渲染</button>
+				<button class="vsword-md-mode-btn" data-mode="reading" type="button" role="radio" aria-pressed="false" aria-checked="false">阅读模式</button>
+				<button class="vsword-md-mode-btn" data-mode="source" type="button" role="radio" aria-pressed="false" aria-checked="false">源码模式</button>
 			</div>
-			<div id="milkdown-toggle-group" class="vsword-md-toggle-group" role="group" aria-label="View toggles">
-				<button class="vsword-md-toggle-btn" data-toggle="focus" type="button" aria-pressed="false" title="专注模式 (Ctrl+Shift+F)">☀ Focus</button>
-				<button class="vsword-md-toggle-btn" data-toggle="typewriter" type="button" aria-pressed="false" title="打字机模式 (Ctrl+Shift+T)">⌨ Typewriter</button>
+			<div id="milkdown-substyle-group" class="vsword-md-substyle-group" role="radiogroup" aria-label="专注策略">
+				<button class="vsword-md-substyle-btn" data-substyle="normal" type="button" role="radio" aria-pressed="true" aria-checked="true">普通</button>
+				<button class="vsword-md-substyle-btn" data-substyle="focus" type="button" role="radio" aria-pressed="false" aria-checked="false" title="专注模式 (Ctrl+Shift+F)">Focus</button>
+				<button class="vsword-md-substyle-btn" data-substyle="typewriter" type="button" role="radio" aria-pressed="false" aria-checked="false" title="打字机模式 (Ctrl+Shift+T)">Typewriter</button>
 			</div>
 		</header>
 		<main id="milkdown-root" aria-label="Markdown WYSIWYG editor"><div class="milkdown-empty">Loading Milkdown…</div></main>

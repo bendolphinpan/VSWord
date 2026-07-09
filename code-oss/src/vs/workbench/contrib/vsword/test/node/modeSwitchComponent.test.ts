@@ -4,17 +4,21 @@
  *--------------------------------------------------------------------------------------------*/
 
 // T-3.7b.d · ModeSwitchComponent 单元测试（AC-8：UI 组件契约验证）
+// T-3.12.3.b 更新：二级 focus/typewriter 双 toggle → substyle radiogroup（三选一互斥）
 //
-// 覆盖 DoD §6 ≥ 4 case（本文件落地 6 case）：
+// 覆盖 case：
 //   1. mount 后 component.el 指向 container 内的 #milkdown-mode-switch
-//   2. mount 后点 realtime 按钮触发 onSetMode('realtime')；同理 reading/source
+//   2. mount 后点三个 mode 按钮分别触发 onSetMode
 //   3. unmount 后点击不再触发回调，但 component.el 仍非 null
-//   4. dispose 后触发 vsword-ui-component-disposed sentinel event，component.el === null
-//   5. focus/typewriter 按钮点击分别触发 onToggleFocus / onToggleTypewriter
-//   6. updateAriaPressed({mode:'reading'}) 后对应按钮 aria-pressed="true"，其余为 "false"
+//   4. dispose 触发 vsword-ui-component-disposed sentinel event，component.el === null
+//   5. substyle radiogroup 三按钮点击分别触发 onSetSubstyle('normal'|'focus'|'typewriter')
+//   6. updateAriaPressed({mode:'reading', substyle:'focus'}) 后正确按钮 aria-pressed=true
+//   7. mount 幂等：重复 mount 事件不叠加
+//   8. applyModeVisibility('reading') → #milkdown-substyle-group 从 DOM 移除；
+//      再调 applyModeVisibility('realtime') → re-attach 回原位
 //
 // 单测策略：jsdom + document.createElement 手搓一个含 #milkdown-mode-switch +
-// #milkdown-toggle-group 骨架的 container，不加载真实 Milkdown。走 test/node/。
+// #milkdown-substyle-group 骨架的 container，不加载真实 Milkdown。走 test/node/。
 
 import * as assert from 'assert';
 import { JSDOM } from 'jsdom';
@@ -27,27 +31,33 @@ import { VSWORD_UI_COMPONENT_DISPOSED_EVENT } from '../../browser/milkdownEditor
 // jsdom 骨架
 // ---------------------------------------------------------------------------
 
+type ViewMode = 'realtime' | 'reading' | 'source';
+type Substyle = 'normal' | 'focus' | 'typewriter';
+
 function bootstrap(): {
 	dom: JSDOM;
 	container: HTMLElement;
 	calls: {
-		mode: Array<'realtime' | 'reading' | 'source'>;
-		focus: number;
-		typewriter: number;
+		mode: ViewMode[];
+		substyle: Substyle[];
 	};
-	state: { mode: 'realtime' | 'reading' | 'source'; focus: boolean; typewriter: boolean };
+	state: { mode: ViewMode; substyle: Substyle };
 } {
 	const dom = new JSDOM(`<!DOCTYPE html><html><body>
-		<div class="vsword-md-shell" data-mode="realtime">
-			<div id="milkdown-mode-switch" role="group" aria-label="Editor mode">
-				<button class="vsword-md-mode-btn" data-mode="realtime" type="button" aria-pressed="true">实时渲染</button>
-				<button class="vsword-md-mode-btn" data-mode="reading" type="button" aria-pressed="false">阅读模式</button>
-				<button class="vsword-md-mode-btn" data-mode="source" type="button" aria-pressed="false">源码模式</button>
-			</div>
-			<div id="milkdown-toggle-group" role="group" aria-label="View toggles">
-				<button class="vsword-md-toggle-btn" data-toggle="focus" type="button" aria-pressed="false">Focus</button>
-				<button class="vsword-md-toggle-btn" data-toggle="typewriter" type="button" aria-pressed="false">Typewriter</button>
-			</div>
+		<div class="vsword-md-shell" data-mode="realtime" data-substyle="normal">
+			<header class="vsword-md-toolbar">
+				<div id="milkdown-mode-switch" role="radiogroup" aria-label="预览模式">
+					<button class="vsword-md-mode-btn" data-mode="realtime" role="radio" aria-pressed="true" aria-checked="true">实时渲染</button>
+					<button class="vsword-md-mode-btn" data-mode="reading" role="radio" aria-pressed="false" aria-checked="false">阅读模式</button>
+					<button class="vsword-md-mode-btn" data-mode="source" role="radio" aria-pressed="false" aria-checked="false">源码模式</button>
+				</div>
+				<div id="milkdown-substyle-group" role="radiogroup" aria-label="专注策略">
+					<button class="vsword-md-substyle-btn" data-substyle="normal" role="radio" aria-pressed="true" aria-checked="true">普通</button>
+					<button class="vsword-md-substyle-btn" data-substyle="focus" role="radio" aria-pressed="false" aria-checked="false">Focus</button>
+					<button class="vsword-md-substyle-btn" data-substyle="typewriter" role="radio" aria-pressed="false" aria-checked="false">Typewriter</button>
+				</div>
+				<span class="sentinel-after-substyle">锚点</span>
+			</header>
 		</div>
 	</body></html>`, { url: 'http://localhost/' });
 	// @ts-ignore
@@ -58,22 +68,17 @@ function bootstrap(): {
 	globalThis.CustomEvent = dom.window.CustomEvent;
 
 	const container = dom.window.document.querySelector('.vsword-md-shell') as HTMLElement;
-	const calls: { mode: Array<'realtime' | 'reading' | 'source'>; focus: number; typewriter: number } = {
-		mode: [],
-		focus: 0,
-		typewriter: 0,
-	};
-	const state = { mode: 'realtime' as 'realtime' | 'reading' | 'source', focus: false, typewriter: false };
+	const calls: { mode: ViewMode[]; substyle: Substyle[] } = { mode: [], substyle: [] };
+	const state = { mode: 'realtime' as ViewMode, substyle: 'normal' as Substyle };
 	return { dom, container, calls, state };
 }
 
 function makeComponent(bootstrapResult: ReturnType<typeof bootstrap>) {
 	const { calls, state } = bootstrapResult;
 	return createModeSwitchComponent({
-		onSetMode: (m: 'realtime' | 'reading' | 'source') => { calls.mode.push(m); },
-		onToggleFocus: () => { calls.focus++; },
-		onToggleTypewriter: () => { calls.typewriter++; },
-		getState: () => ({ mode: state.mode, focus: state.focus, typewriter: state.typewriter }),
+		onSetMode: (m: ViewMode) => { calls.mode.push(m); },
+		onSetSubstyle: (s: Substyle) => { calls.substyle.push(s); },
+		getState: () => ({ mode: state.mode, substyle: state.substyle }),
 	});
 }
 
@@ -87,7 +92,7 @@ function clickById(dom: JSDOM, root: HTMLElement, selector: string) {
 // suites
 // ---------------------------------------------------------------------------
 
-suite('T-3.7b.d · ModeSwitchComponent · IMilkdownUIComponent 契约', () => {
+suite('T-3.7b.d + T-3.12.3.b · ModeSwitchComponent · IMilkdownUIComponent 契约', () => {
 
 	test('1. mount 后 component.el 指向 container 内的 #milkdown-mode-switch', () => {
 		const boot = bootstrap();
@@ -147,37 +152,40 @@ suite('T-3.7b.d · ModeSwitchComponent · IMilkdownUIComponent 契约', () => {
 		assert.strictEqual(boot.calls.mode.length, 0, 'dispose 后点击不应触发回调');
 	});
 
-	test('5. focus / typewriter 按钮点击分别触发 onToggleFocus / onToggleTypewriter', () => {
+	test('5. substyle radio 三按钮点击分别触发 onSetSubstyle', () => {
 		const boot = bootstrap();
 		const component = makeComponent(boot);
 		component.mount(boot.container);
 
-		clickById(boot.dom, boot.container, '.vsword-md-toggle-btn[data-toggle="focus"]');
-		clickById(boot.dom, boot.container, '.vsword-md-toggle-btn[data-toggle="focus"]');
-		clickById(boot.dom, boot.container, '.vsword-md-toggle-btn[data-toggle="typewriter"]');
+		clickById(boot.dom, boot.container, '.vsword-md-substyle-btn[data-substyle="focus"]');
+		clickById(boot.dom, boot.container, '.vsword-md-substyle-btn[data-substyle="typewriter"]');
+		clickById(boot.dom, boot.container, '.vsword-md-substyle-btn[data-substyle="normal"]');
 
-		assert.strictEqual(boot.calls.focus, 2, 'focus 点击两次');
-		assert.strictEqual(boot.calls.typewriter, 1, 'typewriter 点击一次');
+		assert.deepStrictEqual(boot.calls.substyle, ['focus', 'typewriter', 'normal'], 'substyle 点击顺序回调应齐全');
 	});
 
-	test('6. updateAriaPressed({mode:"reading"}) 后 reading 按钮 aria-pressed="true"，其余 "false"', () => {
+	test('6. updateAriaPressed({mode:"reading", substyle:"focus"}) 正确同步双 radiogroup', () => {
 		const boot = bootstrap();
 		const component = makeComponent(boot);
 		component.mount(boot.container);
 
-		component.updateAriaPressed({ mode: 'reading', focus: true, typewriter: false });
+		component.updateAriaPressed({ mode: 'reading', substyle: 'focus' });
 
 		const btnRealtime = boot.container.querySelector('.vsword-md-mode-btn[data-mode="realtime"]') as HTMLElement;
 		const btnReading = boot.container.querySelector('.vsword-md-mode-btn[data-mode="reading"]') as HTMLElement;
 		const btnSource = boot.container.querySelector('.vsword-md-mode-btn[data-mode="source"]') as HTMLElement;
-		const btnFocus = boot.container.querySelector('.vsword-md-toggle-btn[data-toggle="focus"]') as HTMLElement;
-		const btnTypewriter = boot.container.querySelector('.vsword-md-toggle-btn[data-toggle="typewriter"]') as HTMLElement;
+		const btnNormal = boot.container.querySelector('.vsword-md-substyle-btn[data-substyle="normal"]') as HTMLElement;
+		const btnFocus = boot.container.querySelector('.vsword-md-substyle-btn[data-substyle="focus"]') as HTMLElement;
+		const btnTypewriter = boot.container.querySelector('.vsword-md-substyle-btn[data-substyle="typewriter"]') as HTMLElement;
 
-		assert.strictEqual(btnRealtime.getAttribute('aria-pressed'), 'false', 'realtime 按钮必须 false');
-		assert.strictEqual(btnReading.getAttribute('aria-pressed'), 'true', 'reading 按钮必须 true');
-		assert.strictEqual(btnSource.getAttribute('aria-pressed'), 'false', 'source 按钮必须 false');
-		assert.strictEqual(btnFocus.getAttribute('aria-pressed'), 'true', 'focus toggle 反映 state.focus=true');
-		assert.strictEqual(btnTypewriter.getAttribute('aria-pressed'), 'false', 'typewriter toggle 反映 state.typewriter=false');
+		assert.strictEqual(btnRealtime.getAttribute('aria-pressed'), 'false');
+		assert.strictEqual(btnReading.getAttribute('aria-pressed'), 'true');
+		assert.strictEqual(btnSource.getAttribute('aria-pressed'), 'false');
+		assert.strictEqual(btnReading.getAttribute('aria-checked'), 'true', 'role=radio 时 aria-checked 也需同步');
+
+		assert.strictEqual(btnNormal.getAttribute('aria-pressed'), 'false');
+		assert.strictEqual(btnFocus.getAttribute('aria-pressed'), 'true', '三选一互斥：只有 focus 按下');
+		assert.strictEqual(btnTypewriter.getAttribute('aria-pressed'), 'false');
 	});
 
 	test('7. mount(container) 幂等：重复 mount 事件不叠加', () => {
@@ -188,5 +196,40 @@ suite('T-3.7b.d · ModeSwitchComponent · IMilkdownUIComponent 契约', () => {
 
 		clickById(boot.dom, boot.container, '.vsword-md-mode-btn[data-mode="reading"]');
 		assert.strictEqual(boot.calls.mode.length, 1, '重复 mount 后点击应只回调一次（旧监听已解绑）');
+	});
+
+	test('8. applyModeVisibility(\'reading\') → substyle-group 从 DOM 移除；切回 realtime → re-attach 回原位', () => {
+		const boot = bootstrap();
+		const component = makeComponent(boot);
+		component.mount(boot.container);
+
+		// 初始：substyle-group 在 DOM 里，紧邻 sentinel-after-substyle 之前。
+		const initialParent = boot.container.querySelector('.vsword-md-toolbar') as HTMLElement;
+		const substyleGroup = boot.container.querySelector('#milkdown-substyle-group') as HTMLElement;
+		const sentinel = boot.container.querySelector('.sentinel-after-substyle') as HTMLElement;
+		assert.ok(substyleGroup, '初始骨架应有 #milkdown-substyle-group');
+		assert.strictEqual(substyleGroup.parentNode, initialParent, '初始 parent 应为 toolbar');
+		// JSDOM 模板字面量里换行产生空白 Text 节点 → nextSibling 可能是 Text; 用 nextElementSibling 比对结构.
+		assert.strictEqual(substyleGroup.nextElementSibling, sentinel, '初始 nextElementSibling 应为 sentinel');
+
+		// 切 reading → detach
+		boot.state.mode = 'reading';
+		component.applyModeVisibility('reading');
+		assert.strictEqual(boot.container.querySelector('#milkdown-substyle-group'), null,
+			'reading 下 #milkdown-substyle-group 必须从 DOM 移除（AC-1）');
+
+		// 切回 realtime → re-attach 回原位（在 sentinel 之前）
+		boot.state.mode = 'realtime';
+		component.applyModeVisibility('realtime');
+		const reattached = boot.container.querySelector('#milkdown-substyle-group') as HTMLElement;
+		assert.ok(reattached, 'realtime 下 #milkdown-substyle-group 必须 re-attach');
+		assert.strictEqual(reattached, substyleGroup, 're-attach 应复用同一 DOM 引用（保留内部状态）');
+		assert.strictEqual(reattached.parentNode, initialParent, 're-attach 后 parent 恢复为 toolbar');
+		assert.strictEqual(reattached.nextElementSibling, sentinel, 're-attach 后 nextElementSibling 恢复为 sentinel');
+
+		// 幂等：realtime 再调 applyModeVisibility('realtime') 不重复 attach
+		component.applyModeVisibility('realtime');
+		const nodes = boot.container.querySelectorAll('#milkdown-substyle-group');
+		assert.strictEqual(nodes.length, 1, 'realtime 再调应幂等，不重复 attach');
 	});
 });

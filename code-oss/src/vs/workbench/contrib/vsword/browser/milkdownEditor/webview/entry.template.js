@@ -41,7 +41,7 @@ import { createViewModeApplier } from './view-mode-editable.mjs';
 // view-mode-editable 的 slice update 打架）。state 机做兜底 flush，防止
 // 未来 auto-save 通路走到 requestAutoSave() 时被 host gate 永久推迟。
 import { createImeCompositionState } from './ime-composition-state.mjs';
-// T-3.7b.d: ModeSwitchComponent 接管 #milkdown-mode-switch + #milkdown-toggle-group 的 click 派发。
+// T-3.7b.d + T-3.12.3.b: ModeSwitchComponent 接管 #milkdown-mode-switch + #milkdown-substyle-group 的 click 派发。
 import { createModeSwitchComponent } from './mode-switch.mjs';
 import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs';
 import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
@@ -158,7 +158,11 @@ const status = document.getElementById('milkdown-status');
 const saveButton = document.getElementById('milkdown-save');
 const sourceTextarea = document.getElementById('milkdown-source');
 const modeButtons = document.querySelectorAll('#milkdown-mode-switch .vsword-md-mode-btn');
-const toggleButtons = document.querySelectorAll('#milkdown-toggle-group .vsword-md-toggle-btn');
+// T-3.12.3.b: 二级 substyle radiogroup (normal | focus | typewriter, 三选一互斥).
+// 阅读模式下 mode-switch component 会把 #milkdown-substyle-group 整块从 DOM 移除;
+// 这里的 NodeList 快照会失效, 但 controller 里所有对 substyleButtons 的 forEach 已加
+// isConnected 兜底 (setAttribute 到 detached button 也是安全 no-op, 只是无 CSS 效果).
+const substyleButtons = document.querySelectorAll('#milkdown-substyle-group .vsword-md-substyle-btn');
 
 let editor;
 let currentMarkdown = '';
@@ -797,10 +801,15 @@ window.addEventListener('message', event => {
 // T-3.3.2: create mode controller after DOM handles are grabbed. It owns Ctrl+/ and button clicks.
 // T-3.7b.d: click 派发下沉到 ModeSwitchComponent（wireButtons:false）；controller 仍持有状态机 +
 // aria-pressed 更新（applyDom → buttons） + keybinding，行为等价。
+// T-3.12.3.b: onModeChange 里额外调 modeSwitchComponent.applyModeVisibility(next),
+// 让 component 决定 #milkdown-substyle-group 的 DOM detach/re-attach (reading 下 detach).
+// forward-declare 是因为 component 在 controller 之后 mount, onModeChange 触发时
+// (首次 switchTo / preferenceResponse) component 已就位.
+let modeSwitchComponent = null;
 modeController = createModeController({
 	shell,
 	buttons: modeButtons,
-	toggleButtons,
+	substyleButtons,
 	wireButtons: false,
 	sourceTextarea,
 	getMarkdown: () => serialize(),
@@ -814,29 +823,31 @@ modeController = createModeController({
 		} catch (err) {
 			reportError('view-mode-editable/onModeChange', err);
 		}
+		// T-3.12.3.b: reading ↔ realtime/source 切换时同步二级 substyle-group 可见性
+		// (DOM 整块 detach/re-attach). component 内部幂等, 反复调也无副作用.
+		try {
+			modeSwitchComponent?.applyModeVisibility(next);
+		} catch (err) {
+			reportError('mode-switch/applyModeVisibility', err);
+		}
 	},
 });
 
-// T-3.7b.d: mount ModeSwitchComponent —— click 派发交给 component，
-// 语义调用回 controller.switchTo / setFocus / setTypewriter，保持行为等价。
-const modeSwitchComponent = createModeSwitchComponent({
+// T-3.7b.d + T-3.12.3.b: mount ModeSwitchComponent —— click 派发交给 component,
+// 一级 mode 走 controller.switchTo, 二级 substyle radio 走 controller.setSubstyle
+// (radio 语义: 二次点已选项无副作用, setSubstyle 内部 next === substyle 短路).
+modeSwitchComponent = createModeSwitchComponent({
 	onSetMode: (m) => { try { modeController?.switchTo(m); } catch (err) { reportError('mode-switch/setMode', err); } },
-	onToggleFocus: () => {
+	onSetSubstyle: (s) => {
 		try {
-			if (modeController?.getMode() === 'source') return;
-			modeController?.setFocus(!modeController.isFocusOn());
-		} catch (err) { reportError('mode-switch/toggleFocus', err); }
-	},
-	onToggleTypewriter: () => {
-		try {
-			if (modeController?.getMode() === 'source') return;
-			modeController?.setTypewriter(!modeController.isTypewriterOn());
-		} catch (err) { reportError('mode-switch/toggleTypewriter', err); }
+			// PRD §4.3: reading 下 substyle 视觉强置 normal, 无编辑意义, 拦截.
+			if (modeController?.getMode() === 'reading') return;
+			modeController?.setSubstyle(s);
+		} catch (err) { reportError('mode-switch/setSubstyle', err); }
 	},
 	getState: () => ({
 		mode: modeController?.getMode() || 'realtime',
-		focus: !!modeController?.isFocusOn(),
-		typewriter: !!modeController?.isTypewriterOn(),
+		substyle: modeController?.getSubstyle?.() || 'normal',
 	}),
 });
 if (shell) modeSwitchComponent.mount(shell);

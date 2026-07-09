@@ -83,7 +83,11 @@ export function createModeController(opts) {
 		shell,                 // .vsword-md-shell root
 		buttons,               // NodeList of mode buttons (data-mode=realtime|reading|source)
 		toggleButtons,         // NodeList of legacy toggle buttons (data-toggle=focus|typewriter)
-		                       //   T-3.12.3.b 会替换为 substyle radio buttons; 本卡先兼容两种 DOM 形态。
+		                       //   T-3.12.3.b: substyle radio group 已上线 (substyleButtons), 本参数保留
+		                       //   仅为让老 viewModes.test.ts (T-3.10 遗留 fixture) 断言仍能跑。生产 DOM
+		                       //   已删除 #milkdown-toggle-group; 此分支运行期恒为 undefined NodeList。
+		substyleButtons,       // NodeList of substyle radio buttons (data-substyle=normal|focus|typewriter)
+		                       //   T-3.12.3.b 新增 · 生产环境由 entry.template.js 传入; 若未传则仅走 shell 属性更新。
 		sourceTextarea,
 		getMarkdown,
 		setMarkdown,
@@ -111,10 +115,26 @@ export function createModeController(opts) {
 		buttons?.forEach(btn => {
 			const isActive = btn.getAttribute('data-mode') === currentMode;
 			btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+			// role="radio" 场景下 aria-checked 与 aria-pressed 同源, 双写一手保 a11y 树一致.
+			if (btn.getAttribute('role') === 'radio') {
+				btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+			}
+		});
+		// T-3.12.3.b: substyle radio group aria-pressed 同步. reading 模式下二级菜单
+		// 从 DOM 整块移除 (mode-switch component 负责 detach), 此时 substyleButtons
+		// 若是 live NodeList 会自动收缩为空, forEach no-op; 若上层传的是 buttons 内的
+		// 缓存快照, forEach 到 detached button 上 setAttribute 也是安全的 (只是无 CSS 效果).
+		substyleButtons?.forEach(btn => {
+			const kind = btn.getAttribute('data-substyle');
+			const isActive = kind === substyle;
+			btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+			if (btn.getAttribute('role') === 'radio') {
+				btn.setAttribute('aria-checked', isActive ? 'true' : 'false');
+			}
 		});
 		// 兼容 T-3.12.3.b 落地前的老 DOM: `.vsword-md-toggle-btn[data-toggle=focus|typewriter]`.
-		// aria-pressed 派生自 substyle radio, disabled 保留旧 source 屏蔽 (3.b 之后此块会连同 DOM
-		// 一起被 substyle radio group 替换).
+		// aria-pressed 派生自 substyle radio, disabled 保留旧 source 屏蔽. 生产 DOM 已删除此块,
+		// forEach 恒 no-op; 保留供 viewModes.test.ts (T-3.10 遗留 fixture) 断言.
 		toggleButtons?.forEach(btn => {
 			const kind = btn.getAttribute('data-toggle');
 			const on = (kind === 'focus') ? substyle === 'focus'
@@ -190,6 +210,17 @@ export function createModeController(opts) {
 			btn.addEventListener('click', () => {
 				const m = btn.getAttribute('data-mode');
 				if (isValidMode(m)) switchTo(m);
+			});
+		});
+
+		// T-3.12.3.b: substyle radio button click wiring. reading mode 下 DOM 已 detach,
+		// listener 随 button 生命周期一起走; realtime/source 下点击 radio 触发 setSubstyle
+		// (radio 互斥语义, 二次点已选项无副作用 · setSubstyle 内部 next === substyle 短路).
+		substyleButtons?.forEach(btn => {
+			btn.addEventListener('click', () => {
+				if (currentMode === 'reading') return;
+				const s = btn.getAttribute('data-substyle');
+				if (isValidSubstyle(s)) setSubstyle(s);
 			});
 		});
 
