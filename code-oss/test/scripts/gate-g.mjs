@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 /*---------------------------------------------------------------------------------------------
- *  T-3.5c.6 · Gate G · 模块 c（语法补齐）收官 CI 脚本
+ *  Gate G · Phase 3 stage gate（原 T-3.5c.6 · 模块 c 收官 gate 升级为 Phase 3 收官）
  *
- *  Gate G 是"整篇模块 c 的一键回归"，聚合 5 个已就位的 gate/自检 + build-verifier：
+ *  Gate G 由两组步骤合成：
+ *
+ *  A. 模块 c 语法补齐历史证据（T-3.5c.1..6，一键回归）
  *    1. build-milkdown-editor.cjs  —— webview bundle 构建 + verify.template.mjs 全量断言
  *       （含 T-3.5c.1..5 全部语法特性断言：emoji · footnote · frontmatter YAML/TOML/JSON ·
  *         sub/sup · code-block info meta · setext heading · 15 项 slash-menu + Syntax 组）
@@ -12,6 +14,14 @@
  *    5. roundtrip-selfcheck        —— 34 fixture × 3 遍 pickSavePath 稳定
  *    6. mermaid-selfcheck          —— 22 类 × 3 遍 normalized svg 字节一致
  *
+ *  B. Phase 3.9 收官证据（T-3.9.4，见 PRD phase-3.9-perf-ime.md §4.6 / §8）
+ *    7. phase-3.9-artifacts        —— 三份报告 + docs/decisions/phase-3-acceptance.md 存在，
+ *                                     顶部含"验收结论"声明。**不重跑 perf/IME 手测**，只验证
+ *                                     书面证据到位（perf breach 与 bundle 超阈值走 PRD §7 逃生
+ *                                     路径 → phase-3-acceptance.md "未闭合项" 章节 → Phase 4）。
+ *    8. ime-composition            —— run-ime-composition-test.mjs（3.9.2.c，9 case）
+ *    9. tsc-baseline               —— code-oss/src tsc --noEmit 0 error（G-tsc）
+ *
  *  产出：
  *    - test/reports/gate-g-<timestamp>.md   （汇总每一步 exit + 摘要）
  *    - --json                                （追加 JSON 摘要给 CI 消费）
@@ -19,7 +29,8 @@
  *  任一子步骤非零退出 → Gate G 失败，exit 1。
  *
  *  用法（从仓库根跑）：
- *    node code-oss/test/scripts/gate-g.mjs
+ *    node code-oss/test/scripts/gate-g.mjs                # 全量（A+B，模块 c 六步会跑 build，慢）
+ *    node code-oss/test/scripts/gate-g.mjs --phase3-only  # 只跑 B 组三步（Phase 3 收官快速回归）
  *    node code-oss/test/scripts/gate-g.mjs --json
  *--------------------------------------------------------------------------------------------*/
 
@@ -34,10 +45,33 @@ const REPO_ROOT = path.resolve(CODE_OSS, '..');
 const REPORTS_DIR = path.resolve(CODE_OSS, 'test', 'reports');
 
 const argJson = process.argv.includes('--json');
+const argPhase3Only = process.argv.includes('--phase3-only');
 function log(msg) { if (!argJson) { process.stderr.write(msg + '\n'); } }
 
-// 每一步：cmd + args + 摘要抽取器（从 stdout/stderr 摘一行给报告用）。
-const STEPS = [
+// Phase 3.9 收官所需的书面证据清单 —— phase3-artifacts 步骤只验证文件存在 + 首屏声明标记。
+const PHASE3_ARTIFACTS = [
+	{ path: 'code-oss/test/reports/phase-3.9-perf.md', mustContain: ['open', 'type'] },
+	{ path: 'code-oss/test/reports/phase-3.9.2-ime-checklist.md', mustContain: [] },
+	{ path: 'code-oss/test/reports/phase-3.9.3-comparison.md', mustContain: ['Phase 2', 'Phase 3'] },
+	{ path: 'docs/decisions/phase-3-acceptance.md', mustContain: ['Gate D', 'Gate E', 'Gate F', 'Gate G'] },
+];
+
+function checkPhase3Artifacts() {
+	const missing = [];
+	const missingMarker = [];
+	for (const item of PHASE3_ARTIFACTS) {
+		const abs = path.resolve(REPO_ROOT, item.path);
+		if (!fs.existsSync(abs)) { missing.push(item.path); continue; }
+		const body = fs.readFileSync(abs, 'utf8');
+		for (const marker of item.mustContain) {
+			if (!body.includes(marker)) { missingMarker.push(`${item.path}: 缺 "${marker}"`); }
+		}
+	}
+	return { missing, missingMarker };
+}
+
+// A. 模块 c 语法补齐历史 gate（六步 · 全量模式跑）
+const STEPS_A = [
 	{
 		id: 'build',
 		title: 'build-milkdown-editor.cjs（webview bundle + verify.template.mjs 全量断言）',
@@ -124,14 +158,75 @@ const STEPS = [
 	},
 ];
 
+// B. Phase 3.9 收官三步（--phase3-only 时只跑这三步，全量模式追加在 A 之后）
+const STEPS_B = [
+	{
+		id: 'phase3-artifacts',
+		title: 'Phase 3.9 书面证据 · 三报告 + phase-3-acceptance.md 存在且含 Gate 声明',
+		inline: () => {
+			const { missing, missingMarker } = checkPhase3Artifacts();
+			if (missing.length || missingMarker.length) {
+				return {
+					exitCode: 1,
+					stdout: JSON.stringify({ missing, missingMarker }, null, 2),
+					stderr: '',
+					summary: `missing=${missing.length} missingMarker=${missingMarker.length}`,
+				};
+			}
+			return {
+				exitCode: 0,
+				stdout: `artifacts ok · ${PHASE3_ARTIFACTS.length} 份`,
+				stderr: '',
+				summary: `${PHASE3_ARTIFACTS.length} 份证据齐 · Gate D/E/F/G 声明命中`,
+			};
+		},
+	},
+	{
+		id: 'ime-composition',
+		title: 'run-ime-composition-test.mjs（3.9.2.c · IME state machine · 9 case · jsdom mocha）',
+		file: path.join(HERE, 'run-ime-composition-test.mjs'),
+		summarize(out) {
+			const m = out.match(/(\d+)\s+passing/);
+			return m ? `${m[1]} passing` : 'exit=0';
+		},
+	},
+	{
+		id: 'tsc-baseline',
+		title: 'code-oss/src tsc --noEmit（G-tsc · 0 error 基线）',
+		file: path.resolve(CODE_OSS, 'node_modules/typescript/bin/tsc'),
+		args: ['--noEmit', '-p', 'src/tsconfig.json'],
+		cwd: CODE_OSS,
+		env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=8192' },
+		summarize(out) {
+			// tsc 静默 = 0 error；错误行形如 "error TSxxxx:"
+			const errCount = (out.match(/error TS\d+/g) || []).length;
+			return errCount === 0 ? '0 error' : `${errCount} error`;
+		},
+	},
+];
+
+// 根据模式合成 STEPS。--phase3-only 只跑 B 组三步（快速回归，用户 push 前手动跑）。
+const STEPS = argPhase3Only ? STEPS_B : [...STEPS_A, ...STEPS_B];
+
 function runStep(step) {
 	log(`[gate-g] ▶ ${step.id} · ${step.title}`);
 	const t0 = Date.now();
+
+	// inline 步骤：函数直接返回 { exitCode, stdout, stderr, summary }，不 spawn 子进程。
+	if (typeof step.inline === 'function') {
+		let res;
+		try { res = step.inline(); }
+		catch (e) { res = { exitCode: 1, stdout: '', stderr: String(e && e.stack || e), summary: `inline throw: ${e && e.message || e}` }; }
+		const elapsed = Date.now() - t0;
+		log(`[gate-g] ${res.exitCode === 0 ? '✓' : '✗'} ${step.id} · ${elapsed} ms · ${res.summary}`);
+		return { id: step.id, title: step.title, exitCode: res.exitCode, elapsed, summary: res.summary, stdout: res.stdout, stderr: res.stderr };
+	}
+
 	const args = [step.file, ...(step.args || [])];
 	const res = cp.spawnSync(process.execPath, args, {
 		encoding: 'utf8',
 		cwd: step.cwd || REPO_ROOT,
-		env: process.env,
+		env: step.env || process.env,
 		maxBuffer: 32 * 1024 * 1024,
 	});
 	const elapsed = Date.now() - t0;
@@ -149,7 +244,7 @@ function runStep(step) {
 function buildMdReport(steps, totalElapsed, exitCode) {
 	const now = new Date();
 	const lines = [];
-	lines.push(`# T-3.5c.6 · Gate G · ${now.toISOString()}`);
+	lines.push(`# Gate G · Phase 3 stage gate · ${now.toISOString()}${argPhase3Only ? ' · --phase3-only' : ''}`);
 	lines.push('');
 	lines.push(`- exitCode: ${exitCode}`);
 	lines.push(`- 总用时: ${totalElapsed} ms`);

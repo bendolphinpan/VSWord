@@ -150,3 +150,63 @@ Fixture 由 gate-f、`*Roundtrip.test.ts`、selfcheck、bootstrap 四方共享�
 - Golden 更新流程：删除对应 `.golden.svg` / `.expected.svg` → 跑一次 `gate-f.mjs`（测试 auto-write missing golden）→ diff 复查 → commit。**永远不要手改 golden**。
 - Windows 上 tsc 全项目 typecheck 默认堆不足 → 加 `NODE_OPTIONS="--max-old-space-size=8192"`。
 
+---
+
+## VSWord Milkdown Editor — Gate G（Phase 3 stage gate）
+
+Task **T-3.9.4** 把 Gate G 从「模块 c 语法补齐收官」升级为 **Phase 3 阶段验收 gate**，与 Gate E / Gate F 并列。任何声明 Phase 3 收官或涉及 `code-oss/test/scripts/gate-g.mjs` / `docs/decisions/phase-3-acceptance.md` / 三份 phase-3.9 报告的改动，必须过 Gate G 再合入。
+
+### 一键脚本
+
+从仓库根目录：
+
+```
+node code-oss/test/scripts/gate-g.mjs                # 全量（A 组模块 c 六步 + B 组 Phase 3 收官三步，首跑会重跑 build，慢）
+node code-oss/test/scripts/gate-g.mjs --phase3-only  # 只跑 B 组三步（Phase 3 收官快速回归，秒级）
+node code-oss/test/scripts/gate-g.mjs --json         # 追加 JSON 摘要到 stdout (CI 消费)
+node code-oss/test/scripts/run-ime-composition-test.mjs   # 单跑 G-unit（IME 状态机 9 case · jsdom mocha）
+```
+
+任意脚本 exit != 0 就代表 Gate G 未通过。
+
+### Gate G · 两组步骤
+
+**A 组 · 模块 c 语法补齐历史证据**（六步 · 全量模式跑，`--phase3-only` 跳过）：
+
+1. `build-milkdown-editor.cjs` —— webview bundle 构建 + verify.template.mjs 全量断言（覆盖 T-3.5c.1..5 emoji / footnote / frontmatter / sub-sup / code-block meta / setext / slash-menu）
+2. `gate-e.mjs` —— Round-trip 6 测试文件 + 34 fixture
+3. `gate-f.mjs` —— Mermaid 22 类 golden diff
+4. `roundtrip-perf-baseline.mjs` —— A/B/C 三分支 p95 ≤ 1500ms
+5. `roundtrip-selfcheck.mjs` —— 34 fixture × 3 遍 pickSavePath 稳定
+6. `mermaid-selfcheck.mjs` —— 22 类 × 3 遍 normalized svg 字节一致
+
+**B 组 · Phase 3.9 收官证据**（`--phase3-only` 只跑这三步）：
+
+7. **phase3-artifacts** —— 4 份书面证据存在且首屏声明命中：
+   - `code-oss/test/reports/phase-3.9-perf.md`（含 `open` / `type`）
+   - `code-oss/test/reports/phase-3.9.2-ime-checklist.md`（骨架 14 行）
+   - `code-oss/test/reports/phase-3.9.3-comparison.md`（含 `Phase 2` / `Phase 3`）
+   - `docs/decisions/phase-3-acceptance.md`（含 `Gate D` / `Gate E` / `Gate F` / `Gate G`）
+
+   备注：本步骤**不重跑 perf/IME 手测**，只验证书面证据到位。Perf breach 与 bundle 超阈值走 PRD §7 逃生路径 → `phase-3-acceptance.md` "未闭合项" 章节 → Phase 4 承接。
+8. **ime-composition** —— `run-ime-composition-test.mjs`（T-3.9.2.c · IME 状态机 9 case · jsdom mocha）
+9. **tsc-baseline** —— `code-oss/src` tsc `--noEmit -p src/tsconfig.json` · 0 error（G-tsc · 复用 T-3.11.4 tsc-baseline-clean）
+
+### DoD 校验清单
+
+| # | 项 | 校验方式 |
+|---|---|---|
+| 1 | Gate G 全量或 `--phase3-only` 一键 exit 0 | `gate-g.mjs` → `code-oss/test/reports/gate-g-*.md` |
+| 2 | 4 份 Phase 3.9 书面证据齐 | phase3-artifacts inline 步骤，缺一 exit 1 |
+| 3 | IME 单测 9 passing | ime-composition 步骤输出 `9 passing` |
+| 4 | tsc 全项目零 error | tsc-baseline 步骤 · errCount === 0 |
+| 5 | Phase 3 归档决策落盘 | `docs/decisions/phase-3-acceptance.md` 存在并声明 Gate D/E/F/G |
+
+### 常见坑
+
+- **全量模式首跑慢**：A 组 build 会重跑 esbuild + verify（~30–60s），后续 Gate E/F 一起 3–5 分钟；日常 Phase 3 收官回归用 `--phase3-only`（<10s）
+- **A 组依赖 `.tmp/milkdown-prod-builder`**：与 Gate E/F 共享，首跑前须先做过一次 vsword prod build（跑一次 `build-milkdown-editor.cjs` 就位）
+- **phase3-artifacts 是 inline 步骤**：不 spawn 子进程，纯文件存在性 + `mustContain` 关键字校验；若报告文件被误删或首屏缺 `Gate D/E/F/G` 声明会立刻 exit 1
+- **Perf breach 与 bundle 超阈值不阻断 Gate G**：只要 `phase-3.9-perf.md` / `phase-3.9.3-comparison.md` 文件存在且格式正确，超阈值判定由 `phase-3-acceptance.md` "未闭合项" 章节承接（PRD §7 逃生路径），不再由 gate 脚本判死
+- **Windows tsc-baseline 堆不足**：Gate G 已内置 `NODE_OPTIONS="--max-old-space-size=8192"`，无需外部 export
+

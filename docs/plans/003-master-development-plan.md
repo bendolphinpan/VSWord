@@ -100,7 +100,7 @@ commit 提交时使用的 T-号（T-3.6 / 3.7 / 3.8 / 3.9 / 3.10 / 3.11.x）是 
 | **Phase 1** | Writer Workbench Shell（Home / writer-mode / 布局） | ✅ 完成 | 100% |
 | **Phase 2** | Markdown Core（frontmatter / 字数 / round-trip） | ✅ 完成 | 100% |
 | **Phase 3（旧）** | Block Editor（BlockNote） | ❌ **废弃** | 卡死不可用，本次移除 |
-| **Phase 3（新）** | **Markdown WYSIWYG 编辑器（Milkdown 重建）** | 🟡 进行中 | T-3.0/3.1/3.2/3.2b ✅；T-3.3~T-3.9 待启动 |
+| **Phase 3（新）** | **Markdown WYSIWYG 编辑器（Milkdown 重建）** | ✅ 主线完成 | T-3.0..T-3.12 主线 18/19 交付；未闭合项 U-1..U-5 转 Phase 4（见 §7） |
 | **Phase 4** | Canvas（React Flow，文件夹视图） | ✅ 完成 | 100% |
 | **Phase 5** | Mindmap（`.mm` XMind 对齐，mind-elixir） | ✅ 深度完成 | ~90%（T-5.1~5.9） |
 | **Phase 6** | 多维表（Notion-like 数据库） | ⚪ 后期规划 | 标记为后期功能 |
@@ -394,24 +394,58 @@ T-3.9  性能与 IME 全矩阵收口
 
 ---
 
-## 7. 本次执行顺序（Phase 3 新建）
+## 7. 本次执行顺序（Phase 3 新建）· **Phase 3 完成 · Phase 4 待启动**
+
+### 7.1 Phase 3 主线交付（已完成 · 2026-07-09 归档）
 
 ```
-T-3.0 清理旧 Block Editor（前置，无风险）
+T-3.0 清理旧 Block Editor            ✅ c361b402 / 4ccbb95a
   ↓
-T-3.1 Milkdown spike 🚨 验收后继续
+T-3.1 Milkdown spike                 ✅ 历史 spike
   ↓
-T-3.2 WYSIWYG MVP（文件类型关联）
+T-3.2 / 3.2b WYSIWYG MVP + WorkingCopy ✅ c361b402 / 0f6bc00a
   ↓
-T-3.3 Typora 级排版与即时渲染
+T-3.3 Typora 级排版与即时渲染        ✅ 9f76d3e0 等
   ↓
 T-3.4 自定义排版  →  T-3.5 图片增强  →  T-3.6 双链  →  T-3.7 块增强
-  （超越点，可按用户优先级调整顺序）
+       (n/a)         ✅ 8bd1650d 等    ✅ T-3.11.x 系列  ✅ T-3.6/3.7/3.8 commits
   ↓
-T-3.8 Round-trip 保真层
+T-3.5b 图表全套（mermaid / flow / seq / mixed）  ✅ Gate F 81 pass
+T-3.5c 语法补齐（emoji/footnote/frontmatter/…）  ✅ Gate G-A 六步
+T-3.7b 视图模式（源码/阅读/专注/打字机）          ✅ 服务化收敛
+T-3.7c 导航（TOC/大纲/查找替换）                  ✅
+T-3.7d 主题兼容层（内置 4 主题 + Typora .css）    ✅
   ↓
-T-3.9 性能与 IME 收口
+T-3.8 Round-trip 保真层              ✅ Gate E 296 pass
+T-3.8b 导入导出（HTML/PDF/Pandoc）    ✅
+  ↓
+T-3.9 性能与 IME 收口                ✅ Gate G 三报告 + IME 9 pass + tsc 0
+  ↓
+T-3.12 收官 P0 fix（IME gate / 表格 chrome / 模式正交）
+  ├─ 3.12.1 IME gate（host + webview）      ✅ 93aa1f85 / 2844ebb4
+  ├─ 3.12.2 表格 chrome hover-gated          ✅ 52426d5f / dc234dd4 / 59a09c7e
+  └─ 3.12.3 模式正交性 · state machine       ✅ da60f2d8（.a 已交付 · .b/.c 转 Phase 4）
 ```
+
+**归档决策**：见 `docs/decisions/phase-3-acceptance.md`（Gate D/E/F/G 四声明齐 · 主线 94.7% 交付 · 未闭合项 U-1..U-5 转 Phase 4）
+**Gate G 一键回归**：`node code-oss/test/scripts/gate-g.mjs --phase3-only`
+
+### 7.2 Phase 3 未闭合项 · 转 Phase 4 承接
+
+| # | 项目 | 承接方式 | 优先级 |
+|---|---|---|:-:|
+| U-1 | 大文档 open pipeline 优化（1MB > 2s · 5MB > 2s） | Phase 4 独立立项「Milkdown open pipeline v2」 | 高 |
+| U-2 | IME 检查表 14 行人肉签字 | Phase 4 首周执行（单测通道已双证保底） | 中 |
+| U-3 | Editor idle / peak RSS 采集 | 首建 electron dev-build 后同批采集 | 中 |
+| U-4 | 模式正交性 UI 分层收尾（T-3.12.3.b/.c） | 已在 `003-phase3-mode-orthogonality.md` §7 定义 | 低 |
+| U-5 | Milkdown vendor bundle lazy split | 可选 · 若 U-1 走 worker 路线可合并 | 可选 |
+
+### 7.3 下一 Phase 待启动
+
+Phase 4（Canvas）已在 §2 状态矩阵中标 **✅ 完成 100%**（React Flow 方案 · T-4.1..4.7 全交付）。**新 Phase 起点由用户下一 turn 拍板**，候选方向：
+- U-1..U-4（Phase 3 遗留优化）
+- Phase 5 mindmap 剩余 P1（Markdown ↔ .mm 互转、richcontent、10k 节点性能、IME 全矩阵）
+- Phase 7 产品化收口（品牌 / 打包 / 分发 / 用户文档）
 
 **验收节奏**：用户每天早上集中验收；模块内技术自主拍板（可维护 > 性能 > 效果，成熟开源库优先）；仅产品方向问题用 🚨【需要你批准】。
 
