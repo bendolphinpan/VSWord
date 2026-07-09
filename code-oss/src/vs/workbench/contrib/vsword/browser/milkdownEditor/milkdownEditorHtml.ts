@@ -514,77 +514,98 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-table td[data-alignment="center"], .vsword-table th[data-alignment="center"] { text-align: center; }
 		.vsword-table td[data-alignment="right"],  .vsword-table th[data-alignment="right"]  { text-align: right;  }
 
-		.vsword-table-corner,
-		.vsword-table-col-bar,
-		.vsword-table-row-bar {
-			position: absolute;
-			opacity: 0;
-			pointer-events: none;
-			transition: opacity 120ms ease;
-		}
-		.vsword-table-wrap:hover .vsword-table-corner,
-		.vsword-table-wrap:hover .vsword-table-col-bar,
-		.vsword-table-wrap:hover .vsword-table-row-bar,
-		.vsword-table-wrap:focus-within .vsword-table-corner,
-		.vsword-table-wrap:focus-within .vsword-table-col-bar,
-		.vsword-table-wrap:focus-within .vsword-table-row-bar {
-			opacity: 1;
-			pointer-events: auto;
-		}
+		/* T-3.12.2.b · Table chrome (hover-gated Notion/Typora style).
+		 * Old .vsword-table-col-bar / -row-bar removed — JS no longer creates them.
+		 * handle / menu are mounted into DOM by NodeView only on pointerenter, so no
+		 * CSS opacity gate needed. Corner stays in DOM and is always visible. */
 
+		/* Whole-table corner button — moved to the outside bottom-right. */
 		.vsword-table-corner {
-			top: 0; left: 0;
+			position: absolute;
+			right: -24px;
+			bottom: -24px;
 			width: 28px; height: 20px;
 			display: flex; align-items: center; justify-content: center;
+			z-index: 3;
 		}
 		.vsword-table-corner-btn {
 			all: unset;
 			width: 20px; height: 18px;
 			display: inline-flex; align-items: center; justify-content: center;
 			font: inherit; font-size: 14px; line-height: 1;
-			color: var(--vsword-fg, #333);
-			background: var(--vsword-bg, #fff);
-			border: 1px solid var(--vsword-border, #ccc);
+			color: #666;
+			background: #fff;
+			border: 1px solid #ccc;
 			border-radius: 3px;
 			cursor: pointer;
 		}
-		.vsword-table-corner-btn:hover { border-color: var(--vsword-accent, #007acc); }
+		.vsword-table-corner-btn:hover { border-color: #007acc; }
 		.vsword-table-corner-pop {
 			display: none;
 			position: absolute;
-			top: 22px; left: 0;
+			top: 22px; right: 0;              /* Anchor popover to the corner's right edge. */
 			padding: 4px;
-			background: var(--vsword-bg, #fff);
-			border: 1px solid var(--vsword-border, #ccc);
+			background: #fff;
+			border: 1px solid #ccc;
 			border-radius: 4px;
 			box-shadow: 0 2px 6px rgba(0,0,0,0.15);
-			z-index: 3;
+			z-index: 4;
 		}
 		.vsword-table-corner[data-open="true"] .vsword-table-corner-pop { display: flex; }
 
-		.vsword-table-col-bar {
-			top: 0; left: 32px; right: 0;
-			height: 20px;
-			display: grid;
-			grid-auto-flow: column;
-			grid-auto-columns: 1fr;
-			gap: 0;
+		/* Col handle — a thin three-dot strip centered on the cell's top edge.
+		 * anchorTo(side='top') writes left = cellLeft + w/2 - 12 and top = cellTop - 8,
+		 * so we size 24px wide × 6px tall to sit centered across the border. */
+		.vsword-table-col-handle {
+			position: absolute;
+			width: 24px; height: 6px;
+			background: rgba(0,0,0,0.15);
+			border-radius: 2px;
+			color: #666;
+			font-size: 8px;
+			line-height: 6px;
+			text-align: center;
+			cursor: pointer;
+			user-select: none;
+			z-index: 5;
+			overflow: hidden;
 		}
-		.vsword-table-row-bar {
-			top: 24px; left: 0;
-			width: 28px; bottom: 0;
-			display: grid;
-			grid-auto-flow: row;
-			grid-auto-rows: 1fr;
-			gap: 0;
+		.vsword-table-col-handle:hover { background: rgba(0,0,0,0.3); }
+
+		/* Row handle — mirrored: anchorTo(side='left') writes left = cellLeft - 8 and
+		 * top = cellTop + h/2 - 12, so 6×24px vertical strip on the left border. */
+		.vsword-table-row-handle {
+			position: absolute;
+			width: 6px; height: 24px;
+			background: rgba(0,0,0,0.15);
+			border-radius: 2px;
+			color: #666;
+			font-size: 8px;
+			line-height: 24px;
+			text-align: center;
+			cursor: pointer;
+			user-select: none;
+			z-index: 5;
+			overflow: hidden;
 		}
+		.vsword-table-row-handle:hover { background: rgba(0,0,0,0.3); }
+
+		/* Col/Row popovers — mounted on the wrap and anchored via anchorTo (side='below'
+		 * for col, side='right' for row). Absolute-positioned so the inline styles from
+		 * anchorTo take effect. */
 		.vsword-table-col-menu,
 		.vsword-table-row-menu {
-			position: relative;
+			position: absolute;
 			display: flex;
 			align-items: center;
 			justify-content: center;
 			gap: 2px;
+			padding: 2px;
+			background: #fff;
+			border: 1px solid #ccc;
+			border-radius: 3px;
+			box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+			z-index: 6;
 		}
 		.vsword-table-col-menu {
 			flex-direction: column;
@@ -592,13 +613,8 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-table-btn-group {
 			display: inline-flex;
 			gap: 1px;
-			background: var(--vsword-bg, #fff);
-			border: 1px solid var(--vsword-border, #ccc);
-			border-radius: 3px;
+			background: #fff;
 			padding: 1px;
-		}
-		.vsword-table-col-menu .vsword-table-btn-group {
-			/* Col bar sits above the header row; group is small + horizontal. */
 		}
 		.vsword-table-align-group {
 			margin-top: 2px;
