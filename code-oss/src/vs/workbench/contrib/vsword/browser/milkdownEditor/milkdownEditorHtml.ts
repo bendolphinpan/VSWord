@@ -1286,6 +1286,10 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 		}
 
+		/* T-3.13.6: 底部查找栏受控开关 · find-widget 通过 .vsword-hidden 切换显隐 ·
+		   !important 防被 layer/主题 CSS 覆盖 · replace-row 复用同一 class 一并生效. */
+		.vsword-hidden { display: none !important; }
+
 		${getThemesCss()}
 	</style>
 </head>
