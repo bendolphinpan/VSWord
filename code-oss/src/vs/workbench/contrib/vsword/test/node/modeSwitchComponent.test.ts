@@ -14,8 +14,8 @@
 //   5. substyle radiogroup 三按钮点击分别触发 onSetSubstyle('normal'|'focus'|'typewriter')
 //   6. updateAriaPressed({mode:'reading', substyle:'focus'}) 后正确按钮 aria-pressed=true
 //   7. mount 幂等：重复 mount 事件不叠加
-//   8. applyModeVisibility('reading') → #milkdown-substyle-group 从 DOM 移除；
-//      再调 applyModeVisibility('realtime') → re-attach 回原位
+//   8. applyModeVisibility('reading') / ('realtime') 是 no-op (T-3.13.2):
+//      substyle-group 在 DOM 内保持不动, 三档视觉由 CSS + focus-mode plugin 分别渲染.
 //
 // 单测策略：jsdom + document.createElement 手搓一个含 #milkdown-mode-switch +
 // #milkdown-substyle-group 骨架的 container，不加载真实 Milkdown。走 test/node/。
@@ -198,7 +198,7 @@ suite('T-3.7b.d + T-3.12.3.b · ModeSwitchComponent · IMilkdownUIComponent 契�
 		assert.strictEqual(boot.calls.mode.length, 1, '重复 mount 后点击应只回调一次（旧监听已解绑）');
 	});
 
-	test('8. applyModeVisibility(\'reading\') → substyle-group 从 DOM 移除；切回 realtime → re-attach 回原位', () => {
+	test('8. applyModeVisibility(\'reading\') / (\'realtime\') 是 no-op (T-3.13.2): substyle-group 保持在 DOM 内', () => {
 		const boot = bootstrap();
 		const component = makeComponent(boot);
 		component.mount(boot.container);
@@ -209,27 +209,27 @@ suite('T-3.7b.d + T-3.12.3.b · ModeSwitchComponent · IMilkdownUIComponent 契�
 		const sentinel = boot.container.querySelector('.sentinel-after-substyle') as HTMLElement;
 		assert.ok(substyleGroup, '初始骨架应有 #milkdown-substyle-group');
 		assert.strictEqual(substyleGroup.parentNode, initialParent, '初始 parent 应为 toolbar');
-		// JSDOM 模板字面量里换行产生空白 Text 节点 → nextSibling 可能是 Text; 用 nextElementSibling 比对结构.
 		assert.strictEqual(substyleGroup.nextElementSibling, sentinel, '初始 nextElementSibling 应为 sentinel');
 
-		// 切 reading → detach
+		// T-3.13.2: 切 reading 不再 detach.
 		boot.state.mode = 'reading';
 		component.applyModeVisibility('reading');
-		assert.strictEqual(boot.container.querySelector('#milkdown-substyle-group'), null,
-			'reading 下 #milkdown-substyle-group 必须从 DOM 移除（AC-1）');
+		const stillThere = boot.container.querySelector('#milkdown-substyle-group') as HTMLElement;
+		assert.strictEqual(stillThere, substyleGroup, 'reading 下 substyle-group 应保留在 DOM 内 (T-3.13.2)');
+		assert.strictEqual(stillThere.parentNode, initialParent, 'reading 下 parent 不变');
+		assert.strictEqual(stillThere.nextElementSibling, sentinel, 'reading 下 nextElementSibling 不变');
 
-		// 切回 realtime → re-attach 回原位（在 sentinel 之前）
+		// 切回 realtime 仍是 no-op, DOM 结构不变.
 		boot.state.mode = 'realtime';
 		component.applyModeVisibility('realtime');
-		const reattached = boot.container.querySelector('#milkdown-substyle-group') as HTMLElement;
-		assert.ok(reattached, 'realtime 下 #milkdown-substyle-group 必须 re-attach');
-		assert.strictEqual(reattached, substyleGroup, 're-attach 应复用同一 DOM 引用（保留内部状态）');
-		assert.strictEqual(reattached.parentNode, initialParent, 're-attach 后 parent 恢复为 toolbar');
-		assert.strictEqual(reattached.nextElementSibling, sentinel, 're-attach 后 nextElementSibling 恢复为 sentinel');
+		const afterBack = boot.container.querySelector('#milkdown-substyle-group') as HTMLElement;
+		assert.strictEqual(afterBack, substyleGroup, 'realtime 回切 substyle-group 引用不变');
+		assert.strictEqual(afterBack.parentNode, initialParent, 'parent 恢复不变');
+		assert.strictEqual(afterBack.nextElementSibling, sentinel, 'nextElementSibling 恢复不变');
 
-		// 幂等：realtime 再调 applyModeVisibility('realtime') 不重复 attach
+		// 幂等：realtime 再调 applyModeVisibility('realtime') 不重复插入.
 		component.applyModeVisibility('realtime');
 		const nodes = boot.container.querySelectorAll('#milkdown-substyle-group');
-		assert.strictEqual(nodes.length, 1, 'realtime 再调应幂等，不重复 attach');
+		assert.strictEqual(nodes.length, 1, '重复调用应幂等, DOM 里始终只有一份 substyle-group');
 	});
 });

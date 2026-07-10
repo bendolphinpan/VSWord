@@ -152,13 +152,15 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		/* Reading mode: hide caret + slash menu, otherwise keeps layout. */
 		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror { caret-color: transparent; }
 		.vsword-md-shell[data-mode="reading"] .vsword-slash-menu { display: none !important; }
-		/* T-3.10 + T-3.12.3.b Q1=a: focus dimming — active when EITHER reading mode or substyle=focus. */
-		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > *,
+		/* T-3.10 + T-3.13.2: focus dimming — 只在 substyle=focus 时激活, 与 mode 解耦.
+		   reading × normal / focus / typewriter 三档现在各自独立:
+		     - reading × normal: 无 dim
+		     - reading × focus:  走本条 dim 规则 (与 realtime × focus 一致)
+		     - reading × typewriter: 无 dim + typewriter re-scroll (由 focus-mode plugin 处理) */
 		.vsword-md-shell[data-substyle="focus"] #milkdown-root .ProseMirror > * {
 			transition: opacity 180ms ease;
 			opacity: 0.35;
 		}
-		.vsword-md-shell[data-mode="reading"] #milkdown-root .ProseMirror > .vsword-focus-active,
 		.vsword-md-shell[data-substyle="focus"] #milkdown-root .ProseMirror > .vsword-focus-active {
 			opacity: 1;
 		}

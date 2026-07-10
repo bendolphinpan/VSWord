@@ -9,10 +9,12 @@
  *  Shell attributes reflect state so CSS + plugins can gate off them:
  *    .vsword-md-shell[data-mode="…"] [data-substyle="…"]
  *
- *  Semantics:
- *    - reading mode: substyle stored value preserved in memento; shell forces
- *      visual `data-substyle=normal` (阅读态自身即专注阅读体验, no overlay)
- *    - source mode:  substyle透传到 shell（stored + 视觉 · 但 CSS/plugins 无法
+ *  Semantics (T-3.13.2 · reading × substyle 三选一恢复):
+ *    - reading mode: substyle stored + 视觉都透传到 shell (data-substyle=stored).
+ *                    这样 reading × normal 无 dim, reading × focus 走 focus dim,
+ *                    reading × typewriter 走 typewriter re-scroll — 每种子样式在
+ *                    reading 下都产生对应视觉，二级 radio 完整可用.
+ *    - source mode:  substyle 透传到 shell（stored + 视觉 · 但 CSS/plugins 无法
  *                    作用于 <textarea>, 结果是"选中了但看不到效果"）
  *    - realtime:     substyle stored 值直通视觉
  *
@@ -29,7 +31,8 @@
  *    Ctrl+Shift+F     substyle → 'focus'      (若当前已 focus 则回 normal)
  *    Ctrl+Shift+T     substyle → 'typewriter' (若当前已 typewriter 则回 normal)
  *
- *  阅读模式下 Ctrl+Shift+F/T no-op (二级菜单 3.b 之后从 DOM 移除, 快捷键也失效).
+ *  T-3.13.2 · reading 下二级 radio 保留可用: Ctrl+Shift+F/T 在 reading 下同样生效.
+ *  source 下仍 no-op (二级 radio 在 <textarea> 上无视觉).
  *--------------------------------------------------------------------------------------------*/
 
 export const MODES = ['realtime', 'reading', 'source'];
@@ -108,10 +111,11 @@ export function createModeController(opts) {
 	function applyDom() {
 		if (!shell) return;
 		shell.setAttribute('data-mode', currentMode);
-		// PRD §4.3: 阅读模式下视觉强置 normal, stored 值保留在内部 substyle 变量.
-		// 源码/实时预览下 substyle 直通到 shell (PRD §4.4 · 源码下 CSS 层不生效但属性透传).
-		const visualSubstyle = currentMode === 'reading' ? 'normal' : substyle;
-		shell.setAttribute('data-substyle', visualSubstyle);
+		// T-3.13.2: substyle 视觉直通 shell, reading / realtime / source 三档一致.
+		// (旧 T-3.12.3.b 行为: reading 时强置 data-substyle=normal, 已废弃 — 现在
+		//  reading × normal / focus / typewriter 三档在 shell 上都是各自的值,
+		//  由 CSS + focus-mode plugin 分别渲染 dim / typewriter re-scroll.)
+		shell.setAttribute('data-substyle', substyle);
 		buttons?.forEach(btn => {
 			const isActive = btn.getAttribute('data-mode') === currentMode;
 			btn.setAttribute('aria-pressed', isActive ? 'true' : 'false');
@@ -213,12 +217,11 @@ export function createModeController(opts) {
 			});
 		});
 
-		// T-3.12.3.b: substyle radio button click wiring. reading mode 下 DOM 已 detach,
-		// listener 随 button 生命周期一起走; realtime/source 下点击 radio 触发 setSubstyle
-		// (radio 互斥语义, 二次点已选项无副作用 · setSubstyle 内部 next === substyle 短路).
+		// T-3.12.3.b + T-3.13.2: substyle radio button click wiring. reading 下 DOM
+		// 保留 (T-3.13.2 恢复二级菜单可用), 点击直接派发到 setSubstyle; radio 互斥
+		// 语义, 二次点已选项无副作用 · setSubstyle 内部 next === substyle 短路.
 		substyleButtons?.forEach(btn => {
 			btn.addEventListener('click', () => {
-				if (currentMode === 'reading') return;
 				const s = btn.getAttribute('data-substyle');
 				if (isValidSubstyle(s)) setSubstyle(s);
 			});
@@ -240,7 +243,8 @@ export function createModeController(opts) {
 	}
 
 	// Keyboard shortcuts. Ctrl+/ cycles mode. Ctrl+Shift+F/T toggle substyle radio.
-	// PRD §5.2: reading mode下两个快捷键 no-op (二级菜单不存在); source mode 沿用旧语义 no-op.
+	// T-3.13.2: reading 下二级 radio 保留可用, Ctrl+Shift+F/T 在 reading 下同样生效.
+	// source 下仍 no-op (二级 radio 视觉在 <textarea> 上不出现).
 	window.addEventListener('keydown', event => {
 		if (!(event.ctrlKey || event.metaKey)) return;
 		if (event.key === '/' && !event.shiftKey && !event.altKey) {
@@ -250,14 +254,14 @@ export function createModeController(opts) {
 			// Use event.code so it survives layout-dependent .key values.
 			if (event.code === 'KeyF') {
 				event.preventDefault(); event.stopPropagation();
-				if (currentMode !== 'source' && currentMode !== 'reading') {
+				if (currentMode !== 'source') {
 					setSubstyle(substyle === 'focus' ? 'normal' : 'focus');
 				}
 				return;
 			}
 			if (event.code === 'KeyT') {
 				event.preventDefault(); event.stopPropagation();
-				if (currentMode !== 'source' && currentMode !== 'reading') {
+				if (currentMode !== 'source') {
 					setSubstyle(substyle === 'typewriter' ? 'normal' : 'typewriter');
 				}
 				return;

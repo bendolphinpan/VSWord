@@ -179,19 +179,20 @@ suite('T-3.12.3.a · substyle radio', () => {
 		assert.strictEqual(dom.window.localStorage.getItem(VSWORD_MILKDOWN_SUBSTYLE_STORAGE_KEY), 'typewriter');
 	});
 
-	test('reading mode: shell forces data-substyle=normal but stored substyle is preserved', () => {
+	test('reading mode (T-3.13.2): shell 视觉 data-substyle 透传 stored 值, 二级 radio 三档在 reading 下均生效', () => {
 		const { shell, ctrl } = bootstrap();
 		ctrl.setSubstyle('focus');
 		ctrl.switchTo('reading');
-		// Visual: shell shows normal; but internal state remembers.
-		assert.strictEqual(shell.getAttribute('data-substyle'), 'normal');
+		// T-3.13.2 起 reading 也直通视觉, 不再强置 normal.
+		assert.strictEqual(shell.getAttribute('data-substyle'), 'focus');
 		assert.strictEqual(ctrl.getSubstyle(), 'focus');
 	});
 
-	test('leaving reading mode restores visual substyle from stored', () => {
+	test('leaving reading mode: substyle 视觉不变 (reading 期间就是直通)', () => {
 		const { shell, ctrl } = bootstrap();
 		ctrl.setSubstyle('focus');
 		ctrl.switchTo('reading');
+		assert.strictEqual(shell.getAttribute('data-substyle'), 'focus');
 		ctrl.switchTo('realtime');
 		assert.strictEqual(shell.getAttribute('data-substyle'), 'focus');
 	});
@@ -293,9 +294,11 @@ suite('T-3.10 · keyboard shortcuts', () => {
 		assert.strictEqual(ctrl.getSubstyle(), 'normal');
 	});
 
-	test('Ctrl+Shift+F 在 reading 下 no-op (PRD §5.2)', () => {
+	test('Ctrl+Shift+F 在 reading 下 T-3.13.2 起也切换 substyle (二级 radio 恢复可用)', () => {
 		const { dom, ctrl } = bootstrap();
 		ctrl.switchTo('reading');
+		fireKey(dom, { code: 'KeyF', ctrl: true, shift: true });
+		assert.strictEqual(ctrl.getSubstyle(), 'focus');
 		fireKey(dom, { code: 'KeyF', ctrl: true, shift: true });
 		assert.strictEqual(ctrl.getSubstyle(), 'normal');
 	});

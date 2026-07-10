@@ -159,9 +159,8 @@ const saveButton = document.getElementById('milkdown-save');
 const sourceTextarea = document.getElementById('milkdown-source');
 const modeButtons = document.querySelectorAll('#milkdown-mode-switch .vsword-md-mode-btn');
 // T-3.12.3.b: 二级 substyle radiogroup (normal | focus | typewriter, 三选一互斥).
-// 阅读模式下 mode-switch component 会把 #milkdown-substyle-group 整块从 DOM 移除;
-// 这里的 NodeList 快照会失效, 但 controller 里所有对 substyleButtons 的 forEach 已加
-// isConnected 兜底 (setAttribute 到 detached button 也是安全 no-op, 只是无 CSS 效果).
+// T-3.13.2: 阅读模式下 substyle-group 保留在 DOM 内, NodeList 快照跨 mode 恒定;
+// controller 里所有对 substyleButtons 的 forEach 均正常工作.
 const substyleButtons = document.querySelectorAll('#milkdown-substyle-group .vsword-md-substyle-btn');
 
 let editor;
@@ -840,8 +839,8 @@ modeSwitchComponent = createModeSwitchComponent({
 	onSetMode: (m) => { try { modeController?.switchTo(m); } catch (err) { reportError('mode-switch/setMode', err); } },
 	onSetSubstyle: (s) => {
 		try {
-			// PRD §4.3: reading 下 substyle 视觉强置 normal, 无编辑意义, 拦截.
-			if (modeController?.getMode() === 'reading') return;
+			// T-3.13.2: reading × substyle 三选一恢复, 不再拦截 reading 下的 setSubstyle;
+			// reading × normal / focus / typewriter 三档均生效 (dim / typewriter re-scroll 由 CSS + focus-mode plugin 分别渲染).
 			modeController?.setSubstyle(s);
 		} catch (err) { reportError('mode-switch/setSubstyle', err); }
 	},

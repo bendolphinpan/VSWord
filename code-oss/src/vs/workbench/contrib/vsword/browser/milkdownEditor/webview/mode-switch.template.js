@@ -6,8 +6,10 @@
  *  只承担「event wiring + aria-pressed 状态同步」两件事 —— DOM markup 由
  *  `milkdownEditorHtml.ts` 硬编码生成，本组件不重排。
  *
- *  T-3.12.3.b: 二级 focus/typewriter 双 toggle 合并为 substyle radiogroup (三选一互斥) —
- *  阅读模式下整块从 DOM 移除, 其他模式下渲染并从 stored substyle 恢复选中态.
+ *  T-3.12.3.b: 二级 focus/typewriter 双 toggle 合并为 substyle radiogroup (三选一互斥).
+ *  T-3.13.2: 阅读模式下 substyle-group **保留在 DOM 内** (旧 3.b 的 detach 已废弃),
+ *  由 CSS + focus-mode plugin 分别渲染 dim / typewriter re-scroll — reading × normal
+ *  / focus / typewriter 三档在 shell 上都是各自的值.
  *
  *  DOM 契约（由 host HTML 保证）：
  *    <div id="milkdown-mode-switch" role="radiogroup">
@@ -16,7 +18,7 @@
  *    </div>
  *    <div id="milkdown-substyle-group" role="radiogroup">                        ← T-3.12.3.b 新增
  *      <button class="vsword-md-substyle-btn" data-substyle="normal|focus|typewriter" aria-pressed="…">…</button>
- *      × 3 (三选一互斥 · reading 模式下整块 detach)
+ *      × 3 (三选一互斥 · T-3.13.2 起 reading 模式下保留在 DOM · 由 CSS + focus-mode plugin 渲染)
  *    </div>
  *
  *  与 mode-controller.template.js 的关系：mode-controller 仍然拥有状态机 + 快捷键 +
@@ -71,12 +73,6 @@ export function createModeSwitchComponent(deps) {
 	let el = null;
 	/** @type {HTMLElement | null} */
 	let substyleGroupEl = null;
-	/**
-	 * 阅读模式下 substyle-group 从 DOM 移除, 但保留在此变量里以便切离 reading 时 re-attach.
-	 * `parentEl` + `nextSibling` 记录 detach 前的插入点, re-attach 用 insertBefore 恢复原位.
-	 * @type {{ parentEl: HTMLElement, nextSibling: Node | null } | null}
-	 */
-	let substyleAnchor = null;
 	/** @type {HTMLElement | null} */
 	let mountedContainer = null;
 	/** @type {Array<{ btn: HTMLElement, handler: (ev: Event) => void }>} */
@@ -125,32 +121,16 @@ export function createModeSwitchComponent(deps) {
 	}
 
 	/**
-	 * 根据一级 mode 同步二级 substyle-group 的 DOM 存在性 (选项 A · DOM detach/re-attach).
-	 * reading 模式下整块从 tree 移除; realtime/source 模式下 re-attach 回原位.
-	 * @param {ViewMode} mode
+	 * T-3.13.2 起 no-op: 阅读模式下 substyle-group 保留在 DOM 内, 由 CSS + focus-mode
+	 * plugin 分别渲染 dim / typewriter re-scroll — reading × normal / focus / typewriter
+	 * 三档在 shell 上都是各自的值.
+	 *
+	 * 保留函数签名 (向后兼容 entry.template.js 的调用点), 但不再执行任何 DOM 操作.
+	 * 如果外部调用者已改造完成, 可以在后续任务里把这里连同调用点一起移除.
+	 * @param {ViewMode} _mode
 	 */
-	function applyModeVisibility(mode) {
-		if (mode === 'reading') {
-			// detach
-			if (substyleGroupEl && substyleGroupEl.parentNode) {
-				substyleAnchor = {
-					parentEl: /** @type {HTMLElement} */ (substyleGroupEl.parentNode),
-					nextSibling: substyleGroupEl.nextSibling,
-				};
-				substyleGroupEl.parentNode.removeChild(substyleGroupEl);
-			}
-		} else {
-			// re-attach (幂等 · 已在 tree 上就跳过)
-			if (substyleGroupEl && !substyleGroupEl.isConnected && substyleAnchor) {
-				const { parentEl, nextSibling } = substyleAnchor;
-				try {
-					parentEl.insertBefore(substyleGroupEl, nextSibling);
-				} catch {
-					// nextSibling 可能已被 GC/其它插件移除 → 兜底 append 到 parent 末尾.
-					parentEl.appendChild(substyleGroupEl);
-				}
-			}
-		}
+	function applyModeVisibility(_mode) {
+		// no-op (T-3.13.2)
 	}
 
 	function mount(container) {
@@ -161,7 +141,6 @@ export function createModeSwitchComponent(deps) {
 		if (el) unmount();
 		el = container.querySelector('#milkdown-mode-switch');
 		substyleGroupEl = container.querySelector('#milkdown-substyle-group');
-		substyleAnchor = null; // 每次 mount 重置 · 由 applyModeVisibility 首次 reading 切换时回填.
 		mountedContainer = container;
 		if (!el) {
 			// 找不到骨架不算致命错，只是不 wire —— 让 host 有能力把 DOM 延后到组件之后。
@@ -189,7 +168,7 @@ export function createModeSwitchComponent(deps) {
 		try {
 			const currentState = deps.getState() || { mode: 'realtime', substyle: 'normal' };
 			updateAriaPressed(currentState);
-			// 若 mount 时已经处于 reading, 立即 detach substyle-group.
+			// T-3.13.2: substyle-group 常驻 DOM, applyModeVisibility 为 no-op, 保留调用以承前.
 			applyModeVisibility(currentState.mode || 'realtime');
 		} catch { /* noop */ }
 	}
@@ -203,7 +182,6 @@ export function createModeSwitchComponent(deps) {
 		const container = mountedContainer;
 		el = null;
 		substyleGroupEl = null;
-		substyleAnchor = null;
 		mountedContainer = null;
 		if (container && typeof container.dispatchEvent === 'function' && typeof CustomEvent === 'function') {
 			try {
