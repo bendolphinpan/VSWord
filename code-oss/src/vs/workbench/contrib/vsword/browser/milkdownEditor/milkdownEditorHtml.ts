@@ -65,6 +65,11 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			font-family: var(--vscode-font-family, system-ui, sans-serif);
 		}
 		.vsword-md-shell { min-height: 100vh; display: flex; flex-direction: column; }
+		/* T-3.13.5: 顶部工具栏 sticky（纯色 · 视觉延后 · PRD §5a 决策 c）——
+		 * 保证 mode-switch/substyle-group 始终置顶可见，不随文档滚走。
+		 * 用纯色（color-mix bg 94% + fg）而非毛玻璃 —— 毛玻璃延后到最后 UI 布局阶段。
+		 * z-index 100：高于 mode/substyle re-attach 时可能的短暂布局层，低于 slash-menu (1000)/find-widget 弹层。
+		 * 前提：父链 body / .vsword-md-shell 均无 overflow: hidden|auto —— 已核对，OK。 */
 		.vsword-md-toolbar {
 			display: flex;
 			align-items: center;
@@ -73,6 +78,9 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			border-bottom: 1px solid var(--vsword-border);
 			font-size: 12px;
 			background: color-mix(in srgb, var(--vsword-bg) 94%, var(--vsword-fg));
+			position: sticky;
+			top: 0;
+			z-index: 100;
 		}
 		.vsword-md-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 		.vsword-md-resource { color: var(--vsword-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; }
