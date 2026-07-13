@@ -14,6 +14,7 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { FileChangeType, IFileService, IFileStat } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../../platform/notification/common/notification.js';
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
@@ -104,6 +105,9 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 
 	static readonly ID = 'workbench.contrib.vsword.milkdownEditor';
 
+	/** RD-1.4 · 大文档按需加载说明 toast 是否已对用户展示过（APPLICATION）。 */
+	private static readonly LARGE_DOC_TIP_SHOWN_KEY = 'vsword.milkdown.largeDocTipShown';
+
 	private readonly liveInputs = new Set<MilkdownEditorInput>();
 
 	constructor(
@@ -120,6 +124,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IWorkspaceContextService private readonly workspaceService: IWorkspaceContextService,
 		@IEnvironmentService private readonly environmentService: IEnvironmentService,
 		@IVSWordFindService private readonly findService: IVSWordFindService,
+		@INotificationService private readonly notificationService: INotificationService,
 	) {
 		super();
 		// factory / serializer 创建的 input 统一走 attach（幂等）
@@ -375,12 +380,33 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				await this.postInit(input);
 				return;
 			case 'openProgress': {
-				// RD-1.3 · 大文档 progressive 进度（首屏可编辑 / 追加 / 完成）
-				// 仅 debug 日志；UI 状态已在 webview 工具栏展示。避免刷屏：done 或 first 打一条。
+				// RD-1.3/1.4 · 大文档 progressive 进度
 				if (msg.phase === 'first' || msg.phase === 'done') {
 					this.logService.debug(
 						`[VSWord Milkdown] openProgress ${msg.phase} ${msg.loadedChunks}/${msg.totalChunks} chars=${msg.sourceChars} progressive=${msg.progressive}`,
 					);
+				}
+				// RD-1.4 · 产品显著提示：首次遇到 progressive 时 toast 一次（webview 内另有常驻条）
+				if (msg.progressive && msg.phase === 'first') {
+					const shown = this.storageService.getBoolean(
+						MilkdownEditorContribution.LARGE_DOC_TIP_SHOWN_KEY,
+						StorageScope.APPLICATION,
+						false,
+					);
+					if (!shown) {
+						this.storageService.store(
+							MilkdownEditorContribution.LARGE_DOC_TIP_SHOWN_KEY,
+							true,
+							StorageScope.APPLICATION,
+							StorageTarget.USER,
+						);
+						const kb = Math.max(1, Math.round((msg.sourceChars || 0) / 1000));
+						this.notificationService.info(localize(
+							'vsword.milkdown.largeDocTip',
+							'大文档（约 {0}k 字）已启用按需加载：先打开首屏可编辑，下滚加载更多；也可用编辑器内「加载剩余」。这样可避免一次灌入全文导致卡顿。',
+							String(kb),
+						));
+					}
 				}
 				return;
 			}

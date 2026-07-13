@@ -166,7 +166,13 @@ const root = document.getElementById('milkdown-root');
 const status = document.getElementById('milkdown-status');
 const saveButton = document.getElementById('milkdown-save');
 const sourceTextarea = document.getElementById('milkdown-source');
+const largeDocBanner = document.getElementById('vsword-large-doc-banner');
+const largeDocMsg = document.getElementById('vsword-large-doc-msg');
+const largeDocLoadAllBtn = document.getElementById('vsword-large-doc-load-all');
+const largeDocDismissBtn = document.getElementById('vsword-large-doc-dismiss');
 const modeButtons = document.querySelectorAll('#milkdown-mode-switch .vsword-md-mode-btn');
+/** RD-1.4 · 用户点「知道了」后本 session 内不再弹 banner（新 open 仍会重置）。 */
+let largeDocBannerDismissed = false;
 // T-3.12.3.b: 二级 substyle radiogroup (normal | focus | typewriter, 三选一互斥).
 // T-3.13.2: 阅读模式下 substyle-group 保留在 DOM 内, NodeList 快照跨 mode 恒定;
 // controller 里所有对 substyleButtons 的 forEach 均正常工作.
@@ -434,8 +440,32 @@ async function appendMarkdownChunk(chunk) {
 	}
 }
 
+/**
+ * RD-1.4 · 大文档显著提示条（工具栏下）：进度 + 加载剩余 + 关闭。
+ * @param {boolean} visible
+ */
+function setLargeDocBannerVisible(visible) {
+	if (!largeDocBanner) return;
+	const show = !!visible && !largeDocBannerDismissed && pendingChunks.length > 0;
+	largeDocBanner.hidden = !show;
+	largeDocBanner.dataset.visible = show ? 'true' : 'false';
+	if (show && largeDocMsg) {
+		const chars = progressiveOriginalMarkdown
+			? Math.round(progressiveOriginalMarkdown.length / 1000) + 'k 字'
+			: '';
+		largeDocMsg.textContent =
+			'大文档按需加载：已装 ' + progressiveLoadedChunks + '/' + progressiveTotalChunks
+			+ ' 段' + (chars ? ' · 约 ' + chars : '')
+			+ ' · 下滚继续 · 查找/跳转在未加载段可能不完整';
+	}
+	if (largeDocLoadAllBtn) {
+		largeDocLoadAllBtn.disabled = !show || progressiveLoadMoreBusy;
+	}
+}
+
 function updateProgressiveStatus() {
 	if (pendingChunks.length === 0) {
+		setLargeDocBannerVisible(false);
 		if (progressiveUserEdited || dirty) {
 			setStatus('Unsaved changes…', 'dirty');
 		} else {
@@ -448,6 +478,25 @@ function updateProgressiveStatus() {
 		+ ' 段 · 下滚加载更多（未全量，保流畅）',
 		'dirty',
 	);
+	setLargeDocBannerVisible(true);
+}
+
+/**
+ * RD-1.4 · 一次性装入剩余所有 chunk（用户主动，可能短暂卡顿）。
+ * @param {number} epoch
+ */
+async function loadAllRemainingProgressiveChunks(epoch) {
+	if (epoch !== progressiveEpoch) return;
+	if (!pendingChunks.length || !editor) return;
+	setStatus('正在装入剩余段落…', 'dirty');
+	if (largeDocLoadAllBtn) { largeDocLoadAllBtn.disabled = true; }
+	let guard = 0;
+	const max = progressiveTotalChunks + 8;
+	while (pendingChunks.length && epoch === progressiveEpoch && guard < max) {
+		guard++;
+		await loadNextProgressiveChunk(epoch);
+	}
+	updateProgressiveStatus();
 }
 
 /**
@@ -637,9 +686,14 @@ async function createEditor(markdown) {
 	progressiveTotalChunks = chunks.length;
 	progressiveLoadedChunks = 1;
 	pendingChunks = useProgressive && chunks.length > 1 ? chunks.slice(1) : [];
+	// 每次新 open 重置 banner 关闭态，保证大文档提示可见
+	largeDocBannerDismissed = false;
 	if (pendingChunks.length > 0) {
 		progressiveLoading = true;
 		setStatus('已加载 1/' + chunks.length + ' 段 · 下滚加载更多（未全量，保流畅）', 'dirty');
+		setLargeDocBannerVisible(true);
+	} else {
+		setLargeDocBannerVisible(false);
 	}
 
 	editor = await Editor.make()
@@ -926,6 +980,14 @@ async function formatSelectionInPlace() {
 }
 
 saveButton?.addEventListener('click', () => requestSave());
+// RD-1.4 · 大文档提示条操作
+largeDocDismissBtn?.addEventListener('click', () => {
+	largeDocBannerDismissed = true;
+	setLargeDocBannerVisible(false);
+});
+largeDocLoadAllBtn?.addEventListener('click', () => {
+	void loadAllRemainingProgressiveChunks(progressiveEpoch);
+});
 
 // T-3.3.2: source textarea autosave (debounced, mirrors WYSIWYG listenerCtx behaviour).
 sourceTextarea?.addEventListener('input', () => {

@@ -127,6 +127,29 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		.vsword-md-status { color: var(--vsword-muted); }
 		.vsword-md-status[data-kind="dirty"] { color: var(--vscode-gitDecoration-modifiedResourceForeground, #e2c08d); }
 		.vsword-md-status[data-kind="error"] { color: var(--vsword-error); }
+		/* RD-1.4 · 大文档按需加载显著提示（功能条 · 视觉延后只保可读） */
+		#vsword-large-doc-banner {
+			display: none;
+			flex-shrink: 0;
+			align-items: center;
+			gap: 10px;
+			padding: 6px 12px;
+			font-size: 12px;
+			line-height: 1.4;
+			color: var(--vsword-fg);
+			background: color-mix(in srgb, var(--vsword-accent) 12%, var(--vsword-bg));
+			border-bottom: 1px solid var(--vsword-border);
+		}
+		#vsword-large-doc-banner[data-visible="true"] {
+			display: flex;
+		}
+		#vsword-large-doc-banner .vsword-large-doc-msg {
+			flex: 1;
+			min-width: 0;
+		}
+		#vsword-large-doc-banner .vsword-md-button {
+			flex-shrink: 0;
+		}
 		.vsword-md-button {
 			border: 1px solid var(--vsword-border);
 			background: transparent;
@@ -1528,6 +1551,11 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 				<button class="vsword-md-substyle-btn" data-substyle="typewriter" type="button" role="radio" aria-pressed="false" aria-checked="false" title="打字机模式 (Ctrl+Shift+T)">Typewriter</button>
 			</div>
 		</header>
+		<div id="vsword-large-doc-banner" role="status" aria-live="polite" hidden>
+			<span class="vsword-large-doc-msg" id="vsword-large-doc-msg">大文档按需加载中…</span>
+			<button type="button" class="vsword-md-button" id="vsword-large-doc-load-all" title="将剩余段落全部装入编辑器（可能短暂卡顿）">加载剩余</button>
+			<button type="button" class="vsword-md-button" id="vsword-large-doc-dismiss" title="隐藏本条提示">知道了</button>
+		</div>
 		<main id="milkdown-root" aria-label="Markdown WYSIWYG editor"><div class="milkdown-empty">Loading Milkdown…</div></main>
 		<textarea id="milkdown-source" spellcheck="false" aria-label="Markdown source editor"></textarea>
 	</div>

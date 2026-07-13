@@ -1,7 +1,7 @@
 # Decision 0003 · RD-1 大文档 open pipeline（阶段结论）
 
 - **日期**：2026-07-13  
-- **状态**：In progress（RD-1.2 progressive + RD-1.3 首交互/加载中编辑修复已落地；**全量** 1MB ≤2s 仍待 table 算法/D → RD-1.4）  
+- **状态**：RD-1-lite / RD-1.4a / **RD-1.4 产品限速提示** 已落地；**全量** 1MB Ready ≤2s 仍受 GFM table 超线性限制，挂 **RD-1.4b（算法 D，可选）**  
 - **关联**：`004-remediation-and-debt-plan.md` RD-1 · 历史 `phase-3.9-perf.md`
 
 ---
@@ -64,11 +64,18 @@ unified().use(remarkParse).parse(整篇 markdown)  → 仅为 setext hint 抽 bl
 
 | 等级 | 指标 | 状态 |
 |------|------|------|
-| **RD-1-lite**（发布硬门槛） | 1MB：首屏可编辑（TTI）≈ 首块 GFM parse；目标 ≤2s；加载中可输入 | ✅ progressive + 首块 64k + 进度/脏标记修复 |
-| **RD-1.3 全量** | 1MB 全量 Ready P95 ≤2s | 🔴 仍受 table 超线性限制 → **RD-1.4** |
-| **RD-1.4** | 5MB ≤8s 或产品内显著限速提示 | 待 |
+| **RD-1-lite**（发布硬门槛） | 1MB：首屏可编辑（TTI）≈ 首块 GFM parse；目标 ≤2s；加载中可输入 | ✅ progressive + 首块 48k + 进度/脏标记修复 |
+| **RD-1.3 全量** | 1MB 全量 Ready P95 ≤2s | 🔴 仍受 table 超线性限制 → **RD-1.4b**（可选） |
+| **RD-1.4 产品路径** | 不全量预取 + **显著限速提示** + 用户可「加载剩余」 | ✅ 2026-07-13 |
 
-**产品提示**：工具栏 status「大文档加载中… n/m（可先编辑首屏）」；`openProgress` 协议供 host 日志。
+**产品提示（RD-1.4）**：
+
+1. 工具栏 status：`已加载 n/m 段 · 下滚加载更多（未全量，保流畅）`  
+2. 工具栏下方 **banner**：进度 +「加载剩余」+「知道了」  
+3. host 首次 progressive open：**notification** 一次（APPLICATION 记忆）  
+4. `openProgress` 协议供 host 日志  
+
+**明确不保证**：一次灌入 1MB/5MB 全量 PM 的 wall-clock 阈值；策略是 **TTI 优先 + 按需装载**。
 
 ---
 
@@ -95,5 +102,6 @@ node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-ty
 | 2026-07-13 | table 钉死；progressive C 落地 |
 | 2026-07-13 | RD-1.3：首块 64k、openProgress、加载中编辑 dirty 修复；全量 2s 改挂 RD-1.4 |
 | 2026-07-13 | RD-1.4a：默认 **不全量预取**；首块 48k + 滚动近底再装下一块；find 改 fixed 浮层 |
+| 2026-07-13 | RD-1.4：banner + 加载剩余 + 首次 toast；全量 ≤2s 改挂 **RD-1.4b** 可选算法 |
 
 **Decision End · 0003**
