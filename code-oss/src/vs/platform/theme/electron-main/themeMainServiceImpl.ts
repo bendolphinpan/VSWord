@@ -210,7 +210,8 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 	}
 
 	private getStoredBaseTheme(): ThemeTypeSelector {
-		const baseTheme = this.stateService.getItem<ThemeTypeSelector>(THEME_STORAGE_KEY, ThemeTypeSelector.VS_DARK).split(' ')[0];
+		// 冷启动无 state 时默认浅色（VSWord 写作产品）；有用户/会话缓存则仍读缓存。
+		const baseTheme = this.stateService.getItem<ThemeTypeSelector>(THEME_STORAGE_KEY, ThemeTypeSelector.VS).split(' ')[0];
 		switch (baseTheme) {
 			case ThemeTypeSelector.VS: return ThemeTypeSelector.VS;
 			case ThemeTypeSelector.HC_BLACK: return ThemeTypeSelector.HC_BLACK;

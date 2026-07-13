@@ -75,6 +75,11 @@
 				shellBackground = '#FFFFFF';
 				shellForeground = '#000000';
 			}
+		} else {
+			// 无 splash 缓存且未跟系统色：写作产品默认浅色壳，避免 body 无色 → 后被深色主题服务盖住造成白/黑/白。
+			baseTheme = 'vs';
+			shellBackground = '#FFFFFF';
+			shellForeground = '#3B3B3B';
 		}
 
 		const style = document.createElement('style');

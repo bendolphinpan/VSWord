@@ -68,6 +68,11 @@
 				shellBackground = '#F3F3F3';
 				shellForeground = '#000000';
 			}
+		} else {
+			// 与 workbench 冷启动一致：无 splash 时默认浅色，避免白/黑/白。
+			baseTheme = 'vs';
+			shellBackground = '#FFFFFF';
+			shellForeground = '#3B3B3B';
 		}
 
 		// Apply base colors
@@ -83,7 +88,7 @@
 
 		const splash = document.createElement('div');
 		splash.id = 'monaco-parts-splash';
-		splash.className = baseTheme ?? 'vs-dark';
+		splash.className = baseTheme ?? 'vs';
 
 		window.document.body.appendChild(splash);
 

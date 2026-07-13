@@ -5,6 +5,7 @@
 
 import { Registry } from '../../../../platform/registry/common/platform.js';
 import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '../../../../platform/configuration/common/configurationRegistry.js';
+import { ThemeSettingDefaults } from '../../../services/themes/common/workbenchThemeService.js';
 
 /**
  * VSWord writer-mode defaults for Markdown and plaintext editing.
@@ -12,6 +13,10 @@ import { Extensions as ConfigurationExtensions, IConfigurationRegistry } from '.
  * Registered as default configuration overrides so the user can still change
  * them in their settings.json — we only shift the *default* baseline so that
  * opening a `.md` file feels like a writing tool out of the box.
+ *
+ * 整窗主题必须用当前内置 id（`Light 2026` = ThemeSettingDefaults.COLOR_THEME_LIGHT）：
+ * 旧值 `Default Light Modern` 已迁移为 `Light Modern`，无法命中 ThemeService 的
+ * 浅色 initial color map，桌面端会先按 DARK 起色 → 白/黑/白 整窗闪。
  */
 const VSWORD_MARKDOWN_DEFAULTS = {
 	// Soft-wrap long paragraphs at the viewport edge — writers don't want
@@ -53,8 +58,9 @@ Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration)
 				'[plaintext]': VSWORD_PLAINTEXT_DEFAULTS,
 				// Workbench-wide writer affordances.
 				'breadcrumbs.enabled': false,
-				// Light theme by default (writer-first apps default light).
-				'workbench.colorTheme': 'Default Light Modern',
+				// 浅色壳默认：必须等于 ThemeSettingDefaults.COLOR_THEME_LIGHT，
+				// 才能在 ThemeService 构造时走 COLOR_THEME_LIGHT_INITIAL_COLORS（首帧防深色闪）。
+				'workbench.colorTheme': ThemeSettingDefaults.COLOR_THEME_LIGHT,
 				// Auto-reveal the Outline (Markdown headings tree) when the user
 				// opens a doc — Markdown's natural navigator.
 				'outline.collapseItems': 'alwaysExpand',
