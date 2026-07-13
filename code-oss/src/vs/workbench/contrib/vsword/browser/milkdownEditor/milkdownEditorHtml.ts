@@ -18,6 +18,12 @@ interface MilkdownEditorHtmlOptions {
 	readonly documentBaseUri: string;
 	readonly cspSource?: string;
 	readonly initialTheme?: string;
+	/**
+	 * 首帧防闪：host 从 workbench 主题读出的绝对色（非 CSS 变量）。
+	 * 在 vscode 注入 --vscode-* 之前，用它们画 html/body 背景，避免白→深→白。
+	 */
+	readonly bootBackground?: string;
+	readonly bootForeground?: string;
 }
 
 function escapeHtml(value: string): string {
@@ -36,21 +42,37 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 	const katexCssUri = escapeHtml(options.katexCssUri);
 	const documentBaseUri = escapeHtml(options.documentBaseUri);
 	const cspSource = escapeHtml(options.cspSource ?? webviewGenericCspSource);
+	// 绝对色兜底（与 VS Code dark 默认接近）；host 应传入当前 editor 色
+	const bootBg = escapeHtml(options.bootBackground || '#1e1e1e');
+	const bootFg = escapeHtml(options.bootForeground || '#d4d4d4');
 
 	return `<!doctype html>
-<html lang="en">
+<html lang="en" style="background:${bootBg};color:${bootFg}">
 <head>
 	<meta charset="UTF-8">
 	<base href="${documentBaseUri}">
 	<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src ${cspSource} https: data: blob:; font-src ${cspSource} data:; style-src ${cspSource} 'unsafe-inline'; script-src ${cspSource};">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0">
 	<title>${fileName}</title>
+	<!-- 首帧阻塞样式：必须在 katex 等外链 CSS 之前，避免白屏闪一下 -->
+	<style id="vsword-boot-paint">
+		html, body {
+			margin: 0 !important;
+			height: 100% !important;
+			background: ${bootBg} !important;
+			color: ${bootFg} !important;
+		}
+		.vsword-md-shell, #milkdown-root, .milkdown-empty {
+			background: ${bootBg} !important;
+			color: ${bootFg} !important;
+		}
+	</style>
 	<link rel="stylesheet" href="${katexCssUri}">
 	<style>
 		:root {
 			color-scheme: light dark;
-			--vsword-bg: var(--vscode-editor-background, #1e1e1e);
-			--vsword-fg: var(--vscode-editor-foreground, #d4d4d4);
+			--vsword-bg: var(--vscode-editor-background, ${bootBg});
+			--vsword-fg: var(--vscode-editor-foreground, ${bootFg});
 			--vsword-muted: var(--vscode-descriptionForeground, #8b949e);
 			--vsword-border: var(--vscode-panel-border, #3c3c3c);
 			--vsword-accent: var(--vscode-focusBorder, #007fd4);
@@ -347,18 +369,16 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		}
 		#milkdown-root .ProseMirror .katex-display { margin: 0; }
 		/* T-3.3.3 Slash menu
-		   - 失焦关闭由 slash-menu.template.js 负责
-		   - 高亮全宽：用 ::before 延伸到滚动条下方，原生滚动条不挤占高亮宽度
-		   - 滚动条透明轨 + hover 才显 thumb */
+		   外层 .vsword-slash-menu 定宽 + overflow:hidden；
+		   内层 .vsword-slash-scroll 滚动但 **完全隐藏原生滚动条宽度**，
+		   高亮 background 才能左右贴边全宽。滚轮/触控板仍可用。 */
 		.vsword-slash-menu {
 			position: absolute;
 			z-index: 1000;
 			min-width: 240px;
 			max-width: min(360px, 80vw);
-			max-height: 320px;
-			overflow-x: hidden;
-			overflow-y: auto;
-			padding: 4px 0;
+			padding: 0;
+			overflow: hidden;
 			background: var(--vscode-menu-background, var(--vsword-bg));
 			color: var(--vscode-menu-foreground, var(--vsword-fg));
 			border: 1px solid var(--vscode-menu-border, var(--vsword-border));
@@ -366,30 +386,25 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
 			font-family: var(--vscode-font-family);
 			font-size: 13px;
-			scrollbar-gutter: auto;
-			scrollbar-width: thin;
-			scrollbar-color: transparent transparent;
 		}
-		.vsword-slash-menu:hover {
-			scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
+		.vsword-slash-scroll {
+			max-height: 320px;
+			overflow-x: hidden;
+			overflow-y: auto;
+			padding: 4px 0;
+			/* 彻底去掉滚动条占位（Windows classic scrollbar 会挤出右侧白条） */
+			scrollbar-width: none; /* Firefox */
+			-ms-overflow-style: none; /* legacy Edge */
 		}
-		.vsword-slash-menu::-webkit-scrollbar {
-			width: 8px;
-			background: transparent;
+		.vsword-slash-scroll::-webkit-scrollbar {
+			width: 0 !important;
+			height: 0 !important;
+			display: none !important;
+			background: transparent !important;
 		}
-		.vsword-slash-menu::-webkit-scrollbar-track {
-			background: transparent;
-		}
-		.vsword-slash-menu::-webkit-scrollbar-thumb {
-			background: transparent;
-			border-radius: 4px;
-			border: 2px solid transparent;
-			background-clip: padding-box;
-		}
-		.vsword-slash-menu:hover::-webkit-scrollbar-thumb {
-			background-color: rgba(128, 128, 128, 0.5);
-			border: 2px solid transparent;
-			background-clip: padding-box;
+		/* 悬停时用左侧细边提示可滚（不占内容宽）；真正滚动靠滚轮 */
+		.vsword-slash-menu:hover .vsword-slash-scroll {
+			box-shadow: inset -2px 0 0 0 rgba(128, 128, 128, 0.35);
 		}
 		.vsword-slash-menu[hidden],
 		.vsword-slash-menu[data-hidden="true"] {
@@ -406,7 +421,6 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			text-transform: uppercase;
 		}
 		.vsword-slash-item {
-			position: relative;
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
@@ -416,32 +430,15 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			padding: 6px 12px;
 			margin: 0;
 			cursor: pointer;
-			z-index: 0;
-			/* 内容可被滚动条盖住边缘，高亮用伪元素铺满含滚动条区域 */
-		}
-		/* 全宽高亮：向右延伸盖住滚动条占位的白条 */
-		.vsword-slash-item.active::before,
-		.vsword-slash-item:hover::before {
-			content: "";
-			position: absolute;
-			top: 0;
-			bottom: 0;
-			left: 0;
-			right: -12px; /* 盖住典型 8~12px 滚动条槽 */
-			z-index: -1;
-			background: var(--vscode-menu-selectionBackground, rgba(120, 120, 120, 0.28));
-			pointer-events: none;
 		}
 		.vsword-slash-item.active,
 		.vsword-slash-item:hover {
-			background: transparent;
+			background: var(--vscode-menu-selectionBackground, rgba(120, 120, 120, 0.28));
 			color: var(--vscode-menu-selectionForeground, inherit);
 		}
-		.vsword-slash-label { flex: 1 1 auto; min-width: 0; position: relative; z-index: 1; }
+		.vsword-slash-label { flex: 1 1 auto; min-width: 0; }
 		.vsword-slash-hint {
 			flex: 0 0 auto;
-			position: relative;
-			z-index: 1;
 			font-family: var(--vscode-editor-font-family, monospace);
 			font-size: 11px;
 			color: var(--vscode-descriptionForeground, #888);

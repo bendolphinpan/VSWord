@@ -593,7 +593,13 @@ async function createEditor(markdown) {
 	// T-3.7b.c: 旧 editor 拆掉 + 新 editor 未 create() 完毕的空档期 apply 会踩空 ctx，
 	// 先关 sessionReady，等到 initialized = true 后再打开并 replay。
 	viewModeApplier.setSessionReady(false);
-	root.textContent = '';
+	// 清空时保留同色 Loading 占位，避免 createEditor 空窗白闪
+	root.innerHTML = '';
+	const bootHold = document.createElement('div');
+	bootHold.className = 'milkdown-empty';
+	bootHold.textContent = 'Loading…';
+	bootHold.style.cssText = 'padding:42px 16px;opacity:0.65;';
+	root.appendChild(bootHold);
 	currentMarkdown = markdown;
 	dirty = false;
 	initialized = false;

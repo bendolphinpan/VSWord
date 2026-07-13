@@ -138,13 +138,16 @@ function stripTrigger(view) {
 	view.dispatch(state.tr.delete(start, $from.pos));
 }
 
-function renderMenu(container, orderedItems, activeIndex) {
-	container.textContent = '';
+/**
+ * @param {HTMLElement} scrollEl  .vsword-slash-scroll（真正滚动的内层）
+ */
+function renderMenu(scrollEl, orderedItems, activeIndex) {
+	scrollEl.textContent = '';
 	if (!orderedItems.length) {
 		const empty = document.createElement('div');
 		empty.className = 'vsword-slash-empty';
 		empty.textContent = 'No matches';
-		container.appendChild(empty);
+		scrollEl.appendChild(empty);
 		return;
 	}
 	let lastGroup = null;
@@ -154,7 +157,7 @@ function renderMenu(container, orderedItems, activeIndex) {
 			const header = document.createElement('div');
 			header.className = 'vsword-slash-group';
 			header.textContent = it.group.toUpperCase();
-			container.appendChild(header);
+			scrollEl.appendChild(header);
 			lastGroup = it.group;
 		}
 		const row = document.createElement('div');
@@ -174,7 +177,7 @@ function renderMenu(container, orderedItems, activeIndex) {
 		hint.textContent = it.hint;
 		row.appendChild(label);
 		row.appendChild(hint);
-		container.appendChild(row);
+		scrollEl.appendChild(row);
 	});
 	// 键盘上下：让 active 项滚进可视区（nearest，不抖整页）
 	if (activeEl && typeof activeEl.scrollIntoView === 'function') {
@@ -192,9 +195,13 @@ function renderMenu(container, orderedItems, activeIndex) {
  * ArrowUp/ArrowDown/Enter/Escape before ProseMirror sees them.
  */
 export function attachSlashMenu(ctx, editorRoot) {
+	// 外层：裁剪 + 固定视觉宽度；内层：滚动且 **隐藏原生滚动条宽度**，高亮才能左右全宽
 	const content = document.createElement('div');
 	content.className = 'vsword-slash-menu';
 	content.setAttribute('role', 'listbox');
+	const scrollEl = document.createElement('div');
+	scrollEl.className = 'vsword-slash-scroll';
+	content.appendChild(scrollEl);
 	// Prevent the editor from losing focus when the user clicks the menu.
 	content.addEventListener('mousedown', e => e.preventDefault());
 
@@ -251,7 +258,7 @@ export function attachSlashMenu(ctx, editorRoot) {
 		if (state.activeIndex >= ordered.length) state.activeIndex = 0;
 		state.visible = ordered;
 		showMenuVisible();
-		renderMenu(content, ordered, state.activeIndex);
+		renderMenu(scrollEl, ordered, state.activeIndex);
 	}
 
 	function runActive() {
@@ -319,13 +326,13 @@ export function attachSlashMenu(ctx, editorRoot) {
 			}
 			if (event.key === 'ArrowDown') {
 				state.activeIndex = (state.activeIndex + 1) % state.visible.length;
-				renderMenu(content, state.visible, state.activeIndex);
+				renderMenu(scrollEl, state.visible, state.activeIndex);
 				try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
 				return true;
 			}
 			if (event.key === 'ArrowUp') {
 				state.activeIndex = (state.activeIndex - 1 + state.visible.length) % state.visible.length;
-				renderMenu(content, state.visible, state.activeIndex);
+				renderMenu(scrollEl, state.visible, state.activeIndex);
 				try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
 				return true;
 			}

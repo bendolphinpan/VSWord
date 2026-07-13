@@ -317,6 +317,14 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		const disposables = new DisposableStore();
 		this.liveInputs.add(input);
 
+		// 首帧防闪：用 workbench 当前 editor 绝对色，避免 webview 默认白底 → 深色 → 再跳变
+		const wbTheme = this.themeService.getColorTheme();
+		const bootBackground = wbTheme.getColor('editor.background')?.toString()
+			?? (wbTheme.type === ColorScheme.LIGHT || wbTheme.type === ColorScheme.HIGH_CONTRAST_LIGHT
+				? '#ffffff' : '#1e1e1e');
+		const bootForeground = wbTheme.getColor('editor.foreground')?.toString()
+			?? (wbTheme.type === ColorScheme.LIGHT || wbTheme.type === ColorScheme.HIGH_CONTRAST_LIGHT
+				? '#333333' : '#d4d4d4');
 		input.webview.setHtml(getMilkdownEditorHtml({
 			fileName: basename(input.resource),
 			resourceUri: input.resource.toString(),
@@ -324,6 +332,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			katexCssUri: asWebviewUri(katexCssUri).toString(true),
 			documentBaseUri: asWebviewUri(dirname(input.resource)).toString(true) + '/',
 			initialTheme: this.readEffectiveTheme(),
+			bootBackground,
+			bootForeground,
 		}));
 
 		disposables.add(input.webview.onMessage(async e => {
