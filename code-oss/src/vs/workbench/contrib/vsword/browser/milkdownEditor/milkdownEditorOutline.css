@@ -1,0 +1,38 @@
+/*---------------------------------------------------------------------------------------------
+ *  Milkdown Outline 树行布局 —— 对齐 documentSymbolsTree 的 .outline-element flex，
+ *  否则 monaco-icon-label 拿不到宽度，只见图标不见标题正文。
+ *--------------------------------------------------------------------------------------------*/
+
+.monaco-list .outline-element.vsword-outline-element,
+.monaco-list .vsword-outline-element {
+	display: flex;
+	flex: 1;
+	flex-flow: row nowrap;
+	align-items: center;
+	min-width: 0;
+	width: 100%;
+}
+
+.monaco-list .vsword-outline-element > .outline-element-icon,
+.monaco-list .vsword-outline-element > .element-icon {
+	flex: 0 0 auto;
+	padding-right: 6px;
+}
+
+/* IconLabel 占满剩余空间，标题才能显示 */
+.monaco-list .vsword-outline-element > .monaco-icon-label {
+	flex: 1 1 auto;
+	min-width: 0;
+	overflow: hidden;
+}
+
+.monaco-list .vsword-outline-element .monaco-highlighted-label,
+.monaco-list .vsword-outline-element .label-name {
+	color: inherit;
+}
+
+.monaco-list .vsword-outline-element .label-description {
+	opacity: 0.7;
+	margin-left: 0.5em;
+	font-size: 0.9em;
+}

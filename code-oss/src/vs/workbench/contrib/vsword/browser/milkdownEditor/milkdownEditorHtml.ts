@@ -346,8 +346,10 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			overflow-x: auto;
 		}
 		#milkdown-root .ProseMirror .katex-display { margin: 0; }
-		/* T-3.3.3 Slash menu — floating grouped command palette (Q2=b).
-		   高亮全宽；滚动条覆盖在内容上（不占右侧 gutter），仅 hover 渐显。 */
+		/* T-3.3.3 Slash menu
+		   - 失焦关闭由 slash-menu.template.js 负责
+		   - 高亮全宽：用 ::before 延伸到滚动条下方，原生滚动条不挤占高亮宽度
+		   - 滚动条透明轨 + hover 才显 thumb */
 		.vsword-slash-menu {
 			position: absolute;
 			z-index: 1000;
@@ -364,17 +366,15 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
 			font-family: var(--vscode-font-family);
 			font-size: 13px;
-			/* 不预留滚动条槽：高亮可铺满整行 */
 			scrollbar-gutter: auto;
 			scrollbar-width: thin;
 			scrollbar-color: transparent transparent;
 		}
 		.vsword-slash-menu:hover {
-			scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+			scrollbar-color: rgba(128, 128, 128, 0.5) transparent;
 		}
 		.vsword-slash-menu::-webkit-scrollbar {
-			width: 6px;
-			height: 0;
+			width: 8px;
 			background: transparent;
 		}
 		.vsword-slash-menu::-webkit-scrollbar-track {
@@ -382,12 +382,21 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		}
 		.vsword-slash-menu::-webkit-scrollbar-thumb {
 			background: transparent;
-			border-radius: 3px;
+			border-radius: 4px;
+			border: 2px solid transparent;
+			background-clip: padding-box;
 		}
 		.vsword-slash-menu:hover::-webkit-scrollbar-thumb {
-			background: rgba(128, 128, 128, 0.45);
+			background-color: rgba(128, 128, 128, 0.5);
+			border: 2px solid transparent;
+			background-clip: padding-box;
 		}
-		.vsword-slash-menu[hidden], .vsword-slash-menu[data-hidden="true"] { display: none; }
+		.vsword-slash-menu[hidden],
+		.vsword-slash-menu[data-hidden="true"] {
+			display: none !important;
+			visibility: hidden !important;
+			pointer-events: none !important;
+		}
 		.vsword-slash-group {
 			padding: 6px 12px 2px;
 			font-size: 10px;
@@ -397,25 +406,42 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			text-transform: uppercase;
 		}
 		.vsword-slash-item {
+			position: relative;
 			display: flex;
 			justify-content: space-between;
 			align-items: center;
 			gap: 12px;
-			/* 全宽高亮：左右贴菜单边 */
 			width: 100%;
 			box-sizing: border-box;
 			padding: 6px 12px;
 			margin: 0;
 			cursor: pointer;
+			z-index: 0;
+			/* 内容可被滚动条盖住边缘，高亮用伪元素铺满含滚动条区域 */
+		}
+		/* 全宽高亮：向右延伸盖住滚动条占位的白条 */
+		.vsword-slash-item.active::before,
+		.vsword-slash-item:hover::before {
+			content: "";
+			position: absolute;
+			top: 0;
+			bottom: 0;
+			left: 0;
+			right: -12px; /* 盖住典型 8~12px 滚动条槽 */
+			z-index: -1;
+			background: var(--vscode-menu-selectionBackground, rgba(120, 120, 120, 0.28));
+			pointer-events: none;
 		}
 		.vsword-slash-item.active,
 		.vsword-slash-item:hover {
-			background: var(--vscode-menu-selectionBackground, rgba(120, 120, 120, 0.24));
+			background: transparent;
 			color: var(--vscode-menu-selectionForeground, inherit);
 		}
-		.vsword-slash-label { flex: 1 1 auto; min-width: 0; }
+		.vsword-slash-label { flex: 1 1 auto; min-width: 0; position: relative; z-index: 1; }
 		.vsword-slash-hint {
 			flex: 0 0 auto;
+			position: relative;
+			z-index: 1;
 			font-family: var(--vscode-editor-font-family, monospace);
 			font-size: 11px;
 			color: var(--vscode-descriptionForeground, #888);

@@ -212,8 +212,37 @@ export function attachSlashMenu(ctx, editorRoot) {
 		debounce: 20,
 		offset: 8,
 	});
-	provider.onShow = () => { state.open = true; };
-	provider.onHide = () => { state.open = false; };
+	provider.onShow = () => {
+		state.open = true;
+		showMenuVisible();
+	};
+	provider.onHide = () => {
+		state.open = false;
+		try {
+			content.setAttribute('data-hidden', 'true');
+			content.hidden = true;
+			content.style.display = 'none';
+		} catch { /* noop */ }
+	};
+
+	function hideMenu() {
+		try { provider.hide(); } catch { /* noop */ }
+		state.open = false;
+		// 强制隐藏，防止 provider 残留可见
+		try {
+			content.setAttribute('data-hidden', 'true');
+			content.hidden = true;
+			content.style.display = 'none';
+		} catch { /* noop */ }
+	}
+
+	function showMenuVisible() {
+		try {
+			content.removeAttribute('data-hidden');
+			content.hidden = false;
+			content.style.display = '';
+		} catch { /* noop */ }
+	}
 
 	function refresh(view) {
 		state.view = view;
@@ -221,6 +250,7 @@ export function attachSlashMenu(ctx, editorRoot) {
 		const ordered = orderForNav(filterItems(query));
 		if (state.activeIndex >= ordered.length) state.activeIndex = 0;
 		state.visible = ordered;
+		showMenuVisible();
 		renderMenu(content, ordered, state.activeIndex);
 	}
 
@@ -234,8 +264,8 @@ export function attachSlashMenu(ctx, editorRoot) {
 		} catch (err) {
 			console.error('[vsword-slash] command failed:', chosen.id, err);
 		}
-		provider.hide();
-		state.view.focus();
+		hideMenu();
+		try { state.view.focus(); } catch { /* noop */ }
 		return true;
 	}
 
@@ -249,20 +279,40 @@ export function attachSlashMenu(ctx, editorRoot) {
 		}
 	});
 
+	// 失焦 / 点菜单外 → 关闭（用户反馈常驻不消失）
+	const onDocPointerDown = (e) => {
+		if (!state.open) return;
+		const t = e.target;
+		if (t && content.contains(t)) return;
+		hideMenu();
+	};
+	const onWinBlur = () => { if (state.open) hideMenu(); };
+	document.addEventListener('mousedown', onDocPointerDown, true);
+	document.addEventListener('pointerdown', onDocPointerDown, true);
+	window.addEventListener('blur', onWinBlur);
+
 	return {
 		update(view, prevState) {
 			provider.update(view, prevState);
-			if (shouldShowSlash(view)) refresh(view);
+			if (shouldShowSlash(view)) {
+				refresh(view);
+			} else if (state.open) {
+				// 条件不再满足（删掉 /、光标离开空行等）→ 必须关掉
+				hideMenu();
+			}
 		},
 		destroy() {
-			provider.destroy();
-			content.remove();
+			document.removeEventListener('mousedown', onDocPointerDown, true);
+			document.removeEventListener('pointerdown', onDocPointerDown, true);
+			window.removeEventListener('blur', onWinBlur);
+			try { provider.destroy(); } catch { /* noop */ }
+			try { content.remove(); } catch { /* noop */ }
 		},
 		onKey(event) {
 			if (!state.open || !state.visible.length) {
 				// Still let Escape close a stuck menu.
 				if (state.open && event.key === 'Escape') {
-					provider.hide();
+					hideMenu();
 					return true;
 				}
 				return false;
@@ -287,7 +337,7 @@ export function attachSlashMenu(ctx, editorRoot) {
 				return ok;
 			}
 			if (event.key === 'Escape') {
-				provider.hide();
+				hideMenu();
 				try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
 				return true;
 			}

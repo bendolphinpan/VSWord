@@ -36,6 +36,7 @@ import { IWorkbenchContributionsRegistry, Extensions as WorkbenchExtensions } fr
 import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
 import type { WebviewHeading } from './milkdownEditorProtocol.js';
+import './milkdownEditorOutline.css';
 
 // ---------------------------------------------------------------------------
 // Model
@@ -114,23 +115,26 @@ class MilkdownOutlineRenderer implements ITreeRenderer<MilkdownOutlineEntry, Fuz
 	templateId = MilkdownOutlineTemplate.templateId;
 
 	renderTemplate(container: HTMLElement): MilkdownOutlineTemplate {
-		container.classList.add('vsword-outline-element');
-		const iconClass = DOM.append(container, DOM.$('.element-icon'));
+		// 对齐 documentSymbolsTree：outline-element + flex 子项，否则 label 宽为 0
+		container.classList.add('outline-element', 'vsword-outline-element');
 		const iconLabel = new IconLabel(container, { supportHighlights: true });
+		const iconClass = DOM.$('.outline-element-icon');
+		container.prepend(iconClass);
 		return new MilkdownOutlineTemplate(container, iconClass, iconLabel);
 	}
 
 	renderElement(node: ITreeNode<MilkdownOutlineEntry, FuzzyScore>, _index: number, template: MilkdownOutlineTemplate): void {
 		const level = Math.min(6, Math.max(1, node.element.level));
 		const icon = HEADING_ICONS[level];
-		template.iconClass.className = 'element-icon ' + ThemeIcon.asClassNameArray(icon).join(' ');
-		// 主标签必须是标题正文；description 用 H1..H6，避免「只有 ## 没字」
-		const title = (node.element.label && node.element.label.trim()) || `(H${level})`;
+		template.iconClass.className = 'outline-element-icon ' + ThemeIcon.asClassNameArray(icon).join(' ');
+		// 主标签 = 标题正文；description = Hn（右侧淡字）
+		const title = (node.element.label && String(node.element.label).trim()) || `(H${level})`;
 		const options: IIconLabelValueOptions = {
 			matches: createMatches(node.filterData),
 			labelEscapeNewLines: true,
 			title: `H${level} ${title}`,
-			extraClasses: [`vsword-outline-h${level}`],
+			// nowrap：与官方 outline 一致，避免 flex 下描述把主标题挤没
+			extraClasses: ['nowrap', `vsword-outline-h${level}`],
 		};
 		template.iconLabel.setLabel(title, `H${level}`, options);
 	}
