@@ -380,6 +380,12 @@ async function loadNextProgressiveChunk(epoch) {
 			progressiveTotalChunks,
 			progressiveOriginalMarkdown.length,
 		);
+		// 每装一块都刷新 Outline（基于当前已加载 PM，避免左侧一直空）
+		try {
+			editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
+		} catch (err) {
+			reportError('outline-progressive', err);
+		}
 		if (pendingChunks.length === 0) {
 			progressiveLoading = false;
 			// 全量已进 PM：以 serialize 为准
@@ -395,11 +401,6 @@ async function loadNextProgressiveChunk(epoch) {
 				} catch { /* ignore */ }
 			} else {
 				dirty = false;
-			}
-			try {
-				editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
-			} catch (err) {
-				reportError('outline-seed', err);
 			}
 		} else {
 			// 仍有 tail：currentMarkdown 继续用 serialize() 拼装逻辑
@@ -570,27 +571,38 @@ async function createEditor(markdown) {
 				getView: () => { try { return ctx.get(editorViewCtx); } catch { return null; } },
 			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
-				currentMarkdown = nextMarkdown;
 				// 未 initialized：忽略
 				if (!initialized) { return; }
-				// RD-1.3：progressive 期间
-				//   · progressiveAppending=true → 后台 append 的 tr，不 dirty
-				//   · 否则 → 用户键入，记 progressiveUserEdited，收尾时上报 host
-				if (progressiveLoading) {
-					if (!progressiveAppending) {
-						progressiveUserEdited = true;
+				// RD-1.3/1.4：仍有 pending 或 progressive 标志
+				//   · progressiveAppending=true → 后台 append 的 tr，不 dirty，只刷大纲
+				//   · 否则 → 用户键入
+				if (progressiveLoading || pendingChunks.length > 0) {
+					if (progressiveAppending) {
+						// PM-only nextMarkdown 不含 tail；用 serialize() 拼装
+						currentMarkdown = serialize();
+						try { refreshOutline(ctxRef.get(editorViewCtx)); } catch { /* ignore */ }
+						return;
 					}
+					progressiveUserEdited = true;
+					currentMarkdown = serialize();
+					try { refreshOutline(ctxRef.get(editorViewCtx)); } catch { /* ignore */ }
+					dirty = true;
+					setStatus('Unsaved changes…', 'dirty');
+					try {
+						vscode?.postMessage({ type: 'markdownUpdated', markdown: currentMarkdown });
+					} catch { /* ignore */ }
 					return;
 				}
+				currentMarkdown = nextMarkdown;
 				dirty = true;
 				setStatus('Unsaved changes…', 'dirty');
 				vscode?.postMessage({ type: 'markdownUpdated', markdown: nextMarkdown });
 				// T-3.4: rebuild outline on every doc change.
 				refreshOutline(ctxRef.get(editorViewCtx));
 			});
-			// T-3.4: cursor moves update the active heading (highlight in Outline pane).
+			// T-3.4: cursor moves update the active heading（progressive 未全量时也要更新高亮）
 			ctx.get(listenerCtx).selectionUpdated(ctxRef => {
-				if (!initialized || progressiveLoading) { return; }
+				if (!initialized) { return; }
 				refreshOutlineActiveOnly(ctxRef.get(editorViewCtx));
 			});
 			// Register slash view via SlashProvider once the editor context is ready.
@@ -650,10 +662,10 @@ async function createEditor(markdown) {
 		.use($prose(() => createFindKeymap(getFindWidget(), { getMode: () => (modeController?.getMode?.() || 'wysiwyg') })))
 		.create();
 
-	// 首屏就绪：允许编辑；有 pending 时不刷半文档 outline
+	// 首屏就绪：允许编辑；**始终**用已加载 PM 刷 Outline（大文档未全量时也要有目录）
 	initialized = true;
 	currentMarkdown = markdown;
-	finishEditorMount({ seedOutline: pendingChunks.length === 0 });
+	finishEditorMount({ seedOutline: true });
 
 	if (pendingChunks.length === 0) {
 		progressiveLoading = false;
@@ -671,6 +683,19 @@ async function createEditor(markdown) {
 	// 滚动按需加载（不再 for 循环灌满）
 	bindProgressiveScroll(myEpoch);
 	updateProgressiveStatus();
+	// 双 rAF 再刷一次 outline，避免首帧 host Outline 面板尚未订阅
+	if (typeof requestAnimationFrame === 'function') {
+		requestAnimationFrame(() => {
+			requestAnimationFrame(() => {
+				if (myEpoch !== progressiveEpoch || !editor) return;
+				try {
+					editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
+				} catch (err) {
+					reportError('outline-first-raf', err);
+				}
+			});
+		});
+	}
 }
 
 // T-3.3.2: rebuild the editor from source-mode textarea content.
