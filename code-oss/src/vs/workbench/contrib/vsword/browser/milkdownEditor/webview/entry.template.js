@@ -1077,8 +1077,9 @@ window.addEventListener('message', event => {
 	}
 	if (msg.type === 'themeChanged') {
 		// T-3.3.1: set body[data-theme] so the CSS layer swaps tokens. `default` = drop the attr.
-		const theme = String(msg.theme || 'default');
+		const theme = String(msg.theme || 'paper');
 		if (theme === 'default' || theme === '') {
+			// legacy：去掉 data-theme，回落到 :root 的 workbench token
 			document.body.removeAttribute('data-theme');
 		} else {
 			document.body.setAttribute('data-theme', theme);
@@ -1173,7 +1174,7 @@ window.addEventListener('message', event => {
 			// `#milkdown-root .ProseMirror .token.*` 段一并注入的，已经被 themeCss 收集了。
 			// 单独字段留空 + TODO 让 T-3.8b.1.d 若拆分独立文件时再填。
 			const prismCss = '';
-			const themeId = document.body.getAttribute('data-theme') || 'default';
+			const themeId = document.body.getAttribute('data-theme') || 'paper';
 			// 本卡不做本地图片抓取，assets 恒空数组，通路先跑通（TODO T-3.8b.1.d）。
 			const assets = imageMode === 'sibling-folder' ? [] : undefined;
 			vscode?.postMessage({

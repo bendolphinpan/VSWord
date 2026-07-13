@@ -47,10 +47,12 @@ export const onDidChangeExternalThemes: Event<void> = _onDidChange.event;
  * 匹配顺序：
  *  1. 外挂 id（`ext:*`）→ 走 external 缓存反查；查不到时返回 id 本身兜底。
  *  2. `default` → 返回 caller 传入的 fallbackDefaultLabel（i18n 由 caller 完成）。
- *  3. 其他（内置 5 id） → 直接返回 id（内置无独立 displayName，label 就是 id）。
+ *  3. `paper` → 产品默认浅色写作主题展示名。
+ *  4. 其他内置 id → 直接返回 id（无独立 displayName）。
  */
 export function displayNameForThemeId(id: string, fallbackDefaultLabel: string): string {
 	if (id === 'default') return fallbackDefaultLabel;
+	if (id === 'paper') return 'Paper';
 	if (id.startsWith('ext:')) {
 		const hit = _externalThemes.find(t => t.id === id);
 		return hit ? hit.displayName : id;

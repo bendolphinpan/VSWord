@@ -11,6 +11,7 @@ import { IQuickInputService, IQuickPickItem, QuickPickInput } from '../../../../
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { localize, localize2 } from '../../../../../nls.js';
 import {
+	VSWORD_MILKDOWN_DEFAULT_THEME,
 	VSWORD_MILKDOWN_THEME_IDS,
 	VSWORD_MILKDOWN_THEME_STORAGE_KEY,
 	VSWORD_THEME_CONFIG,
@@ -45,6 +46,7 @@ import { isExternalThemeId } from './milkdownEditorExternalThemes.js';
  *  - dark    (enum of theme ids, minus 'default')
  * The contribution reads these + IStorageService lastTheme via readEffectiveTheme().
  */
+// followWorkbench 的 light/dark 枚举：排除 legacy `default`（跟壳 token）
 const selectableThemes = (VSWORD_MILKDOWN_THEME_IDS as readonly string[]).filter(id => id !== 'default');
 
 Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConfiguration({
@@ -135,7 +137,7 @@ Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConf
 		[VSWORD_THEME_CONFIG.light]: {
 			type: 'string',
 			enum: selectableThemes,
-			default: 'github',
+			default: 'paper',
 			description: localize('vsword.theme.light.desc', 'Markdown theme applied when followWorkbench is on and the workbench is in a light color scheme.'),
 		},
 		[VSWORD_THEME_CONFIG.dark]: {
@@ -166,7 +168,7 @@ class SelectMarkdownThemeAction extends Action2 {
 	async run(accessor: ServicesAccessor): Promise<void> {
 		const quickInput = accessor.get(IQuickInputService);
 		const storage = accessor.get(IStorageService);
-		const current = storage.get(VSWORD_MILKDOWN_THEME_STORAGE_KEY, StorageScope.APPLICATION, 'default');
+		const current = storage.get(VSWORD_MILKDOWN_THEME_STORAGE_KEY, StorageScope.APPLICATION, VSWORD_MILKDOWN_DEFAULT_THEME);
 		// T-3.7d.3 · quick-pick 分组化：内置 + separator + workspace/user 外挂。
 		// items 构造走纯函数 buildThemeQuickPickItems（单测独立回归）。
 		const items = buildThemeQuickPickItems({
@@ -174,7 +176,8 @@ class SelectMarkdownThemeAction extends Action2 {
 			external: getExternalThemes(),
 			currentThemeId: current,
 			labels: {
-				defaultLabel: localize('vsword.theme.default', 'Default (follow Code OSS)'),
+				defaultLabel: localize('vsword.theme.default', 'Legacy · follow workbench tokens'),
+				paperLabel: localize('vsword.theme.paper', 'Paper · 浅色写作（默认）'),
 				workspaceSeparator: localize('vsword.theme.externalWorkspaceGroup', 'External themes · Workspace'),
 				userSeparator: localize('vsword.theme.externalUserGroup', 'External themes · User'),
 				fromWorkspaceDescription: localize('vsword.theme.fromWorkspace', 'From workspace'),

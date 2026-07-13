@@ -62,7 +62,8 @@ suite('T-3.7d.1 · 内置主题 audit · 最小回归', () => {
 	test('A2 · getThemesCss() 每个非 default id 都存在 body[data-theme="<id>"] 选择器', () => {
 		const css = getThemesCss();
 		const nonDefault = (VSWORD_MILKDOWN_THEME_IDS as readonly string[]).filter(id => id !== 'default');
-		assert.ok(nonDefault.length >= 4, `预期至少 4 个非-default id，实得 ${nonDefault.length}`);
+		assert.ok(nonDefault.length >= 5, `预期至少 5 个非-default id（含 paper），实得 ${nonDefault.length}`);
+		assert.ok(nonDefault.includes('paper'), '产品默认 paper 必须在非-default 列表中');
 		for (const id of nonDefault) {
 			// 允许双引号或单引号的属性写法；这里 CSS blob 用双引号，正则宽松一点。
 			// 注意：`body[data-theme="<id>"] {` —— 闭合 `]` 必须写进正则，选择器右侧允许空白后接 `{`。

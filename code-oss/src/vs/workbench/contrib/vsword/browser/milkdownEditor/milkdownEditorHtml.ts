@@ -4,7 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { webviewGenericCspSource } from '../../../webview/common/webview.js';
-import { getThemesCss } from './milkdownEditorThemes.js';
+import {
+	getThemesCss,
+	VSWORD_MILKDOWN_DEFAULT_THEME,
+	VSWORD_PAPER_THEME_COLORS,
+} from './milkdownEditorThemes.js';
 
 interface MilkdownEditorHtmlOptions {
 	readonly fileName: string;
@@ -19,8 +23,9 @@ interface MilkdownEditorHtmlOptions {
 	readonly cspSource?: string;
 	readonly initialTheme?: string;
 	/**
-	 * 首帧防闪：host 从 workbench 主题读出的绝对色（非 CSS 变量）。
-	 * 在 vscode 注入 --vscode-* 之前，用它们画 html/body 背景，避免白→深→白。
+	 * 首帧防闪：与**文档主题**一致的绝对色（非 workbench editor 色）。
+	 * 在 vscode 注入 --vscode-* 之前画 html/body 背景；首帧后由内联脚本卸掉，
+	 * 避免 !important 卡住后续主题切换。
 	 */
 	readonly bootBackground?: string;
 	readonly bootForeground?: string;
@@ -42,9 +47,10 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 	const katexCssUri = escapeHtml(options.katexCssUri);
 	const documentBaseUri = escapeHtml(options.documentBaseUri);
 	const cspSource = escapeHtml(options.cspSource ?? webviewGenericCspSource);
-	// 绝对色兜底（与 VS Code dark 默认接近）；host 应传入当前 editor 色
-	const bootBg = escapeHtml(options.bootBackground || '#1e1e1e');
-	const bootFg = escapeHtml(options.bootForeground || '#d4d4d4');
+	// 绝对色兜底：产品默认 paper 浅色，**不用** workbench 深色 editor 色
+	const bootBg = escapeHtml(options.bootBackground || VSWORD_PAPER_THEME_COLORS.bg);
+	const bootFg = escapeHtml(options.bootForeground || VSWORD_PAPER_THEME_COLORS.fg);
+	const initialTheme = escapeHtml(options.initialTheme ?? VSWORD_MILKDOWN_DEFAULT_THEME);
 
 	return `<!doctype html>
 <html lang="en" style="background:${bootBg};color:${bootFg}">
@@ -1504,7 +1510,7 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		${getThemesCss()}
 	</style>
 </head>
-<body data-theme="${escapeHtml(options.initialTheme ?? 'default')}">
+<body data-theme="${initialTheme}">
 	<div class="vsword-md-shell" data-mode="realtime">
 		<header class="vsword-md-toolbar">
 			<span class="vsword-md-title">${fileName}</span>
@@ -1526,6 +1532,16 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		<textarea id="milkdown-source" spellcheck="false" aria-label="Markdown source editor"></textarea>
 	</div>
 	<script type="module" src="${scriptUri}"></script>
+	<script>
+		// 首帧结束后卸掉 boot-paint 的 !important，避免卡住后续主题切换；
+		// 此时 body[data-theme] + getThemesCss 已就位，背景由文档主题接管。
+		requestAnimationFrame(function () {
+			requestAnimationFrame(function () {
+				var el = document.getElementById('vsword-boot-paint');
+				if (el) { el.remove(); }
+			});
+		});
+	</script>
 </body>
 </html>`;
 }

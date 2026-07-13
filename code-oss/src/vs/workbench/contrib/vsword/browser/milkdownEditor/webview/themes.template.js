@@ -11,6 +11,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 export const VSWORD_MILKDOWN_THEME_IDS = Object.freeze([
+	'paper',
 	'default',
 	'github',
 	'newsprint',
@@ -18,7 +19,8 @@ export const VSWORD_MILKDOWN_THEME_IDS = Object.freeze([
 	'solarized-light',
 ]);
 
-export const VSWORD_MILKDOWN_DEFAULT_THEME = 'default';
+/** Product default: light writing surface (does not follow workbench dark shell). */
+export const VSWORD_MILKDOWN_DEFAULT_THEME = 'paper';
 
 export function isValidTheme(id) {
 	return typeof id === 'string' && VSWORD_MILKDOWN_THEME_IDS.includes(id);

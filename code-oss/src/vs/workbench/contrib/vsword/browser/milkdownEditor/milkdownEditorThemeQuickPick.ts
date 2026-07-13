@@ -44,7 +44,8 @@ export interface ThemeQuickPickInput {
 	 * 单测里可以传 undefined 直接吃默认；产线走 Action 时传 localize 的产物。
 	 */
 	readonly labels?: {
-		defaultLabel?: string;                // 'Default (follow Code OSS)'
+		defaultLabel?: string;                // 'Legacy · follow workbench tokens'
+		paperLabel?: string;                  // 'Paper · 浅色写作（默认）'
 		workspaceSeparator?: string;          // 'External themes · Workspace'
 		userSeparator?: string;               // 'External themes · User'
 		fromWorkspaceDescription?: string;    // 'From workspace'
@@ -57,13 +58,20 @@ export interface ThemeQuickPickInput {
 export type ThemeQuickPickEntry = IQuickPickItem | IQuickPickSeparator;
 
 const DEFAULT_LABELS = {
-	defaultLabel: 'Default (follow Code OSS)',
+	defaultLabel: 'Legacy · follow workbench tokens',
+	paperLabel: 'Paper · light writing (default)',
 	workspaceSeparator: 'External themes · Workspace',
 	userSeparator: 'External themes · User',
 	fromWorkspaceDescription: 'From workspace',
 	fromUserDescription: 'From user',
 	currentSuffix: '(current)',
 } as const;
+
+function builtinThemeLabel(id: string, labels: typeof DEFAULT_LABELS): string {
+	if (id === 'paper') { return labels.paperLabel; }
+	if (id === 'default') { return labels.defaultLabel; }
+	return id;
+}
 
 /**
  * T-3.7d.3 · 生成 quick-pick items。
@@ -82,7 +90,7 @@ export function buildThemeQuickPickItems(input: ThemeQuickPickInput): ThemeQuick
 
 	// ---- 内置块 --------------------------------------------------------
 	for (const id of input.builtinIds) {
-		const label = id === 'default' ? labels.defaultLabel : id;
+		const label = builtinThemeLabel(id, labels);
 		const isCurrent = current === id;
 		const item: IQuickPickItem = {
 			id,

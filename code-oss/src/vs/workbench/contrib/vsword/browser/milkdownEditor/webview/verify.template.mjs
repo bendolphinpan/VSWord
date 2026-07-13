@@ -259,16 +259,17 @@ const checks = {
 	defaultModeIsRealtime: DEFAULT_MODE === 'realtime',
 	focusModePluginPresent: Array.isArray(focusModePlugins) && focusModePlugins.length > 0,
 	// T-3.3.1 theme system: id list, default id, validator.
-	themeIdsAreFiveCanonicalValues:
+	themeIdsAreSixCanonicalValues:
 		Array.isArray(VSWORD_MILKDOWN_THEME_IDS) &&
-		VSWORD_MILKDOWN_THEME_IDS.length === 5 &&
+		VSWORD_MILKDOWN_THEME_IDS.length === 6 &&
+		VSWORD_MILKDOWN_THEME_IDS.includes('paper') &&
 		VSWORD_MILKDOWN_THEME_IDS.includes('default') &&
 		VSWORD_MILKDOWN_THEME_IDS.includes('github') &&
 		VSWORD_MILKDOWN_THEME_IDS.includes('newsprint') &&
 		VSWORD_MILKDOWN_THEME_IDS.includes('night') &&
 		VSWORD_MILKDOWN_THEME_IDS.includes('solarized-light'),
-	defaultThemeIsDefault: VSWORD_MILKDOWN_DEFAULT_THEME === 'default',
-	themeValidatorAcceptsKnownIds: isValidTheme('github') && isValidTheme('night'),
+	defaultThemeIsPaper: VSWORD_MILKDOWN_DEFAULT_THEME === 'paper',
+	themeValidatorAcceptsKnownIds: isValidTheme('paper') && isValidTheme('github') && isValidTheme('night'),
 	themeValidatorRejectsUnknownIds: !isValidTheme('dracula') && !isValidTheme('') && !isValidTheme(null),
 	// T-3.4 outline extractor: heading discovery, slugification, active-id resolution.
 	outlineExtractsChineseHeading:

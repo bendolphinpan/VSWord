@@ -1,6 +1,6 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-13T07:19:56.524Z
+Generated: 2026-07-13T09:16:45.270Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
@@ -355,12 +355,6 @@ Generated: 2026-07-13T07:19:56.524Z
 | skin-tone | 2.0.0 | MIT | https://registry.npmjs.org/skin-tone/-/skin-tone-2.0.0.tgz |
 | unicode-emoji-modifier-base | 1.0.0 | MIT | https://registry.npmjs.org/unicode-emoji-modifier-base/-/unicode-emoji-modifier-base-1.0.0.tgz |
 | eve-raphael | 0.5.0 |  | https://registry.npmjs.org/eve-raphael/-/eve-raphael-0.5.0.tgz |
-| remark-flexible-markers | 1.3.5 | MIT | https://registry.npmjs.org/remark-flexible-markers/-/remark-flexible-markers-1.3.5.tgz |
-| unist-builder | 4.0.0 | MIT | https://registry.npmjs.org/unist-builder/-/unist-builder-4.0.0.tgz |
-| unist-util-find-after | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-after/-/unist-util-find-after-5.0.0.tgz |
-| unist-util-find-all-after | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-all-after/-/unist-util-find-all-after-5.0.0.tgz |
-| unist-util-find-all-before | 5.0.0 | MIT | https://registry.npmjs.org/unist-util-find-all-before/-/unist-util-find-all-before-5.0.0.tgz |
-| unist-util-find-between | 1.2.2 | MIT | https://registry.npmjs.org/unist-util-find-between/-/unist-util-find-between-1.2.2.tgz |
 | remark-frontmatter | 5.0.0 | MIT | https://registry.npmjs.org/remark-frontmatter/-/remark-frontmatter-5.0.0.tgz |
 | mdast-util-frontmatter | 2.0.1 | MIT | https://registry.npmjs.org/mdast-util-frontmatter/-/mdast-util-frontmatter-2.0.1.tgz |
 | micromark-extension-frontmatter | 2.0.0 | MIT | https://registry.npmjs.org/micromark-extension-frontmatter/-/micromark-extension-frontmatter-2.0.0.tgz |

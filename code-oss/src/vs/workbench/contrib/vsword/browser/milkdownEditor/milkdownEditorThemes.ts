@@ -1,29 +1,37 @@
 /*---------------------------------------------------------------------------------------------
- *  VSWord Milkdown themes (T-3.3.1).
+ *  VSWord Milkdown themes (T-3.3.1 + product default paper).
  *
- *  Four inlined presets:
+ *  Built-in presets:
+ *    - paper           : **product default** · soft light writing surface（不跟 workbench 深色）
+ *    - default         : legacy · 无 data-theme，背景跟 --vscode-editor-*（易与深色壳打架）
  *    - github          : light, technical, GitHub sans-serif
  *    - newsprint       : light, editorial, serif newspaper feel
  *    - night           : dark, muted, Typora signature warm-dark
  *    - solarized-light : light, retro, Ethan Schoonover palette
  *
- *  Applied by setting `<body data-theme="<name>">`. Selecting `default` restores the
- *  workbench-tracking behaviour (no data-theme attribute).
- *
- *  All theme overrides tweak the `--vsword-*` token layer defined in :root. New tokens
- *  introduced here (font, line-height, max-width, heading scale) apply to every theme
- *  through the base layer, so a new theme only needs to override what differs.
+ *  Applied by setting `<body data-theme="<name>">`.
+ *  闪烁根因（2026-07）：首帧用 workbench 深色 editor 色「防闪」，最终文档主题却是浅色
+ *  → 白/深/白。现改为默认 paper + 首帧 boot 色与文档主题一致，不再用 workbench 覆写。
  *--------------------------------------------------------------------------------------------*/
 
 /** Canonical theme ids. Keep in sync with the enum literals in the contribution + Settings. */
-export const VSWORD_MILKDOWN_THEME_IDS = ['default', 'github', 'newsprint', 'night', 'solarized-light'] as const;
+export const VSWORD_MILKDOWN_THEME_IDS = ['paper', 'default', 'github', 'newsprint', 'night', 'solarized-light'] as const;
 export type VswordMilkdownTheme = typeof VSWORD_MILKDOWN_THEME_IDS[number];
 
 /** Storage key for the last user-selected theme id (APPLICATION scope). */
 export const VSWORD_MILKDOWN_THEME_STORAGE_KEY = 'vsword.milkdown.lastTheme';
 
-/** Default theme when the store is empty (workbench-tracking, no overrides). */
-export const VSWORD_MILKDOWN_DEFAULT_THEME: VswordMilkdownTheme = 'default';
+/** 产品默认：浅色写作纸，不跟随 Code OSS 深色壳。 */
+export const VSWORD_MILKDOWN_DEFAULT_THEME: VswordMilkdownTheme = 'paper';
+
+/** Paper 主题固定色（首帧 boot + CSS 共用，避免与 workbench 深色冲突）。 */
+export const VSWORD_PAPER_THEME_COLORS = {
+	bg: '#f7f6f3',
+	fg: '#2c2c2c',
+	muted: '#6b6b6b',
+	border: '#e2e0da',
+	accent: '#2f6fed',
+} as const;
 
 /** Configuration section keys — mirrored in the workbench configuration contribution. */
 export const VSWORD_THEME_CONFIG = {
@@ -34,6 +42,28 @@ export const VSWORD_THEME_CONFIG = {
 
 export function isValidTheme(id: string | undefined | null): id is VswordMilkdownTheme {
 	return typeof id === 'string' && (VSWORD_MILKDOWN_THEME_IDS as readonly string[]).includes(id);
+}
+
+/**
+ * 文档主题 → 首帧绝对色。用于 webview boot paint，**不**读 workbench editor 色。
+ */
+export function getDocumentThemeBootColors(themeId: string | undefined | null): { bg: string; fg: string } {
+	switch (themeId) {
+		case 'night':
+			return { bg: '#363636', fg: '#b8b8b8' };
+		case 'github':
+			return { bg: '#ffffff', fg: '#24292f' };
+		case 'newsprint':
+			return { bg: '#fbf9f4', fg: '#2b2b2b' };
+		case 'solarized-light':
+			return { bg: '#fdf6e3', fg: '#586e75' };
+		case 'default':
+			// legacy follow-tokens：boot 仍用 paper 浅底，避免深色壳首帧
+			return { bg: VSWORD_PAPER_THEME_COLORS.bg, fg: VSWORD_PAPER_THEME_COLORS.fg };
+		case 'paper':
+		default:
+			return { bg: VSWORD_PAPER_THEME_COLORS.bg, fg: VSWORD_PAPER_THEME_COLORS.fg };
+	}
 }
 
 /**
@@ -82,6 +112,28 @@ export function getThemesCss(): string {
 		#milkdown-root .ProseMirror pre { background: var(--vsword-pre-bg); }
 		#milkdown-root .ProseMirror table tr:nth-child(2n) td { background: var(--vsword-table-stripe); }
 		#milkdown-root .ProseMirror table th { background: var(--vsword-table-header-bg); }
+
+		/* -------- Paper（产品默认 · 浅色写作纸，不跟 workbench） -------- */
+		body[data-theme="paper"] {
+			--vsword-bg: #f7f6f3;
+			--vsword-fg: #2c2c2c;
+			--vsword-muted: #6b6b6b;
+			--vsword-border: #e2e0da;
+			--vsword-accent: #2f6fed;
+			--vsword-link: #2f6fed;
+			--vsword-body-font: var(--vsword-font-serif);
+			--vsword-heading-font: var(--vsword-font-serif);
+			--vsword-heading-weight: 650;
+			--vsword-body-size: 17px;
+			--vsword-body-line: 1.75;
+			--vsword-max-width: 800px;
+			--vsword-quote-bar: #c4bfb4;
+			--vsword-code-bg: #efece6;
+			--vsword-pre-bg: #efece6;
+			--vsword-table-stripe: #f0eee8;
+			--vsword-table-header-bg: #efece6;
+			color-scheme: light;
+		}
 
 		/* -------- GitHub (light, technical) -------- */
 		body[data-theme="github"] {

@@ -69,6 +69,7 @@ import {
 	VSWORD_MILKDOWN_DEFAULT_THEME,
 	VSWORD_MILKDOWN_THEME_STORAGE_KEY,
 	VSWORD_THEME_CONFIG,
+	getDocumentThemeBootColors,
 	isValidTheme,
 } from './milkdownEditorThemes.js';
 import {
@@ -317,23 +318,18 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		const disposables = new DisposableStore();
 		this.liveInputs.add(input);
 
-		// 首帧防闪：用 workbench 当前 editor 绝对色，避免 webview 默认白底 → 深色 → 再跳变
-		const wbTheme = this.themeService.getColorTheme();
-		const bootBackground = wbTheme.getColor('editor.background')?.toString()
-			?? (wbTheme.type === ColorScheme.LIGHT || wbTheme.type === ColorScheme.HIGH_CONTRAST_LIGHT
-				? '#ffffff' : '#1e1e1e');
-		const bootForeground = wbTheme.getColor('editor.foreground')?.toString()
-			?? (wbTheme.type === ColorScheme.LIGHT || wbTheme.type === ColorScheme.HIGH_CONTRAST_LIGHT
-				? '#333333' : '#d4d4d4');
+		// 首帧防闪：boot 色与**文档主题**一致（默认 paper 浅色），不再用 workbench 深色 editor 色覆写
+		const initialTheme = this.readEffectiveTheme();
+		const boot = getDocumentThemeBootColors(initialTheme);
 		input.webview.setHtml(getMilkdownEditorHtml({
 			fileName: basename(input.resource),
 			resourceUri: input.resource.toString(),
 			scriptUri: asWebviewUri(scriptUri).toString(true),
 			katexCssUri: asWebviewUri(katexCssUri).toString(true),
 			documentBaseUri: asWebviewUri(dirname(input.resource)).toString(true) + '/',
-			initialTheme: this.readEffectiveTheme(),
-			bootBackground,
-			bootForeground,
+			initialTheme,
+			bootBackground: boot.bg,
+			bootForeground: boot.fg,
 		}));
 
 		disposables.add(input.webview.onMessage(async e => {
@@ -625,7 +621,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			const isDark = kind === ColorScheme.DARK || kind === ColorScheme.HIGH_CONTRAST_DARK;
 			const key = isDark ? VSWORD_THEME_CONFIG.dark : VSWORD_THEME_CONFIG.light;
 			const raw = this.configurationService.getValue<string>(key);
-			return isValidTheme(raw) ? raw : (isDark ? 'night' : 'github');
+			return isValidTheme(raw) ? raw : (isDark ? 'night' : VSWORD_MILKDOWN_DEFAULT_THEME);
 		}
 		const stored = this.storageService.get(VSWORD_MILKDOWN_THEME_STORAGE_KEY, StorageScope.APPLICATION, VSWORD_MILKDOWN_DEFAULT_THEME);
 		if (isExternalThemeId(stored) && this.externalThemes.some(t => t.id === stored)) {

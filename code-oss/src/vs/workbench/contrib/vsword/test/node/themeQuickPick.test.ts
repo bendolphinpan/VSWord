@@ -6,8 +6,8 @@
 // T-3.7d.3 · Select Markdown Theme quick-pick 分组化最小回归。
 //
 // 5 条断言（PRD DoD Q1-Q5）：
-//   Q1 只内置：items 数=5，无 separator
-//   Q2 workspace 外挂：5 内置 + 1 separator + N workspace items，separator 位置正确
+//   Q1 只内置：items 数=6，无 separator
+//   Q2 workspace 外挂：6 内置 + 1 separator + N workspace items，separator 位置正确
 //   Q3 user 外挂：workspace separator 之后再来 user separator + user items
 //   Q4 workspace 与内置 id 冲突（`github` vs `ext:workspace:github`）：两个都在 list，不去重
 //   Q5 外挂 item description === 'From workspace' / 'From user'
@@ -23,7 +23,8 @@ import type {
 	IQuickPickSeparator,
 } from '../../../../../platform/quickinput/common/quickInput.js';
 
-const BUILTIN_IDS = ['default', 'github', 'newsprint', 'night', 'solarized-light'] as const;
+const BUILTIN_IDS = ['paper', 'default', 'github', 'newsprint', 'night', 'solarized-light'] as const;
+const BUILTIN_COUNT = BUILTIN_IDS.length;
 
 function fakeExternal(source: 'workspace' | 'user', slug: string, displayName?: string): ExternalTheme {
 	return {
@@ -40,21 +41,23 @@ function isSep(entry: IQuickPickItem | IQuickPickSeparator): entry is IQuickPick
 
 suite('T-3.7d.3 · Select Markdown Theme quick-pick 分组 · Q1-Q5 最小回归', () => {
 
-	test('Q1 · 只内置：items 数=5，无 separator', () => {
+	test('Q1 · 只内置：items 数=6，无 separator', () => {
 		const items = buildThemeQuickPickItems({
 			builtinIds: BUILTIN_IDS,
 			external: [],
 		});
-		assert.strictEqual(items.length, 5, 'items 数应等于 builtinIds 长度');
+		assert.strictEqual(items.length, BUILTIN_COUNT, 'items 数应等于 builtinIds 长度');
 		assert.strictEqual(items.filter(isSep).length, 0, '无外挂时不应出现任何 separator');
 		// items 顺序应严格按 builtinIds
 		for (let i = 0; i < BUILTIN_IDS.length; i++) {
 			const it = items[i] as IQuickPickItem;
 			assert.strictEqual(it.id, BUILTIN_IDS[i], `第 ${i} 项 id 应为 ${BUILTIN_IDS[i]}`);
 		}
+		const paper = items[0] as IQuickPickItem;
+		assert.ok(paper.label.toLowerCase().includes('paper'), 'paper 应用友好 label，而非裸 id');
 	});
 
-	test('Q2 · 有 workspace 外挂：5 内置 + 1 separator + N workspace items', () => {
+	test('Q2 · 有 workspace 外挂：6 内置 + 1 separator + N workspace items', () => {
 		const external: ExternalTheme[] = [
 			fakeExternal('workspace', 'my-theme', 'My Theme'),
 			fakeExternal('workspace', 'draft-a', 'Draft A'),
@@ -63,14 +66,14 @@ suite('T-3.7d.3 · Select Markdown Theme quick-pick 分组 · Q1-Q5 最小回归
 			builtinIds: BUILTIN_IDS,
 			external,
 		});
-		// 总长度：5 + 1 sep + 2 items = 8
-		assert.strictEqual(items.length, 8);
+		// 总长度：6 + 1 sep + 2 items = 9
+		assert.strictEqual(items.length, BUILTIN_COUNT + 1 + 2);
 		// separator 出现且只出现一次
 		const sepIndices = items.map((e, i) => isSep(e) ? i : -1).filter(i => i >= 0);
-		assert.deepStrictEqual(sepIndices, [5], 'workspace separator 应恰在内置块之后（index 5）');
+		assert.deepStrictEqual(sepIndices, [BUILTIN_COUNT], `workspace separator 应恰在内置块之后（index ${BUILTIN_COUNT}）`);
 		// separator 后的两条是 workspace item
-		const first = items[6] as IQuickPickItem;
-		const second = items[7] as IQuickPickItem;
+		const first = items[BUILTIN_COUNT + 1] as IQuickPickItem;
+		const second = items[BUILTIN_COUNT + 2] as IQuickPickItem;
 		assert.strictEqual(first.id, 'ext:workspace:my-theme');
 		assert.strictEqual(first.label, 'My Theme');
 		assert.strictEqual(second.id, 'ext:workspace:draft-a');
@@ -86,13 +89,13 @@ suite('T-3.7d.3 · Select Markdown Theme quick-pick 分组 · Q1-Q5 最小回归
 			builtinIds: BUILTIN_IDS,
 			external,
 		});
-		// 5 内置 + 1 sep + 1 ws item + 1 sep + 2 user items = 10
-		assert.strictEqual(items.length, 10);
+		// 6 内置 + 1 sep + 1 ws item + 1 sep + 2 user items = 11
+		assert.strictEqual(items.length, BUILTIN_COUNT + 1 + 1 + 1 + 2);
 		const sepIndices = items.map((e, i) => isSep(e) ? i : -1).filter(i => i >= 0);
-		assert.deepStrictEqual(sepIndices, [5, 7], 'workspace separator=5, user separator=7');
+		assert.deepStrictEqual(sepIndices, [BUILTIN_COUNT, BUILTIN_COUNT + 2], `workspace separator=${BUILTIN_COUNT}, user separator=${BUILTIN_COUNT + 2}`);
 		// user 块顺序
-		const u0 = items[8] as IQuickPickItem;
-		const u1 = items[9] as IQuickPickItem;
+		const u0 = items[BUILTIN_COUNT + 3] as IQuickPickItem;
+		const u1 = items[BUILTIN_COUNT + 4] as IQuickPickItem;
 		assert.strictEqual(u0.id, 'ext:user:ua');
 		assert.strictEqual(u1.id, 'ext:user:ub');
 	});

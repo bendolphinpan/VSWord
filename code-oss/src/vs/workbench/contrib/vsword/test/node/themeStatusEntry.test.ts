@@ -171,7 +171,7 @@ suite('T-3.7d.3 · resolveThemeDisplayName · 纯函数分支', () => {
 		assert.strictEqual(r.displayName, 'DEFAULT-LABEL');
 	});
 
-	test('stored 无效（非内置、非 ext:*）→ 兜底 default', () => {
+	test('stored 无效（非内置、非 ext:*）→ 兜底 paper', () => {
 		const r = resolveThemeDisplayName({
 			storedThemeId: 'bogus-x',
 			followWorkbench: false,
@@ -180,7 +180,8 @@ suite('T-3.7d.3 · resolveThemeDisplayName · 纯函数分支', () => {
 			workbenchIsDark: false,
 			defaultLabel: 'Default',
 		});
-		assert.strictEqual(r.id, 'default');
+		assert.strictEqual(r.id, 'paper');
+		assert.strictEqual(r.displayName, 'Paper');
 	});
 
 	test('stored=ext:user:foo（registry 未注册）→ id 保留，displayName=id', () => {

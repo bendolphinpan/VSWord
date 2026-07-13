@@ -57,12 +57,13 @@ export const VSWORD_MILKDOWN_THEME_STATUS_ENTRY_ID = 'vsword.milkdown.theme';
  *
  * 分支（与 Contribution.readEffectiveTheme 保持 v1 对齐，见 PRD §4.3.3）：
  *   - followWorkbench=true → 取 workbenchIsDark ? configDark : configLight（跳过 stored）
- *   - 否则：stored 是内置合法 id 或 ext:* 前缀 → 用 stored；不合法 → 兜底 'default'
+ *   - 否则：stored 是内置合法 id 或 ext:* 前缀 → 用 stored；不合法 → 兜底 paper
  *
  * displayName 反查规则（见 displayNameForThemeId）：
  *   - 'default' → labels.defaultLabel
+ *   - 'paper' → 'Paper'
  *   - ext:* → registry 命中 → theme.displayName；未命中 → id 兜底
- *   - 其他（内置 4 个 slug）→ 直接返回 id
+ *   - 其他内置 slug → 直接返回 id
  */
 export function resolveThemeDisplayName(input: {
 	readonly storedThemeId: string | undefined;
