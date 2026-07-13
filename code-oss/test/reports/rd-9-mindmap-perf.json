@@ -1,17 +1,31 @@
 {
-  "builtAt": "2026-07-13T11:14:23.050Z",
-  "fixture": "large-1k-nodes.mm",
-  "bytes": 33891,
-  "nodeCount": 1001,
-  "runs": 5,
-  "parseMsAvg": 4.79,
-  "parseMsMax": 8.1,
-  "serializeMsAvg": 0.01,
-  "serializeMsMax": 0.03,
-  "roundTripOk": true,
-  "extrapolate10kParseMs": 47.9,
+  "builtAt": "2026-07-13T12:49:58.944Z",
+  "fixture1k": {
+    "label": "large-1k-nodes.mm",
+    "bytes": 33891,
+    "nodeCount": 1001,
+    "runs": 5,
+    "parseMsAvg": 4.47,
+    "parseMsMax": 7.38,
+    "serializeMsAvg": 0,
+    "serializeMsMax": 0.02,
+    "roundTripOk": true
+  },
+  "synthetic10k": {
+    "label": "synthetic-10k-nodes",
+    "bytes": 329473,
+    "nodeCount": 10000,
+    "runs": 3,
+    "parseMsAvg": 30.09,
+    "parseMsMax": 33.97,
+    "serializeMsAvg": 0,
+    "serializeMsMax": 0,
+    "roundTripOk": true
+  },
+  "extrapolate10kParseMsFrom1k": 44.7,
   "notes": [
     "Node parse/serialize only — not mind-elixir layout/render.",
-    "10k extrapolate assumes linear scaling (layout may be superlinear)."
+    "RD-9.3b: synthetic-10k is measured (not only extrapolated).",
+    "Layout/render 10k remains out of scope for this probe."
   ]
 }

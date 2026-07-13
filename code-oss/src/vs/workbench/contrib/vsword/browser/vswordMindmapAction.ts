@@ -18,7 +18,7 @@ import { getCodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
-import { markdownToMindmapXml } from '../common/mindmapMarkdown.js';
+import { markdownToMindmapXml, mindmapToMarkdownOutline } from '../common/mindmapMarkdown.js';
 import { addMindmapNodeIcon, addMindmapSummary, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, moveMindmapNode, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, removeMindmapSummary, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, updateMindmapSummary, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
@@ -595,7 +595,7 @@ function parseNullableColor(raw: unknown): string | null {
 
 /**
  * RD-9.1 · 从当前编辑器 Markdown 大纲生成 `.mm` 并打开 Mindmap。
- * 有损导入：仅列表缩进结构 → FreeMind 树。
+ * 有损导入：ATX 标题 + 列表缩进结构 → FreeMind 树。
  */
 class VswordMarkdownOutlineToMindmapAction extends Action2 {
 	static readonly ID = 'vsword.actions.markdownOutlineToMindmap';
@@ -619,19 +619,19 @@ class VswordMarkdownOutlineToMindmapAction extends Action2 {
 		const codeEditor = getCodeEditor(editorService.activeTextEditorControl);
 		const model = codeEditor?.getModel();
 		if (!model) {
-			notification.info(localize('vsword.mindmap.noEditor', 'Open a text/Markdown editor with a bullet outline first.'));
+			notification.info(localize('vsword.mindmap.noEditor', '请先打开含标题或列表大纲的 Markdown / 文本编辑器。'));
 			return;
 		}
 		const text = model.getValue();
 		const xml = markdownToMindmapXml(text);
 		if (!xml) {
-			notification.info(localize('vsword.mindmap.noOutline', 'No Markdown list items found (use - / * / 1. outlines).'));
+			notification.info(localize('vsword.mindmap.noOutline', '未找到大纲（支持 # 标题 或 - / * / 1. 列表）。'));
 			return;
 		}
 
 		const src = model.uri;
 		if (src.scheme !== 'file') {
-			notification.info(localize('vsword.mindmap.saveFirst', 'Save the Markdown file to disk first, then run this command again.'));
+			notification.info(localize('vsword.mindmap.saveFirst', '请先将 Markdown 保存到磁盘后再执行本命令。'));
 			return;
 		}
 		const base = basename(src).replace(/\.[^.]+$/, '') || 'outline';
@@ -646,13 +646,87 @@ class VswordMarkdownOutlineToMindmapAction extends Action2 {
 			await fileService.writeFile(target, VSBuffer.fromString(xml));
 			const manager = instantiationService.createInstance(MindmapEditorManager, target);
 			await manager.openMindmap();
-			notification.info(localize('vsword.mindmap.created', 'Created mindmap: {0}', basename(target)));
+			notification.info(localize('vsword.mindmap.created', '已创建思维导图：{0}', basename(target)));
 		} catch (err) {
 			logService.error('[VSWord Mindmap] markdown→.mm failed:', err);
-			notification.error(localize('vsword.mindmap.createFailed', 'Failed to create .mm: {0}', String(err)));
+			notification.error(localize('vsword.mindmap.createFailed', '创建 .mm 失败：{0}', String(err)));
+		}
+	}
+}
+
+/**
+ * RD-9.1c · 将当前 `.mm` 导出为 Markdown 标题大纲（有损）。
+ * 来源：Explorer 选中 / 命令参数 / 活动文本编辑器中的 .mm。
+ */
+class VswordMindmapToMarkdownOutlineAction extends Action2 {
+	static readonly ID = 'vsword.actions.mindmapToMarkdownOutline';
+
+	constructor() {
+		super({
+			id: VswordMindmapToMarkdownOutlineAction.ID,
+			title: localize2('vswordMindmapToMarkdown', 'VSWord: Mindmap to Markdown Outline'),
+			category: VSWORD_CATEGORY,
+			f1: true,
+			menu: [
+				{
+					id: MenuId.ExplorerContext,
+					group: 'navigation',
+					order: 30,
+					when: ContextKeyExpr.equals('resourceExtname', '.mm'),
+				},
+			],
+		});
+	}
+
+	override async run(accessor: ServicesAccessor, resource?: URI | { resource: URI }): Promise<void> {
+		const fileService = accessor.get(IFileService);
+		const notification = accessor.get(INotificationService);
+		const editorService = accessor.get(IEditorService);
+		const logService = accessor.get(ILogService);
+		const explorerService = accessor.get(IExplorerService);
+
+		let fileUri = getResourceUri(resource);
+		if (!fileUri) {
+			const codeEditor = getCodeEditor(editorService.activeTextEditorControl);
+			const model = codeEditor?.getModel();
+			if (model?.uri.scheme === 'file' && model.uri.path.toLowerCase().endsWith('.mm')) {
+				fileUri = model.uri;
+			}
+		}
+		if (!fileUri || fileUri.path.toLowerCase().endsWith('.mm') === false) {
+			notification.info(localize('vsword.mindmap.exportNeedMm', '请选择或打开一个 .mm 文件后再导出 Markdown 大纲。'));
+			return;
+		}
+
+		try {
+			const content = await fileService.readFile(fileUri);
+			const doc = parseMindmapXml(content.value.toString());
+			if (!doc.root) {
+				notification.info(localize('vsword.mindmap.exportEmpty', '该 .mm 无有效根节点，无法导出。'));
+				return;
+			}
+			const md = mindmapToMarkdownOutline(doc.root);
+			const base = basename(fileUri).replace(/\.mm$/i, '') || 'mindmap';
+			let target = joinPath(dirname(fileUri), `${base}.outline.md`);
+			if (await fileService.exists(target)) {
+				const stamp = Date.now().toString(36);
+				target = joinPath(dirname(fileUri), `${base}.outline-${stamp}.md`);
+			}
+			await fileService.writeFile(target, VSBuffer.fromString(md));
+			await editorService.openEditor({ resource: target, options: { pinned: true } });
+			try {
+				await explorerService.select(target, true);
+			} catch (err) {
+				logService.debug('[VSWord Mindmap] explorer select after export failed: ' + err);
+			}
+			notification.info(localize('vsword.mindmap.exportOk', '已导出 Markdown 大纲：{0}（有损，不含图标/颜色/关系线）', basename(target)));
+		} catch (err) {
+			logService.error('[VSWord Mindmap] .mm→Markdown failed:', err);
+			notification.error(localize('vsword.mindmap.exportFailed', '导出 Markdown 失败：{0}', String(err)));
 		}
 	}
 }
 
 registerAction2(VswordOpenMindmapAction);
 registerAction2(VswordMarkdownOutlineToMindmapAction);
+registerAction2(VswordMindmapToMarkdownOutlineAction);

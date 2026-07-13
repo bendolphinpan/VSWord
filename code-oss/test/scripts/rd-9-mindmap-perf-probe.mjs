@@ -66,45 +66,79 @@ if (!fs.existsSync(FIXTURE)) {
 	process.exit(1);
 }
 
-const xml = fs.readFileSync(FIXTURE, 'utf8');
-const { parseMindmapXml, serializeMindmapXml } = await loadParseSerialize();
-
-const runs = 5;
-const parseMs = [];
-const serMs = [];
-let nodeCount = 0;
-let roundTripOk = true;
-
-for (let i = 0; i < runs; i++) {
-	const t0 = performance.now();
-	const doc = parseMindmapXml(xml);
-	parseMs.push(performance.now() - t0);
-	if (i === 0) {
-		nodeCount = countNodes(doc.root);
+/**
+ * RD-9.3b · 合成 N 节点浅宽树（root + 若干一级子节点，各带子节点），用于 10k parse 实测。
+ * 不写盘；仅内存 XML。
+ */
+function buildSyntheticMmXml(targetNodes) {
+	// root + first-level groups of ~10 leaves each
+	const leaves = Math.max(0, targetNodes - 1);
+	const groupSize = 10;
+	const groups = Math.ceil(leaves / groupSize);
+	let parts = ['<?xml version="1.0" encoding="UTF-8"?>', '<map version="1.0.1">', '<node ID="root" TEXT="Synthetic10k">'];
+	let made = 1;
+	for (let g = 0; g < groups && made < targetNodes; g++) {
+		const gid = `g${g}`;
+		parts.push(`<node ID="${gid}" TEXT="G${g}">`);
+		made++;
+		for (let i = 0; i < groupSize && made < targetNodes; i++) {
+			parts.push(`<node ID="n${g}_${i}" TEXT="N${g}-${i}"/>`);
+			made++;
+		}
+		parts.push('</node>');
 	}
-	const t1 = performance.now();
-	const out = serializeMindmapXml(doc);
-	serMs.push(performance.now() - t1);
-	if (out !== xml) { roundTripOk = false; }
+	parts.push('</node></map>');
+	return parts.join('');
 }
 
-const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+function benchXml(label, xml, parseMindmapXml, serializeMindmapXml, runs = 5) {
+	const parseMs = [];
+	const serMs = [];
+	let nodeCount = 0;
+	let roundTripOk = true;
+	for (let i = 0; i < runs; i++) {
+		const t0 = performance.now();
+		const doc = parseMindmapXml(xml);
+		parseMs.push(performance.now() - t0);
+		if (i === 0) {
+			nodeCount = countNodes(doc.root);
+		}
+		const t1 = performance.now();
+		const out = serializeMindmapXml(doc);
+		serMs.push(performance.now() - t1);
+		if (out !== xml) { roundTripOk = false; }
+	}
+	const avg = (a) => a.reduce((x, y) => x + y, 0) / a.length;
+	return {
+		label,
+		bytes: Buffer.byteLength(xml, 'utf8'),
+		nodeCount,
+		runs,
+		parseMsAvg: +avg(parseMs).toFixed(2),
+		parseMsMax: +Math.max(...parseMs).toFixed(2),
+		serializeMsAvg: +avg(serMs).toFixed(2),
+		serializeMsMax: +Math.max(...serMs).toFixed(2),
+		roundTripOk,
+	};
+}
+
+const xml1k = fs.readFileSync(FIXTURE, 'utf8');
+const { parseMindmapXml, serializeMindmapXml } = await loadParseSerialize();
+
+const fixture1k = benchXml('large-1k-nodes.mm', xml1k, parseMindmapXml, serializeMindmapXml);
+const synth10kXml = buildSyntheticMmXml(10_000);
+const synth10k = benchXml('synthetic-10k-nodes', synth10kXml, parseMindmapXml, serializeMindmapXml, 3);
+
 const result = {
 	builtAt: new Date().toISOString(),
-	fixture: 'large-1k-nodes.mm',
-	bytes: Buffer.byteLength(xml, 'utf8'),
-	nodeCount,
-	runs,
-	parseMsAvg: +avg(parseMs).toFixed(2),
-	parseMsMax: +Math.max(...parseMs).toFixed(2),
-	serializeMsAvg: +avg(serMs).toFixed(2),
-	serializeMsMax: +Math.max(...serMs).toFixed(2),
-	roundTripOk,
-	// 10k 节点：用 1k 线性外推（仅数量级参考）
-	extrapolate10kParseMs: +(avg(parseMs) * (10000 / Math.max(1, nodeCount))).toFixed(1),
+	fixture1k,
+	synthetic10k: synth10k,
+	// 保留 1k→10k 外推对照
+	extrapolate10kParseMsFrom1k: +(fixture1k.parseMsAvg * (10000 / Math.max(1, fixture1k.nodeCount))).toFixed(1),
 	notes: [
 		'Node parse/serialize only — not mind-elixir layout/render.',
-		'10k extrapolate assumes linear scaling (layout may be superlinear).',
+		'RD-9.3b: synthetic-10k is measured (not only extrapolated).',
+		'Layout/render 10k remains out of scope for this probe.',
 	],
 };
 

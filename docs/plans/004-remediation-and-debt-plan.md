@@ -62,7 +62,7 @@
 | **RD-6** | Backlinks 独立面板 | 原 T-3.6.4 | P2 · **拍板：保持 footer · 关闭** | — | — | 否 |
 | **RD-7** | 用户字体三元组 Settings | 原 T-3.4.4 | P1 · **✅ 已实现** | 功能 | — | 否 |
 | **RD-8** | vendor lazy / bundle 策略 | 原 U-5 | P2 · **✅ 审计完成** | 性能 | — | 否 |
-| **RD-9** | Phase 5 Mindmap 剩余 | master §3 | P2 · **9.1/9.3 部分 ✅** | 功能 | 按子项 | 否 |
+| **RD-9** | Phase 5 Mindmap 剩余 | master §3 | P2 · **阶段收口 ✅**（9.2/9.4 延后） | 功能 | — | 否 |
 | **RD-10** | Phase 7 最小可发布 DoD | master §6 | **P0** · 形态 **B Portable** · **UI 后** | 产品化 | 5–10d | **是**（给外人用） |
 | **RD-11** | Round-trip 保真语义复核 | Gate E 通过但超越 Typora 主张需钉死 | P1 · **✅** | 质量 | 1d | 否 |
 | **RD-12** | 扩展市场冒烟（Open VSX + VSIX） | P0 硬需求 | P1 · **清单就绪 · 待手测签字** | 兼容 | 1d | 发布前建议 |
@@ -254,15 +254,17 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 ---
 
-### RD-9 — Phase 5 Mindmap 剩余 · P2 · 部分交付（2026-07-13）
+### RD-9 — Phase 5 Mindmap 剩余 · P2 · 阶段收口（2026-07-13）
 
 详见 `docs/decisions/0007-rd9-mindmap-remaining.md`。
 
 | 子项 | 内容 | 状态 |
 |------|------|------|
-| RD-9.1 | Markdown ↔ `.mm` 互转 | ✅ `markdownToMindmapXml` + 命令 `VSWord: Markdown Outline to Mindmap (.mm)` |
+| RD-9.1 | Markdown ↔ `.mm` 互转 | ✅ |
+| RD-9.1b | ATX 标题 + 列表混排导入 | ✅ |
+| RD-9.1c | `.mm` → Markdown 大纲导出命令 | ✅ `mindmapToMarkdownOutline` |
 | RD-9.2 | richcontent 富文本可视化编辑 | ⏸ 延后 |
-| RD-9.3 | 10k 节点性能矩阵 | ✅ 1k 探针脚本 + 外推说明（非完整 10k 渲染） |
+| RD-9.3 / 9.3b | 1k fixture + **10k 合成 parse 实测** | ✅ ~30ms parse · 非 mind-elixir 渲染 |
 | RD-9.4 | Mindmap IME 专项 | ⏸ 延后 |
 
 ---

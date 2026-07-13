@@ -161,7 +161,7 @@ VSWord = Code OSS 1.124.2 基线
 - T-5.9 arrowlink 跨子树关联线
 - 53/53 单测通过；三视图切换（XML / mindmap / MD bullet）
 
-**Phase 5 剩余（P1/P2）**：Markdown ↔ `.mm` 互转完善、richcontent 富文本可视化编辑、10k 节点性能矩阵、IME 全矩阵专项。统一登记为债务 **RD-9**（见 `004-remediation-and-debt-plan.md`），**不**再写入「Phase 4」。
+**Phase 5 剩余**：RD-9 **阶段收口**（MD↔.mm 含标题 + 导出命令 + 10k parse 探针 ✅；richcontent 可视化 / 导图 IME 仍延后）。见 `004` RD-9 · `docs/decisions/0007-rd9-mindmap-remaining.md`。
 
 ---
 

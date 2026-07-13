@@ -13,6 +13,7 @@ import {
 	markdownBulletsToMindmap,
 	markdownToMindmapXml,
 	mindmapToMarkdownBullets,
+	mindmapToMarkdownOutline,
 	mindmapToMmXml,
 } from '../../common/mindmapMarkdown.js';
 import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, moveMindmapNode, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
@@ -183,10 +184,49 @@ suite('VSWord Mindmap XML', () => {
 		assert.strictEqual(again.children[0]!.text, 'a');
 	});
 
-	test('RD-9.1 · 空 / 无列表 → undefined', () => {
+	test('RD-9.1 · 空 / 无大纲 → undefined', () => {
 		assert.strictEqual(markdownBulletsToMindmap(''), undefined);
-		assert.strictEqual(markdownBulletsToMindmap('# just heading\n\nparagraph\n'), undefined);
+		assert.strictEqual(markdownBulletsToMindmap('just paragraph\nno outline\n'), undefined);
 		assert.strictEqual(markdownToMindmapXml('no lists'), undefined);
+	});
+
+	// RD-9.1b · ATX 标题 + 列表混排
+	test('RD-9.1b · 单 H1 标题成为根', () => {
+		const tree = markdownBulletsToMindmap('# just heading\n\nparagraph\n');
+		assert.ok(tree);
+		assert.strictEqual(tree.text, 'just heading');
+		assert.strictEqual(tree.children.length, 0);
+	});
+
+	test('RD-9.1b · H1/H2 + 列表子节点', () => {
+		const md = '# Product\n## Phase 1\n- Design\n  - UI\n## Phase 2\n- Ship\n';
+		const tree = markdownBulletsToMindmap(md);
+		assert.ok(tree);
+		assert.strictEqual(tree.text, 'Product');
+		assert.strictEqual(tree.children.length, 2);
+		assert.strictEqual(tree.children[0]!.text, 'Phase 1');
+		assert.strictEqual(tree.children[0]!.children[0]!.text, 'Design');
+		assert.strictEqual(tree.children[0]!.children[0]!.children[0]!.text, 'UI');
+		assert.strictEqual(tree.children[1]!.text, 'Phase 2');
+		assert.strictEqual(tree.children[1]!.children[0]!.text, 'Ship');
+	});
+
+	test('RD-9.1b · 多顶层标题合成 Outline 根', () => {
+		const tree = markdownBulletsToMindmap('## A\n## B\n- b1\n');
+		assert.ok(tree);
+		assert.strictEqual(tree.text, 'Outline');
+		assert.strictEqual(tree.children.length, 2);
+		assert.strictEqual(tree.children[0]!.text, 'A');
+		assert.strictEqual(tree.children[1]!.text, 'B');
+		assert.strictEqual(tree.children[1]!.children[0]!.text, 'b1');
+	});
+
+	test('RD-9.1c · mindmapToMarkdownOutline 输出 ATX 标题', () => {
+		const root = markdownBulletsToMindmap('# R\n## A\n- a1\n')!;
+		const outline = mindmapToMarkdownOutline(root);
+		assert.ok(outline.startsWith('# R\n'));
+		assert.ok(outline.includes('## A\n'));
+		assert.ok(outline.includes('### a1\n'));
 	});
 
 	test('parses summary bracket hook correctly', () => {
