@@ -1,7 +1,7 @@
 # Decision 0003 · RD-1 大文档 open pipeline（阶段结论）
 
 - **日期**：2026-07-13  
-- **状态**：In progress（RD-1.2 progressive 已落地；全量 ≤2s 仍待 table 算法/D）  
+- **状态**：In progress（RD-1.2 progressive + RD-1.3 首交互/加载中编辑修复已落地；**全量** 1MB ≤2s 仍待 table 算法/D → RD-1.4）  
 - **关联**：`004-remediation-and-debt-plan.md` RD-1 · 历史 `phase-3.9-perf.md`
 
 ---
@@ -60,7 +60,15 @@ unified().use(remarkParse).parse(整篇 markdown)  → 仅为 setext hint 抽 bl
 - `progressiveLoading` 期间不向 host 报 dirty  
 - 新 `createEditor` 用 `progressiveEpoch` 取消在途追加  
 
-**RD-1-lite**：首交互（首屏 Ready）目标 ≤2s；**全量加载完成**仍可能 >2s（总 CPU 近似分块之和，但 UI 可响应）。
+### Gate-R1 口径拆分（RD-1.3 · 2026-07-13）
+
+| 等级 | 指标 | 状态 |
+|------|------|------|
+| **RD-1-lite**（发布硬门槛） | 1MB：首屏可编辑（TTI）≈ 首块 GFM parse；目标 ≤2s；加载中可输入 | ✅ progressive + 首块 64k + 进度/脏标记修复 |
+| **RD-1.3 全量** | 1MB 全量 Ready P95 ≤2s | 🔴 仍受 table 超线性限制 → **RD-1.4** |
+| **RD-1.4** | 5MB ≤8s 或产品内显著限速提示 | 待 |
+
+**产品提示**：工具栏 status「大文档加载中… n/m（可先编辑首屏）」；`openProgress` 协议供 host 日志。
 
 ---
 
@@ -74,7 +82,8 @@ node code-oss/test/scripts/run-markdown-chunk-test.mjs
 node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-type
 ```
 
-手测：打开 >180k 字符 `.md`，状态栏应见「大文档加载中（首屏）…」→ 可输入 → 「Ready」。
+手测：打开 >180k 字符 `.md`，状态栏应见「大文档加载中（首屏）…」→ **可输入** → 后台续载 → 「Ready」。  
+加载中若编辑，结束后应保持 dirty（●）且内容不丢。
 
 ---
 
@@ -84,5 +93,6 @@ node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-ty
 |------|------|
 | 2026-07-13 | 首建：GFM 主因、setext 去重 |
 | 2026-07-13 | table 钉死；progressive C 落地 |
+| 2026-07-13 | RD-1.3：首块 64k、openProgress、加载中编辑 dirty 修复；全量 2s 改挂 RD-1.4 |
 
 **Decision End · 0003**

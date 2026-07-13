@@ -146,8 +146,9 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 | RD-1.1 | 分阶段耗时；**table 扩展**主因 | ✅ 0003 |
 | RD-1.1b | createEditor 去掉 full remark-parse；setext O(N) | ✅ |
 | RD-1.2 | progressive 分块 open（首屏可编辑） | ✅ |
-| RD-1.3 | 全量 1MB P95≤2s（可能需 table 算法/D 方案） | 部分（首交互） |
-| RD-1.4 | 5MB ≤8s 全量 | 待 |
+| RD-1.3 | **RD-1-lite**：首交互/加载中可编辑 + 进度 + dirty 正确；首块 64k | ✅ 代码（手测可选） |
+| RD-1.3b | ~~全量 1MB P95≤2s~~ → 见 **RD-1.4**（table 算法） | 改挂 |
+| RD-1.4 | 全量 1MB ≤2s 与/或 5MB ≤8s（table 算法/D）+ 产品限速提示 | 待 |
 
 **非目标**：极致 RSS（RD-3）；为性能永久关掉 GFM 表格。
 

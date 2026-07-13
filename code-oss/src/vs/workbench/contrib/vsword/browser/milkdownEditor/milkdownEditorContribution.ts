@@ -368,6 +368,16 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'ready':
 				await this.postInit(input);
 				return;
+			case 'openProgress': {
+				// RD-1.3 · 大文档 progressive 进度（首屏可编辑 / 追加 / 完成）
+				// 仅 debug 日志；UI 状态已在 webview 工具栏展示。避免刷屏：done 或 first 打一条。
+				if (msg.phase === 'first' || msg.phase === 'done') {
+					this.logService.debug(
+						`[VSWord Milkdown] openProgress ${msg.phase} ${msg.loadedChunks}/${msg.totalChunks} chars=${msg.sourceChars} progressive=${msg.progressive}`,
+					);
+				}
+				return;
+			}
 			case 'markdownUpdated':
 				input.workingCopy.updateContent(
 					msg.markdown,

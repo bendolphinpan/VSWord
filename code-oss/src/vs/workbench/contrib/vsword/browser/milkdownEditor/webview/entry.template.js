@@ -175,9 +175,13 @@ let saveSeq = 0;
 let slashController;
 let blockHandleController;
 let modeController;
-// RD-1.2: progressive 加载期间抑制 markdownUpdated → host dirty，并允许中途 createEditor 取消。
+// RD-1.2/1.3: progressive 加载期间抑制「无编辑时」的 markdownUpdated → host dirty；
+// 若用户在加载中输入则记 progressiveUserEdited，结束后保留 dirty 并上报 host。
 let progressiveLoading = false;
 let progressiveEpoch = 0;
+let progressiveUserEdited = false;
+/** true 仅在 appendMarkdownChunk 内部，用于区分「后台追加 tr」与「用户键入」。 */
+let progressiveAppending = false;
 // T-3.7b.c: 视图模式 → editable 切换器。整个 webview 一份，跨 createEditor 重建。
 // createEditor 拆掉旧 Editor 时先 setSessionReady(false)，新 editor.create() 完成后再 setSessionReady(true)。
 const viewModeApplier = createViewModeApplier({
@@ -237,12 +241,44 @@ function reportError(prefix, err) {
 
 function yieldToMain() {
 	return new Promise(resolve => {
-		if (typeof requestAnimationFrame === 'function') {
-			requestAnimationFrame(() => setTimeout(resolve, 0));
+		const go = () => {
+			// RD-1.3：composition 中不追加块，避免 IME 候选被 tr.insert 打断
+			try {
+				if (imeCompositionState?.snapshot?.()?.composing) {
+					setTimeout(go, 48);
+					return;
+				}
+			} catch { /* ignore */ }
+			resolve();
+		};
+		if (typeof requestIdleCallback === 'function') {
+			requestIdleCallback(() => go(), { timeout: 64 });
+		} else if (typeof requestAnimationFrame === 'function') {
+			requestAnimationFrame(() => setTimeout(go, 0));
 		} else {
-			setTimeout(resolve, 0);
+			setTimeout(go, 0);
 		}
 	});
+}
+
+/**
+ * RD-1.3 · progressive 进度上报（host 可写日志 / 状态栏；webview 工具栏已有中文 status）。
+ * @param {'first'|'append'|'done'} phase
+ * @param {number} loadedChunks
+ * @param {number} totalChunks
+ * @param {number} sourceChars
+ */
+function postOpenProgress(phase, loadedChunks, totalChunks, sourceChars) {
+	try {
+		vscode?.postMessage({
+			type: 'openProgress',
+			progressive: totalChunks > 1,
+			phase,
+			loadedChunks,
+			totalChunks,
+			sourceChars,
+		});
+	} catch { /* disposed */ }
 }
 
 /**
@@ -251,22 +287,28 @@ function yieldToMain() {
  */
 async function appendMarkdownChunk(chunk) {
 	if (!editor || typeof chunk !== 'string' || chunk.length === 0) { return; }
-	await editor.action(ctx => {
-		const parser = ctx.get(parserCtx);
-		const view = ctx.get(editorViewCtx);
-		if (!parser || !view) { return; }
-		let parsed;
-		try {
-			parsed = parser(chunk);
-		} catch (err) {
-			reportError('progressive-parse', err);
-			return;
-		}
-		if (!parsed || !parsed.content || parsed.content.size === 0) { return; }
-		const end = view.state.doc.content.size;
-		const tr = view.state.tr.insert(end, parsed.content);
-		view.dispatch(tr);
-	});
+	progressiveAppending = true;
+	try {
+		await editor.action(ctx => {
+			const parser = ctx.get(parserCtx);
+			const view = ctx.get(editorViewCtx);
+			if (!parser || !view) { return; }
+			let parsed;
+			try {
+				parsed = parser(chunk);
+			} catch (err) {
+				reportError('progressive-parse', err);
+				return;
+			}
+			if (!parsed || !parsed.content || parsed.content.size === 0) { return; }
+			const end = view.state.doc.content.size;
+			// 保留选区，避免追加时把用户光标拽到文末
+			const tr = view.state.tr.insert(end, parsed.content);
+			view.dispatch(tr);
+		});
+	} finally {
+		progressiveAppending = false;
+	}
 }
 
 /**
@@ -337,15 +379,17 @@ async function createEditor(markdown) {
 		blockHandleController = undefined;
 	}
 
-	// RD-1.2: 大文档 progressive —— 首屏小块先可编辑，其余 yield 追加。
+	// RD-1.2/1.3: 大文档 progressive —— 首屏小块先可编辑，其余 yield 追加。
 	const useProgressive = shouldUseProgressiveOpen(markdown);
 	const chunks = useProgressive
 		? splitMarkdownProgressive(markdown, VSWORD_FIRST_CHUNK_CHARS, VSWORD_NEXT_CHUNK_CHARS)
 		: [markdown];
 	const head = chunks[0] ?? '';
+	progressiveUserEdited = false;
+	progressiveAppending = false;
 	if (useProgressive && chunks.length > 1) {
 		progressiveLoading = true;
-		setStatus('大文档加载中（首屏）… ' + chunks.length + ' 段', 'dirty');
+		setStatus('大文档加载中（首屏）… 1/' + chunks.length, 'dirty');
 	}
 
 	editor = await Editor.make()
@@ -383,8 +427,17 @@ async function createEditor(markdown) {
 			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
-				// progressive 追加阶段 / 未 initialized：不报 dirty（避免 host auto-save 中间态）
-				if (!initialized || progressiveLoading) { return; }
+				// 未 initialized：忽略
+				if (!initialized) { return; }
+				// RD-1.3：progressive 期间
+				//   · progressiveAppending=true → 后台 append 的 tr，不 dirty
+				//   · 否则 → 用户键入，记 progressiveUserEdited，收尾时上报 host
+				if (progressiveLoading) {
+					if (!progressiveAppending) {
+						progressiveUserEdited = true;
+					}
+					return;
+				}
 				dirty = true;
 				setStatus('Unsaved changes…', 'dirty');
 				vscode?.postMessage({ type: 'markdownUpdated', markdown: nextMarkdown });
@@ -463,21 +516,24 @@ async function createEditor(markdown) {
 		if (!useProgressive) {
 			currentMarkdown = serialize();
 		}
+		postOpenProgress('done', 1, 1, markdown.length);
 		setStatus('Ready', 'ok');
 		return;
 	}
 
+	postOpenProgress('first', 1, chunks.length, markdown.length);
 	// 追加剩余 chunk（可被新的 createEditor 取消）
 	for (let i = 1; i < chunks.length; i++) {
 		if (myEpoch !== progressiveEpoch) { return; }
 		await yieldToMain();
 		if (myEpoch !== progressiveEpoch || !editor) { return; }
-		setStatus('大文档加载中… ' + (i + 1) + '/' + chunks.length, 'dirty');
+		setStatus('大文档加载中… ' + (i + 1) + '/' + chunks.length + '（可先编辑首屏）', 'dirty');
 		try {
 			await appendMarkdownChunk(chunks[i]);
 		} catch (err) {
 			reportError('progressive-append-' + i, err);
 		}
+		postOpenProgress('append', i + 1, chunks.length, markdown.length);
 	}
 	if (myEpoch !== progressiveEpoch) { return; }
 	progressiveLoading = false;
@@ -488,13 +544,27 @@ async function createEditor(markdown) {
 		currentMarkdown = markdown;
 		reportError('progressive-serialize', err);
 	}
-	dirty = false;
+	// RD-1.3：加载中用户改过 → 保持 dirty 并通知 host；否则 clean
+	if (progressiveUserEdited) {
+		dirty = true;
+		setStatus('Unsaved changes…', 'dirty');
+		try {
+			vscode?.postMessage({ type: 'markdownUpdated', markdown: currentMarkdown });
+		} catch { /* ignore */ }
+	} else {
+		dirty = false;
+		setStatus('Ready', 'ok');
+	}
+	progressiveUserEdited = false;
 	try {
 		editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
 	} catch (err) {
 		reportError('outline-seed', err);
 	}
-	setStatus('Ready', 'ok');
+	postOpenProgress('done', chunks.length, chunks.length, markdown.length);
+	if (!dirty) {
+		setStatus('Ready', 'ok');
+	}
 }
 
 // T-3.3.2: rebuild the editor from source-mode textarea content.

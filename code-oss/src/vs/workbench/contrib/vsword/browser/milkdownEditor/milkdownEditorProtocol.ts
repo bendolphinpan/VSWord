@@ -46,6 +46,20 @@ export interface WebviewErrorMessage {
 	readonly message: string;
 }
 
+/**
+ * RD-1.3 · 大文档 progressive open 进度（webview → host）。
+ * phase: first = 首屏可编辑；append = 后续块；done = 全量完成。
+ */
+export interface WebviewOpenProgressMessage {
+	readonly type: 'openProgress';
+	readonly progressive: boolean;
+	readonly phase: 'first' | 'append' | 'done';
+	/** 已完成的块数（含首屏），从 1 起。 */
+	readonly loadedChunks: number;
+	readonly totalChunks: number;
+	readonly sourceChars: number;
+}
+
 /** T-3.3.2: webview asks the host for the persisted global mode preference. */
 export interface WebviewPreferenceRequestMessage {
 	readonly type: 'preferenceRequest';
@@ -236,6 +250,7 @@ export type WebviewToHostMessage =
 	| WebviewSaveRequestMessage
 	| WebviewOpenAsTextMessage
 	| WebviewErrorMessage
+	| WebviewOpenProgressMessage
 	| WebviewPreferenceRequestMessage
 	| WebviewPreferenceUpdateMessage
 	| WebviewThemeRequestMessage
