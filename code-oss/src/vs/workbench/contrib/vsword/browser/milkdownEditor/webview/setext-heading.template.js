@@ -33,6 +33,7 @@
 
 import {
 	buildSetextHintQueueFromSource,
+	buildSetextHintQueueFromSourceScan,
 	rewriteSetextHeadings,
 } from './setext-helpers.mjs';
 
@@ -58,10 +59,31 @@ export function configureSetextHeading(payload) {
 		_lastHintQueue = new Map();
 		return;
 	}
-	_lastHintQueue = buildSetextHintQueueFromSource(
-		payload.sourceText,
-		payload.blockRanges || [],
-	);
+	// RD-1：优先 O(N) 全文扫描，不依赖 remark-parse 的 blockRanges。
+	// 若调用方显式传入 blockRanges（旧路径 / 测试），仍走 collectSetextHints。
+	if (payload.blockRanges && typeof payload.blockRanges[Symbol.iterator] === 'function') {
+		const ranges = Array.from(payload.blockRanges);
+		if (ranges.length > 0) {
+			_lastHintQueue = buildSetextHintQueueFromSource(
+				payload.sourceText,
+				ranges,
+			);
+			return;
+		}
+	}
+	_lastHintQueue = buildSetextHintQueueFromSourceScan(payload.sourceText);
+}
+
+/**
+ * RD-1 · 仅凭 sourceText 配置 setext（createEditor 热路径入口）。
+ * @param {string} sourceText
+ */
+export function configureSetextHeadingFromSource(sourceText) {
+	if (typeof sourceText !== 'string' || !sourceText) {
+		_lastHintQueue = new Map();
+		return;
+	}
+	_lastHintQueue = buildSetextHintQueueFromSourceScan(sourceText);
 }
 
 /**
@@ -107,6 +129,7 @@ export function peekSetextHintQueue() {
 /** 单元测试导出。 */
 export const __TEST__ = {
 	configureSetextHeading,
+	configureSetextHeadingFromSource,
 	postProcessSetextHeadings,
 	disableSetextHeading,
 	enableSetextHeading,

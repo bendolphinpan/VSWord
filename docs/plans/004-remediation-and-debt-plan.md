@@ -139,18 +139,19 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 | open | 5mb-mixed.md | 极慢 | 2s | 🔴 |
 | type | 1mb/5mb | ≪50ms | 50ms | ✅ |
 
-**根因方向（已有 bench 结论）**：remark-parse + `buildSessionFromMdast` 类 O(N²) 扫描 / 整树构造；非 CSS 级 low-hanging fruit。
+**根因（2026-07-13）**：主瓶颈 **remark-gfm**（1MB ~12–20s）；见 `docs/decisions/0003-rd1-open-pipeline.md`。
 
-| 子项 | 内容 | Gate |
+| 子项 | 内容 | 状态 |
 |------|------|------|
-| RD-1.1 | 复现 bench：`phase-3.9-perf` 同 fixture，落盘新 baseline | 数字可复现 |
-| RD-1.2 | 方案 spike（三选一或组合）：分块 parse / 增量 hydration / worker 卸载 | 书面 ADR ≤1 页 + 原型数字 |
-| RD-1.3 | 实现选定方案 | tsc 0 · 既有 Gate E/F 不回归 |
-| RD-1.4 | 验收：1MB open P95 **≤ 2s**（目标）；5MB **≤ 8s**（放宽目标，写入 ADR） | 报告进 `code-oss/test/reports/` |
+| RD-1.1 | 分阶段耗时 + GFM 主因落盘 | ✅ 0003 |
+| RD-1.1b | createEditor 去掉 full remark-parse；setext O(N) 扫描 | ✅ |
+| RD-1.2 | progressive 分块 **或** 裁剪 GFM 扩展 | 下一刀 |
+| RD-1.3 | 实现选定方案 | 待 |
+| RD-1.4 | 1MB open P95 ≤ 2s；5MB ≤ 8s | 待 |
 
-**非目标（本卡不做）**：极致内存优化到具体 RSS 阈值（见 RD-3）；视觉动画。
+**非目标**：极致 RSS（RD-3）；为性能永久关掉 GFM 表格。
 
-**升级条件**：若 RD-1.2 证明需 >2 周，拆 **RD-1-lite**（1MB 达标优先）与 **RD-1-full**（5MB）。
+**升级条件**：若 RD-1.2 证明需 >2 周，拆 **RD-1-lite**（1MB）与 **RD-1-full**（5MB）。
 
 ---
 

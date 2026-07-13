@@ -50,14 +50,11 @@ import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
 import { codeBlockSchemaOverride } from './code-block-schema-override.mjs';
 // T-3.5c.5b: setext heading 保真后处理。
 import {
-	configureSetextHeading,
+	configureSetextHeadingFromSource,
 	postProcessSetextHeadings,
 } from './setext-heading.mjs';
-// T-3.5c.5b: 用一个轻量 remark-parse 解析 source 给 setext-hints 抽取位置。
-// 不复用 editor 的 parser（避免引入 @milkdown 内部依赖），只跑出 mdast 节点
-// + 位置偏移。
-import { unified } from 'unified';
-import remarkParse from 'remark-parse';
+// RD-1: setext hints 改 O(N) 行扫描（setext-helpers.scanSetextHintsFromSource），
+// 不再在 createEditor 前 unified+remark-parse 整篇（与 Milkdown GFM parse 双倍开销）。
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
@@ -237,26 +234,12 @@ async function createEditor(markdown) {
 	currentMarkdown = markdown;
 	dirty = false;
 	initialized = false;
-	// T-3.5c.5b: 在创建编辑器前先把原文里的 setext heading 抽成 hint 队列。
-	// 注意：必须**在 editor 加载 markdown 之前**做，避免丢失 sourceText 引用
-	// （编辑器内部不会保留原文，只保留 PM doc）。
+	// T-3.5c.5b + RD-1: 在创建编辑器前抽 setext hint（O(N) 扫描，无 remark-parse）。
+	// 必须在 editor 加载 markdown 之前：编辑器内部不保留原文，只保留 PM doc。
 	try {
-		const mdast = unified().use(remarkParse).parse(markdown);
-		const blocks = [];
-		for (const node of (mdast && mdast.children) || []) {
-			const pos = node && node.position;
-			if (!pos || !pos.start || !pos.end) { blocks.push(null); continue; }
-			const from = pos.start.offset;
-			const to = pos.end.offset;
-			if (!Number.isFinite(from) || !Number.isFinite(to) || to <= from) {
-				blocks.push(null); continue;
-			}
-			blocks.push([from, to]);
-		}
-		configureSetextHeading({ sourceText: markdown, blockRanges: blocks });
+		configureSetextHeadingFromSource(markdown);
 	} catch (err) {
-		// sourceText 解析失败时禁用后处理（不阻塞主流程，setext 退化为 ATX）。
-		configureSetextHeading({ sourceText: '', blockRanges: [] });
+		configureSetextHeadingFromSource('');
 		reportError('setext-init', err);
 	}
 	if (editor) {

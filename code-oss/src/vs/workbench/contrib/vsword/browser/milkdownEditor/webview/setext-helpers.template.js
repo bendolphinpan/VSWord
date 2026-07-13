@@ -193,6 +193,74 @@ export function buildSetextHintQueueFromSource(sourceText, blockRanges) {
 	return buildSetextHintQueue(hints);
 }
 
+/**
+ * RD-1 · O(N) 行扫描收集 setext hints —— **不**跑 remark-parse。
+ *
+ * 与 createEditor 旧路径对齐：只识别「空行分隔的 top-level 两行块」
+ * （title + `===`/`---` underline），与 {@link parseSetextHeading} 契约一致。
+ * 跳过 fenced code（``` / ~~~）内的伪 setext。
+ *
+ * 动机：entry 曾在 Editor.make 前 `unified().use(remarkParse).parse(整篇)`，
+ * 1MB 纯 parse 约 0.5s，且与 Milkdown 内 GFM parse 重复占内存。
+ *
+ * @param {string} sourceText
+ * @returns {Array<{ kind: 'h1' | 'h2', text: string, char: '=' | '-', charCount: number } | null>}
+ */
+export function scanSetextHintsFromSource(sourceText) {
+	const text = normalizeNewlines(sourceText);
+	if (!text) { return []; }
+	const lines = text.split('\n');
+	/** @type {Array<{ kind: 'h1' | 'h2', text: string, char: '=' | '-', charCount: number }>} */
+	const hints = [];
+	let inFence = false;
+	let fenceMarker = '';
+
+	for (let i = 0; i < lines.length; i++) {
+		const line = lines[i];
+		// CommonMark fence open/close（只看行首 ``` / ~~~）
+		const fenceOpen = /^(```+|~~~+)/.exec(line);
+		if (fenceOpen) {
+			const marker = fenceOpen[1][0] === '`' ? '`' : '~';
+			const run = fenceOpen[1];
+			if (!inFence) {
+				inFence = true;
+				fenceMarker = run[0];
+			} else if (run[0] === fenceMarker && run.length >= 3) {
+				inFence = false;
+				fenceMarker = '';
+			}
+			continue;
+		}
+		if (inFence) { continue; }
+
+		// top-level 块起点：文件头或前一行为空
+		const prevBlank = i === 0 || lines[i - 1].trim() === '';
+		if (!prevBlank) { continue; }
+		if (i + 1 >= lines.length) { break; }
+		if (line.trim() === '') { continue; }
+
+		const underline = lines[i + 1];
+		// 块在 underline 后结束：EOF 或下一空行（与 parseSetextHeading 两行块一致）
+		const afterOk = i + 2 >= lines.length || lines[i + 2].trim() === '';
+		if (!afterOk) { continue; }
+
+		const h = parseSetextHeading(line + '\n' + underline);
+		if (h) {
+			hints.push(h);
+			i += 1; // 跳过 underline
+		}
+	}
+	return hints;
+}
+
+/**
+ * 从全文 O(N) 扫描构造 setext hint queue（无 remark、无 blockRanges）。
+ * @param {string} sourceText
+ */
+export function buildSetextHintQueueFromSourceScan(sourceText) {
+	return buildSetextHintQueue(scanSetextHintsFromSource(sourceText));
+}
+
 /** 单元测试导出。 */
 export const __TEST__ = {
 	SETEXT_UNDERLINE_RE,
@@ -201,5 +269,7 @@ export const __TEST__ = {
 	buildSetextHintQueue,
 	rewriteSetextHeadings,
 	buildSetextHintQueueFromSource,
+	scanSetextHintsFromSource,
+	buildSetextHintQueueFromSourceScan,
 	normalizeNewlines,
 };
