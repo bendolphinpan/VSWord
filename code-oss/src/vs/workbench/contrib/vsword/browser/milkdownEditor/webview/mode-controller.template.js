@@ -168,16 +168,26 @@ export function createModeController(opts) {
 			if (!opts2.silent && vscode) {
 				vscode.postMessage({ type: 'preferenceUpdate', mode: nextMode });
 			}
-			if (nextMode === 'source') {
-				requestAnimationFrame(() => sourceTextarea?.focus?.());
-			} else if (nextMode === 'realtime' || nextMode === 'reading') {
-				// reading 也 focus 容器（caret 由 CSS 隐藏）；realtime 恢复可输入 caret
-				requestAnimationFrame(() => {
-					const pm = shell?.querySelector?.('.ProseMirror');
-					if (pm && typeof pm.focus === 'function') {
-						try { pm.focus({ preventScroll: true }); } catch { try { pm.focus(); } catch { /* noop */ } }
+			// 焦点恢复：立即 + 双 rAF（onModeChange/setProps 之后再补一次）
+			// mode-switch 已 mousedown preventDefault，通常不失焦；这里做兜底
+			const focusEditor = () => {
+				if (nextMode === 'source') {
+					try { sourceTextarea?.focus?.(); } catch { /* noop */ }
+					return;
+				}
+				const pm = shell?.querySelector?.('.ProseMirror');
+				if (!pm) return;
+				try {
+					if (typeof pm.focus === 'function') {
+						try { pm.focus({ preventScroll: true }); } catch { pm.focus(); }
 					}
-				});
+				} catch { /* noop */ }
+			};
+			focusEditor();
+			if (typeof requestAnimationFrame === 'function') {
+				requestAnimationFrame(() => requestAnimationFrame(focusEditor));
+			} else {
+				setTimeout(focusEditor, 0);
 			}
 		} finally {
 			switching = false;
@@ -195,14 +205,18 @@ export function createModeController(opts) {
 		if (next === substyle) return;
 		substyle = next;
 		applyDom();
-		// 样式切换后把焦点交回编辑区，避免「有焦无光标、无法输入」
+		// 样式切换后双 rAF 把焦点交回 contenteditable（避免有焦无光标）
 		if (currentMode !== 'source') {
-			requestAnimationFrame(() => {
+			const focusPm = () => {
 				const pm = shell?.querySelector?.('.ProseMirror');
-				if (pm && typeof pm.focus === 'function') {
-					try { pm.focus({ preventScroll: true }); } catch { try { pm.focus(); } catch { /* noop */ } }
-				}
-			});
+				if (!pm || typeof pm.focus !== 'function') return;
+				try { pm.focus({ preventScroll: true }); } catch { try { pm.focus(); } catch { /* noop */ } }
+			};
+			if (typeof requestAnimationFrame === 'function') {
+				requestAnimationFrame(() => requestAnimationFrame(focusPm));
+			} else {
+				setTimeout(focusPm, 0);
+			}
 		}
 		if (opts2.silent) return;
 		writeStoredSubstyle(substyle);

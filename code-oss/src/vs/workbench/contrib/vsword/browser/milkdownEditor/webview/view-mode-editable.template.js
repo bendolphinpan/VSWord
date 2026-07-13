@@ -95,26 +95,62 @@ export function createViewModeApplier(deps) {
 					view = null;
 				}
 				if (view && typeof view.setProps === 'function') {
+					// 切换 editable 前记下 selection，setProps 后若失焦/选区被清则恢复
+					const prevFrom = view.state?.selection?.from;
+					const prevTo = view.state?.selection?.to;
 					try {
 						view.setProps({ editable });
 					} catch (err) {
 						log('view.setProps failed', err);
 					}
-					// 3) IME composition flush —— 空 tr dispatch 强制 ProseMirror 结束 composing
-					// 状态，避免半吊子输入残留（AC-6）。
-					if (view.state && typeof view.dispatch === 'function') {
+					// 3) 仅在真正 composing 时 flush —— 无脑空 tr 会打乱 selection/焦点
+					if (view.composing && view.state && typeof view.dispatch === 'function') {
 						try {
 							view.dispatch(view.state.tr);
 						} catch (err) {
 							log('view.dispatch flush failed', err);
 						}
 					}
-					// 4) 切回可编辑模式后强制 focus，恢复 caret（用户反馈：切模式后有焦无指针）
-					if (mode !== READING && typeof view.focus === 'function') {
-						try {
-							view.focus();
-						} catch (err) {
-							log('view.focus failed', err);
+					// 4) 任意模式（含 reading）都把焦点/选区交回编辑器；reading 只是 caret 透明
+					if (typeof view.focus === 'function') {
+						const doFocus = () => {
+							try {
+								// 选区被冲掉时按切换前位置恢复
+								if (
+									view.state &&
+									typeof prevFrom === 'number' &&
+									typeof prevTo === 'number' &&
+									(view.state.selection.from !== prevFrom || view.state.selection.to !== prevTo)
+								) {
+									try {
+										const $f = view.state.doc.resolve(
+											Math.max(0, Math.min(prevFrom, view.state.doc.content.size)),
+										);
+										const $t = view.state.doc.resolve(
+											Math.max(0, Math.min(prevTo, view.state.doc.content.size)),
+										);
+										const selCtor = view.state.selection.constructor;
+										if (typeof selCtor.between === 'function') {
+											view.dispatch(view.state.tr.setSelection(selCtor.between($f, $t)));
+										} else if (typeof selCtor.near === 'function') {
+											view.dispatch(view.state.tr.setSelection(selCtor.near($f)));
+										}
+									} catch { /* selection restore best-effort */ }
+								}
+								view.focus();
+								const dom = view.dom;
+								if (dom && typeof dom.focus === 'function') {
+									try { dom.focus({ preventScroll: true }); } catch { dom.focus(); }
+								}
+							} catch (err) {
+								log('view.focus failed', err);
+							}
+						};
+						doFocus();
+						if (typeof requestAnimationFrame === 'function') {
+							requestAnimationFrame(() => requestAnimationFrame(doFocus));
+						} else {
+							setTimeout(doFocus, 0);
 						}
 					}
 				}

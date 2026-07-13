@@ -10,7 +10,7 @@
 //   2. apply('realtime') → editable() 返回 true
 //   3. apply('source')   → editable() 返回 true（reading 唯一真只读，其余全部可编辑）
 //   4. sessionReady=false 时 apply 塞进 pendingMode；setSessionReady(true) 立即 replay
-//   5. apply 里对活体 EditorView 调 setProps({editable}) + 空 tr dispatch 强制 flush composition
+//   5. apply 里对活体 EditorView 调 setProps({editable})；仅 composing 时才空 tr flush
 //
 // 被测代码 = `view-mode-editable.template.js` 里的纯函数 `createViewModeApplier`。
 // 它设计上不 import 任何 @milkdown/*，可直接在 node 里跑，无需 jsdom / Milkdown mock。
@@ -25,20 +25,41 @@ import { createViewModeApplier } from '../../browser/milkdownEditor/webview/view
 // ---------------------------------------------------------------------------
 
 interface FakeView {
-	state: { tr: { __tr: true } };
+	state: {
+		tr: { __tr: true };
+		selection: { from: number; to: number; constructor: { between?: Function; near?: Function } };
+		doc: { content: { size: number }; resolve: (pos: number) => unknown };
+	};
+	composing: boolean;
 	setProps: (props: { editable: () => boolean }) => void;
 	dispatch: (tr: unknown) => void;
+	focus: () => void;
+	dom: { focus: () => void };
 	__setPropsCalls: Array<{ editable: () => boolean }>;
 	__dispatchCalls: unknown[];
 }
 
-function makeFakeView(): FakeView {
+function makeFakeView(opts?: { composing?: boolean }): FakeView {
 	const setPropsCalls: Array<{ editable: () => boolean }> = [];
 	const dispatchCalls: unknown[] = [];
 	return {
-		state: { tr: { __tr: true } },
+		state: {
+			tr: { __tr: true },
+			selection: {
+				from: 1,
+				to: 1,
+				constructor: {},
+			},
+			doc: {
+				content: { size: 10 },
+				resolve: (pos: number) => ({ pos }),
+			},
+		},
+		composing: !!opts?.composing,
 		setProps: (props) => { setPropsCalls.push(props); },
 		dispatch: (tr) => { dispatchCalls.push(tr); },
+		focus: () => { /* noop */ },
+		dom: { focus: () => { /* noop */ } },
 		__setPropsCalls: setPropsCalls,
 		__dispatchCalls: dispatchCalls,
 	};
@@ -179,26 +200,37 @@ suite('T-3.7b.c · createViewModeApplier · reading editable 切换', () => {
 		assert.strictEqual(applier.getLastApplied(), 'reading');
 	});
 
-	test('apply 对活体 view 调 setProps + 空 tr dispatch（IME composition flush）', () => {
+	test('apply 对活体 view 调 setProps；仅 composing 时空 tr flush（避免切模式丢光标）', () => {
 		const viewCtxKey = Symbol();
 		const optionsCtxKey = Symbol();
-		const view = makeFakeView();
-		const ctx = makeFakeCtx(viewCtxKey, optionsCtxKey, view);
-		const editor = makeFakeEditor(ctx);
-		const applier = createViewModeApplier({
-			getEditor: () => editor,
+		// 非 composing：不得空 tr（会打乱 selection/焦点）
+		const viewIdle = makeFakeView({ composing: false });
+		const ctxIdle = makeFakeCtx(viewCtxKey, optionsCtxKey, viewIdle);
+		const editorIdle = makeFakeEditor(ctxIdle);
+		const applierIdle = createViewModeApplier({
+			getEditor: () => editorIdle,
 			editorViewCtx: viewCtxKey,
 			editorViewOptionsCtx: optionsCtxKey,
 		});
+		applierIdle.setSessionReady(true);
+		applierIdle.apply('reading');
+		assert.strictEqual(viewIdle.__setPropsCalls.length, 1, 'setProps 调用一次');
+		assert.strictEqual(viewIdle.__dispatchCalls.length, 0, '非 composing 不 dispatch 空 tr');
 
-		applier.setSessionReady(true);
-		applier.apply('reading');
-
-		// setProps 一次
-		assert.strictEqual(view.__setPropsCalls.length, 1, 'setProps 调用一次');
-		// dispatch 一次，传的是 view.state.tr（空 tr → PM flush composition）
-		assert.strictEqual(view.__dispatchCalls.length, 1, 'dispatch 调用一次强制 flush');
-		assert.strictEqual(view.__dispatchCalls[0], view.state.tr, 'dispatch 传的应是 view.state.tr');
+		// composing：才 flush
+		const viewComposing = makeFakeView({ composing: true });
+		const ctxComposing = makeFakeCtx(viewCtxKey, optionsCtxKey, viewComposing);
+		const editorComposing = makeFakeEditor(ctxComposing);
+		const applierComposing = createViewModeApplier({
+			getEditor: () => editorComposing,
+			editorViewCtx: viewCtxKey,
+			editorViewOptionsCtx: optionsCtxKey,
+		});
+		applierComposing.setSessionReady(true);
+		applierComposing.apply('reading');
+		assert.strictEqual(viewComposing.__setPropsCalls.length, 1, 'composing 时 setProps 一次');
+		assert.strictEqual(viewComposing.__dispatchCalls.length, 1, 'composing 时 dispatch 一次强制 flush');
+		assert.strictEqual(viewComposing.__dispatchCalls[0], viewComposing.state.tr, 'dispatch 传的应是 view.state.tr');
 	});
 
 	test('后续切换：reading → realtime → reading，每次 editable 语义正确', () => {

@@ -78,14 +78,27 @@ export function createModeSwitchComponent(deps) {
 	/** @type {Array<{ btn: HTMLElement, handler: (ev: Event) => void }>} */
 	let listeners = [];
 
+	/**
+	 * 工具栏按钮：mousedown preventDefault 防止 contenteditable 失焦（切模式丢光标根因）。
+	 * click 仍正常触发 mode/substyle 切换。
+	 */
 	function bindClick(btn, handler) {
+		const onMouseDown = (ev) => {
+			// 保留主/辅键默认行为以外的焦点：阻止按钮抢走 ProseMirror 焦点
+			try { ev.preventDefault(); } catch { /* noop */ }
+		};
+		btn.addEventListener('mousedown', onMouseDown);
 		btn.addEventListener('click', handler);
-		listeners.push({ btn, handler });
+		listeners.push({ btn, handler, onMouseDown });
 	}
 
 	function unbindAll() {
-		for (const { btn, handler } of listeners) {
+		for (const entry of listeners) {
+			const { btn, handler, onMouseDown } = entry;
 			try { btn.removeEventListener('click', handler); } catch { /* noop */ }
+			if (onMouseDown) {
+				try { btn.removeEventListener('mousedown', onMouseDown); } catch { /* noop */ }
+			}
 		}
 		listeners = [];
 	}

@@ -57,14 +57,21 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			--vsword-error: var(--vscode-errorForeground, #f85149);
 		}
 		* { box-sizing: border-box; }
-		body {
+		html, body {
 			margin: 0;
-			min-height: 100vh;
+			height: 100%;
+			overflow: hidden; /* 只让 #milkdown-root 滚，避免双滚动条/底部灰横条 */
 			background: var(--vsword-bg);
 			color: var(--vsword-fg);
 			font-family: var(--vscode-font-family, system-ui, sans-serif);
 		}
-		.vsword-md-shell { min-height: 100vh; display: flex; flex-direction: column; }
+		.vsword-md-shell {
+			height: 100%;
+			min-height: 0;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+		}
 		/* T-3.13.5: 顶部工具栏 sticky（纯色 · 视觉延后 · PRD §5a 决策 c）——
 		 * 保证 mode-switch/substyle-group 始终置顶可见，不随文档滚走。
 		 * 用纯色（color-mix bg 94% + fg）而非毛玻璃 —— 毛玻璃延后到最后 UI 布局阶段。
@@ -125,32 +132,50 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		#milkdown-root {
 			flex: 1;
 			min-height: 0;
-			overflow-x: hidden;
+			overflow-x: hidden !important;
 			overflow-y: auto;
-			/* typewriter 末行也要能滚到视口 2/3：加大底部可滚动空白 */
+			/* typewriter 末行滚到 2/3：底部可滚空白 */
 			padding-top: 42px;
 			padding-bottom: min(45vh, 360px);
-			/* 短内容时减少「幽灵」overlay 滑块存在感 */
+			/* 彻底禁用横向 scrollbar；纵向仅 hover 时淡显 */
 			scrollbar-width: thin;
 			scrollbar-color: transparent transparent;
 		}
 		#milkdown-root:hover {
-			scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+			scrollbar-color: rgba(128, 128, 128, 0.35) transparent;
 		}
 		#milkdown-root::-webkit-scrollbar {
-			width: 8px;
-			height: 8px;
+			width: 6px;
+			height: 0 !important;
+		}
+		#milkdown-root::-webkit-scrollbar:horizontal,
+		#milkdown-root::-webkit-scrollbar-corner {
+			display: none !important;
+			width: 0 !important;
+			height: 0 !important;
 		}
 		#milkdown-root::-webkit-scrollbar-thumb {
 			background: transparent;
-			border-radius: 4px;
+			border-radius: 3px;
 		}
-		#milkdown-root:hover::-webkit-scrollbar-thumb {
-			background: rgba(128, 128, 128, 0.4);
+		#milkdown-root:hover::-webkit-scrollbar-thumb:vertical {
+			background: rgba(128, 128, 128, 0.35);
+		}
+		#milkdown-root .milkdown {
+			min-height: 0;
+			width: 100%;
+			max-width: 100%;
+			overflow-x: hidden;
 		}
 		#milkdown-root .ProseMirror {
-			min-height: 100%;
+			min-height: 0;
 			outline: none;
+			/* 预留左侧 edit-context 指示条空间，避免 left 负偏移撑出横向条 */
+			padding-left: 16px;
+			padding-right: 12px;
+			overflow-x: hidden;
+			overflow-wrap: anywhere;
+			word-break: break-word;
 		}
 		#milkdown-root .ProseMirror-focused {
 			caret-color: var(--vsword-fg, currentColor);
@@ -215,7 +240,8 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			background: var(--vsword-accent);
 			color: var(--vscode-button-foreground, #fff);
 		}
-		/* Edit-context visual feedback (Q2=b): left bar + tinted background on the block containing the cursor. */
+		/* Edit-context visual feedback (Q2=b): left bar + tinted background on the block containing the cursor.
+		   指示条落在 padding-left 内（left:0），禁止负偏移 —— 负 left 是底部灰横条主因之一。 */
 		#milkdown-root .ProseMirror .vsword-edit-context {
 			position: relative;
 			background: color-mix(in srgb, var(--vsword-accent) 6%, transparent);
@@ -225,12 +251,13 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		#milkdown-root .ProseMirror .vsword-edit-context::before {
 			content: "";
 			position: absolute;
-			left: -12px;
+			left: -12px; /* 相对 block；外层 ProseMirror 已 padding-left:16px，不会溢出 root */
 			top: 4px;
 			bottom: 4px;
 			width: 3px;
 			border-radius: 2px;
 			background: var(--vsword-accent);
+			pointer-events: none;
 		}
 		/* HTML block dual-view: raw-source pane when the cursor is inside, rendered otherwise. */
 		#milkdown-root .ProseMirror .vsword-html-block {
@@ -247,7 +274,6 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			color: var(--vscode-editor-foreground);
 		}
 		#milkdown-root .ProseMirror .vsword-html-block[data-view="rendered"] * { pointer-events: none; }
-		#milkdown-root .milkdown { min-height: calc(100vh - 110px); }
 		#milkdown-root .ProseMirror {
 			outline: none;
 			font-family: var(--vscode-editor-font-family, ui-serif, Georgia, serif);
@@ -255,6 +281,8 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			line-height: 1.75;
 			max-width: 860px;
 			margin: 0 auto;
+			overflow-wrap: anywhere;
+			word-break: break-word;
 		}
 		#milkdown-root .ProseMirror p { margin: 0.75em 0; }
 		#milkdown-root .ProseMirror h1, #milkdown-root .ProseMirror h2, #milkdown-root .ProseMirror h3 { line-height: 1.25; }
@@ -1258,7 +1286,7 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 		}
 
-		/* T-3.11.4 · backlinks footer · empty 时几乎不占视觉（用户反馈底部条噪音） */
+		/* T-3.11.4 · backlinks footer · empty 时完全隐藏（用户反馈底部灰条噪音） */
 		.vsword-backlinks-footer {
 			border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
 			background: var(--vscode-editorWidget-background, transparent);
@@ -1267,12 +1295,11 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			padding: 4px 12px;
 			margin-top: 12px;
 			user-select: none;
+			flex-shrink: 0;
 		}
 		.vsword-backlinks-footer.empty {
-			opacity: 0.35;
-			border-top-color: transparent;
+			display: none !important;
 		}
-		.vsword-backlinks-footer.empty .vsword-backlinks-header { opacity: 0.6; }
 		.vsword-backlinks-header {
 			background: transparent;
 			border: 0;

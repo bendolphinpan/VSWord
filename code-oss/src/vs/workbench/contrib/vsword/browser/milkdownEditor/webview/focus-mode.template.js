@@ -11,18 +11,16 @@
  *
  *  Shell attributes drive rendering:
  *    data-mode      = realtime | reading | source
- *    data-substyle  = normal | focus | typewriter   (mutually exclusive · reading mode always renders normal, stored value preserved)
+ *    data-substyle  = normal | focus | typewriter   (mutually exclusive)
  *
  *  What this plugin still owns:
  *    (1) Decoration: `.vsword-focus-active vsword-edit-context` 挂在 cursor 所在
  *        top-level block, 以及 (仅 data-substyle=focus 时) 鼠标 hover 所在
- *        top-level block. CSS gates on data-substyle=focus (or data-mode=reading
- *        kept for reading-mode auto-dim visual — still owned by CSS layer,
- *        not by this plugin's typewriter gate).
+ *        top-level block. CSS gates on data-substyle=focus.
  *    (2) Typewriter re-scroll: when data-substyle=typewriter AND the cursor's
- *        viewport Y coordinate crossed a line boundary since last centering,
- *        scroll the active block to viewport center. Line-change (not
- *        selection-change) avoids the "jitter every keystroke" failure mode.
+ *        viewport Y crossed a line boundary, scroll caret to viewport 2/3.
+ *    (3) normal / focus 完全同一套 caret-in-view：光标始终夹在视口上下安全区内
+ *        （约 1 行高 margin），不使用 block.scrollIntoView（大段落下 caret 会出屏）。
  *--------------------------------------------------------------------------------------------*/
 
 import { $prose } from '@milkdown/utils';
@@ -30,6 +28,9 @@ import { Plugin, PluginKey } from '@milkdown/prose/state';
 import { Decoration, DecorationSet } from '@milkdown/prose/view';
 
 const KEY = new PluginKey('vsword-focus-and-context');
+
+/** 光标相对视口顶/底至少保留的行数（normal/focus 同一套）。 */
+const CARET_EDGE_LINES = 1;
 
 /**
  * 根据文档任意 pos 定位其所在的 top-level block。
@@ -94,6 +95,23 @@ function hoverEnabled(shell) {
 	return shell.getAttribute('data-substyle') === 'focus';
 }
 
+/**
+ * 由 caret 视口坐标 + scroller 矩形算 scrollTop delta。
+ * 顶/底各留 margin（约 1 行），保证光标不会跑到「画面外」。
+ * @returns {number} delta（0 = 无需滚）
+ */
+export function computeCaretInViewDelta(coords, scrollerRect, margin) {
+	if (!coords || !scrollerRect || scrollerRect.height <= 0) return 0;
+	const m = Number.isFinite(margin) && margin >= 0 ? margin : 28;
+	if (coords.top < scrollerRect.top + m) {
+		return coords.top - (scrollerRect.top + m);
+	}
+	if (coords.bottom > scrollerRect.bottom - m) {
+		return coords.bottom - (scrollerRect.bottom - m);
+	}
+	return 0;
+}
+
 export const focusAndContextPlugin = $prose(() => {
 	return new Plugin({
 		key: KEY,
@@ -122,6 +140,10 @@ export const focusAndContextPlugin = $prose(() => {
 			decorations(state) {
 				return this.getState(state).decos;
 			},
+			// ProseMirror 原生 scrollToSelection：与 ensureCaretInView 同量级 margin
+			// （typewriter 路径会在 rAF 里覆盖 scrollTop，不受此干扰）
+			scrollMargin: 32,
+			scrollThreshold: 32,
 		},
 		view(view) {
 			const shell = view.dom.closest('.vsword-md-shell');
@@ -159,7 +181,11 @@ export const focusAndContextPlugin = $prose(() => {
 				scroller.scrollTop = Math.max(0, Math.min(maxScroll, target));
 			}
 
-			/** normal / focus：仅当光标完全离开可见区时 nearest 滚入。 */
+			/**
+			 * normal / focus（完全同一套）：按 **caret 坐标**（不是 block 节点）把光标
+			 * 夹在视口上下安全区。禁止 element.scrollIntoView——大段落 block 仍可见时
+			 * nearest 不滚，光标会出屏；focus 下 hover 装饰更新也不能打断本路径。
+			 */
 			function ensureCaretInView() {
 				if (typewriterEnabled(shell)) return;
 				const scroller = scrollerEl();
@@ -169,21 +195,14 @@ export const focusAndContextPlugin = $prose(() => {
 					coords = view.coordsAtPos(view.state.selection.from);
 				} catch { return; }
 				const rect = scroller.getBoundingClientRect();
-				const margin = 24;
-				if (coords.top >= rect.top + margin && coords.bottom <= rect.bottom - margin) {
-					return;
-				}
-				const active = view.dom.querySelector('.vsword-focus-active');
-				if (active && typeof active.scrollIntoView === 'function') {
-					active.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-				} else {
-					// fallback：按坐标微调 scrollTop
-					if (coords.top < rect.top + margin) {
-						scroller.scrollTop -= (rect.top + margin - coords.top);
-					} else if (coords.bottom > rect.bottom - margin) {
-						scroller.scrollTop += (coords.bottom - (rect.bottom - margin));
-					}
-				}
+				if (rect.height <= 0) return;
+				// 用当前 caret 行高估 margin（至少 24，约 1 行）
+				const lineH = Math.max(20, Math.min(48, (coords.bottom - coords.top) || 28));
+				const margin = Math.max(lineH * CARET_EDGE_LINES, Math.min(lineH * 1.25, rect.height * 0.08));
+				const delta = computeCaretInViewDelta(coords, rect, margin);
+				if (delta === 0) return;
+				const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+				scroller.scrollTop = Math.max(0, Math.min(maxScroll, scroller.scrollTop + delta));
 			}
 
 			function maybeRecenter(force) {
@@ -201,7 +220,7 @@ export const focusAndContextPlugin = $prose(() => {
 						return;
 					}
 					lastCenterY = -1;
-					// normal / focus（及 reading×focus）：光标出屏则跟随
+					// normal 与 focus 完全同一路径
 					ensureCaretInView();
 				});
 			}
@@ -266,7 +285,20 @@ export const focusAndContextPlugin = $prose(() => {
 			}
 
 			return {
-				update() { maybeRecenter(false); },
+				// 关键：只在 selection/doc 变化时跟随光标。
+				// focus 模式下 mousemove → hover decoration tr 会频繁 update；
+				// 若每次都 cancel+重排 rAF，会把 caret 跟随滚动画吞掉（用户反馈 focus 无跟随）。
+				update(_v, prevState) {
+					if (!prevState) {
+						maybeRecenter(true);
+						return;
+					}
+					const selChanged = !view.state.selection.eq(prevState.selection);
+					const docChanged = !view.state.doc.eq(prevState.doc);
+					if (selChanged || docChanged) {
+						maybeRecenter(false);
+					}
+				},
 				destroy() {
 					if (rafId) cancelAnimationFrame(rafId);
 					if (hoverTimer) { clearTimeout(hoverTimer); hoverTimer = 0; }
