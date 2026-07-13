@@ -109,6 +109,14 @@ export function createViewModeApplier(deps) {
 							log('view.dispatch flush failed', err);
 						}
 					}
+					// 4) 切回可编辑模式后强制 focus，恢复 caret（用户反馈：切模式后有焦无指针）
+					if (mode !== READING && typeof view.focus === 'function') {
+						try {
+							view.focus();
+						} catch (err) {
+							log('view.focus failed', err);
+						}
+					}
 				}
 			});
 			lastAppliedMode = mode;

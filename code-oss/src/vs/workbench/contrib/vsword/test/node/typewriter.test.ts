@@ -30,6 +30,8 @@ import {
 	hoverEnabled,
 	shouldRecenter,
 	contentFitsInViewport,
+	computeTypewriterScrollTop,
+	TYPEWRITER_VIEWPORT_RATIO,
 } from '../../browser/milkdownEditor/webview/focus-mode-helpers.template.js';
 
 // ---------------------------------------------------------------------------
@@ -88,11 +90,9 @@ suite('T-3.13.4 · typewriter helpers · substyle 读取', () => {
 
 suite('T-3.13.4 · typewriter · AC-4.1 长文档 · 输入行居中 ± tolerance', () => {
 
-	// AC-4.1 的"视口中心 50% ± 15%"是**视觉断言**：完整回路是 caret Y →
-	// scrollIntoView({block:'center'}) → 浏览器把 caret 挪到视口 50%。webview
-	// 里 scrollIntoView 在 Chromium 是硬实现，无 mock 空间。因此本单测断言的是
-	// **决策层契约**：只要 caret 每跨过 line-height（8px）就 fire scrollIntoView
-	// 一次，视觉居中由浏览器 API 保证。tolerance ± 15% 由 QA 手测覆盖。
+	// AC-4.1 已升级为「视口约 2/3 高度」（TYPEWRITER_VIEWPORT_RATIO）：完整回路是
+	// caretDocY → computeTypewriterScrollTop → scroller.scrollTop。本单测断言决策层
+	// + scrollTop 计算；真实像素由 QA 手测覆盖。
 
 	test('AC-4.1a · lastCenterY = -1（首次） · currentY 任意 → 应 recenter', () => {
 		// 长文档进入 typewriter 时，view.update 首帧就应该把当前行拉到中间。
@@ -126,6 +126,16 @@ suite('T-3.13.4 · typewriter · AC-4.1 长文档 · 输入行居中 ± toleranc
 			true,
 			'force=true 忽略 intra-line 阈值（用于 typewriter attribute 翻转即时居中）',
 		);
+	});
+
+	test('AC-4.1e · 默认 ratio=2/3 · scrollTop 计算', () => {
+		assert.strictEqual(TYPEWRITER_VIEWPORT_RATIO, 2 / 3);
+		// caret 在文档 900px，视口 600 → 目标 scroll = 900 - 400 = 500
+		assert.strictEqual(computeTypewriterScrollTop(900, 600, 10000), 900 - 600 * (2 / 3));
+		// 不超过 maxScroll
+		assert.strictEqual(computeTypewriterScrollTop(900, 600, 100), 100);
+		// 不为负
+		assert.strictEqual(computeTypewriterScrollTop(10, 600, 10000), 0);
 	});
 });
 

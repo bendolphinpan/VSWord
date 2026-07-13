@@ -125,9 +125,35 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		#milkdown-root {
 			flex: 1;
 			min-height: 0;
-			overflow: auto;
+			overflow-x: hidden;
+			overflow-y: auto;
+			/* typewriter 末行也要能滚到视口 2/3：加大底部可滚动空白 */
 			padding-top: 42px;
-			padding-bottom: 42px;
+			padding-bottom: min(45vh, 360px);
+			/* 短内容时减少「幽灵」overlay 滑块存在感 */
+			scrollbar-width: thin;
+			scrollbar-color: transparent transparent;
+		}
+		#milkdown-root:hover {
+			scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+		}
+		#milkdown-root::-webkit-scrollbar {
+			width: 8px;
+			height: 8px;
+		}
+		#milkdown-root::-webkit-scrollbar-thumb {
+			background: transparent;
+			border-radius: 4px;
+		}
+		#milkdown-root:hover::-webkit-scrollbar-thumb {
+			background: rgba(128, 128, 128, 0.4);
+		}
+		#milkdown-root .ProseMirror {
+			min-height: 100%;
+			outline: none;
+		}
+		#milkdown-root .ProseMirror-focused {
+			caret-color: var(--vsword-fg, currentColor);
 		}
 		/* T-3.3.2: source-mode textarea shares padding & max-width with the WYSIWYG surface. */
 		#milkdown-source {
@@ -1232,7 +1258,7 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 		}
 
-		/* T-3.11.4 · backlinks footer */
+		/* T-3.11.4 · backlinks footer · empty 时几乎不占视觉（用户反馈底部条噪音） */
 		.vsword-backlinks-footer {
 			border-top: 1px solid var(--vscode-panel-border, rgba(128, 128, 128, 0.35));
 			background: var(--vscode-editorWidget-background, transparent);
@@ -1241,6 +1267,10 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			padding: 4px 12px;
 			margin-top: 12px;
 			user-select: none;
+		}
+		.vsword-backlinks-footer.empty {
+			opacity: 0.35;
+			border-top-color: transparent;
 		}
 		.vsword-backlinks-footer.empty .vsword-backlinks-header { opacity: 0.6; }
 		.vsword-backlinks-header {

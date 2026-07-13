@@ -169,9 +169,15 @@ export function createModeController(opts) {
 				vscode.postMessage({ type: 'preferenceUpdate', mode: nextMode });
 			}
 			if (nextMode === 'source') {
-				requestAnimationFrame(() => sourceTextarea.focus());
-			} else if (nextMode === 'realtime') {
-				requestAnimationFrame(() => shell?.querySelector('.ProseMirror')?.focus?.());
+				requestAnimationFrame(() => sourceTextarea?.focus?.());
+			} else if (nextMode === 'realtime' || nextMode === 'reading') {
+				// reading 也 focus 容器（caret 由 CSS 隐藏）；realtime 恢复可输入 caret
+				requestAnimationFrame(() => {
+					const pm = shell?.querySelector?.('.ProseMirror');
+					if (pm && typeof pm.focus === 'function') {
+						try { pm.focus({ preventScroll: true }); } catch { try { pm.focus(); } catch { /* noop */ } }
+					}
+				});
 			}
 		} finally {
 			switching = false;
@@ -189,6 +195,15 @@ export function createModeController(opts) {
 		if (next === substyle) return;
 		substyle = next;
 		applyDom();
+		// 样式切换后把焦点交回编辑区，避免「有焦无光标、无法输入」
+		if (currentMode !== 'source') {
+			requestAnimationFrame(() => {
+				const pm = shell?.querySelector?.('.ProseMirror');
+				if (pm && typeof pm.focus === 'function') {
+					try { pm.focus({ preventScroll: true }); } catch { try { pm.focus(); } catch { /* noop */ } }
+				}
+			});
+		}
 		if (opts2.silent) return;
 		writeStoredSubstyle(substyle);
 		if (vscode) {

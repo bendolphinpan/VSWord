@@ -447,11 +447,20 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	}
 
 	private async postInit(input: MilkdownEditorInput): Promise<void> {
-		// If the working copy has already been loaded (e.g. reopened tab from
-		// backup restore), push what we have instead of re-reading disk.
-		const markdown = input.workingCopy.isLoaded
-			? input.workingCopy.getContent()
-			: await input.workingCopy.load('initial');
+		// 启动 / webview ready：非 dirty 一律重新读盘，避免「关窗再开空白/旧稿」。
+		// 仅当 WorkingCopy 已有未保存编辑时才推内存内容（热恢复 / 同会话重挂 webview）。
+		let markdown: string;
+		try {
+			if (input.workingCopy.isLoaded && input.workingCopy.isDirty()) {
+				markdown = input.workingCopy.getContent();
+			} else {
+				markdown = await input.workingCopy.load('initial');
+			}
+		} catch (err) {
+			this.logService.error('[VSWord Milkdown] postInit load failed:', err);
+			markdown = input.workingCopy.isLoaded ? input.workingCopy.getContent() : '';
+			this.post(input, { type: 'hostError', message: 'Failed to load file: ' + String(err) });
+		}
 		this.post(input, {
 			type: 'init',
 			resourceUri: input.resource.toString(),

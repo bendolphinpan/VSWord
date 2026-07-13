@@ -57,14 +57,14 @@ export function hoverEnabled(shell) {
 
 /**
  * Line-change gate。决定当前 caret Y 是否已经跨过一个行边界，值得触发一次
- * scrollIntoView({ block: 'center' }) 重居中。
+ * typewriter 重定位（实现侧用 scrollTop 滚到视口 ratio=2/3，非 center）。
  *
  * @param {Object} params
  * @param {number} params.lastCenterY  上次成功 recenter 时的 caret viewport Y。-1 表示未记录。
  * @param {number | null} params.currentY 当前 caret viewport Y。null 表示 coords 取不到（如折叠 selection）。
  * @param {boolean} [params.force] 强制信号（首次安装 / substyle 切换 / 强制 recenter）。
  * @param {number} [params.threshold=8] intra-line 抖动阈值（默认 8px ≈ 半个行高）。
- * @returns {boolean} true 表示应当调用 scrollIntoView 重居中；false 表示 skip。
+ * @returns {boolean} true 表示应当重定位；false 表示 skip。
  */
 export function shouldRecenter({ lastCenterY, currentY, force, threshold }) {
 	if (currentY == null || !Number.isFinite(currentY)) return false;
@@ -72,6 +72,26 @@ export function shouldRecenter({ lastCenterY, currentY, force, threshold }) {
 	if (force) return true;
 	if (lastCenterY == null || lastCenterY < 0) return true;
 	return Math.abs(currentY - lastCenterY) >= t;
+}
+
+/** Typewriter 目标视口高度比例（中下 2/3）。 */
+export const TYPEWRITER_VIEWPORT_RATIO = 2 / 3;
+
+/**
+ * 计算 scroller 应设的 scrollTop，使 caret 文档 Y 落在视口 ratio 处。
+ * @param {number} caretDocY  caret 相对 scroller 内容顶的 Y（含 scrollTop）
+ * @param {number} viewportHeight
+ * @param {number} maxScroll
+ * @param {number} [ratio=2/3]
+ */
+export function computeTypewriterScrollTop(caretDocY, viewportHeight, maxScroll, ratio) {
+	const r = typeof ratio === 'number' && ratio > 0 && ratio < 1 ? ratio : TYPEWRITER_VIEWPORT_RATIO;
+	if (!Number.isFinite(caretDocY) || !Number.isFinite(viewportHeight) || viewportHeight <= 0) {
+		return 0;
+	}
+	const target = caretDocY - viewportHeight * r;
+	const max = Number.isFinite(maxScroll) && maxScroll > 0 ? maxScroll : 0;
+	return Math.max(0, Math.min(max, target));
 }
 
 /**

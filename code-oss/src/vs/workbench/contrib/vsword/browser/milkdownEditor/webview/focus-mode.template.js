@@ -128,7 +128,11 @@ export const focusAndContextPlugin = $prose(() => {
 			let rafId = 0;
 			let lastCenterY = -1; // viewport-Y of the caret at last recenter (Q2=c line-change gate)
 
-			// ---- typewriter re-scroll ------------------------------------------------
+			// ---- scroll helpers (typewriter 2/3 · normal/focus caret-in-view) --------
+			function scrollerEl() {
+				return view.dom.closest('#milkdown-root') || view.dom.parentElement;
+			}
+
 			function currentCaretY() {
 				try {
 					const { from } = view.state.selection;
@@ -137,20 +141,68 @@ export const focusAndContextPlugin = $prose(() => {
 				} catch { return null; }
 			}
 
+			/**
+			 * Typewriter：把光标行滚到 scroller 视口约 2/3 高度（中下），
+			 * 末行也保持该高度（用 padding-bottom 兜底，见 milkdownEditorHtml）。
+			 */
+			function scrollCaretToRatio(ratio) {
+				const scroller = scrollerEl();
+				if (!scroller) return;
+				let coords;
+				try {
+					coords = view.coordsAtPos(view.state.selection.from);
+				} catch { return; }
+				const rect = scroller.getBoundingClientRect();
+				const caretDocY = coords.top - rect.top + scroller.scrollTop;
+				const target = caretDocY - rect.height * ratio;
+				const maxScroll = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+				scroller.scrollTop = Math.max(0, Math.min(maxScroll, target));
+			}
+
+			/** normal / focus：仅当光标完全离开可见区时 nearest 滚入。 */
+			function ensureCaretInView() {
+				if (typewriterEnabled(shell)) return;
+				const scroller = scrollerEl();
+				if (!scroller) return;
+				let coords;
+				try {
+					coords = view.coordsAtPos(view.state.selection.from);
+				} catch { return; }
+				const rect = scroller.getBoundingClientRect();
+				const margin = 24;
+				if (coords.top >= rect.top + margin && coords.bottom <= rect.bottom - margin) {
+					return;
+				}
+				const active = view.dom.querySelector('.vsword-focus-active');
+				if (active && typeof active.scrollIntoView === 'function') {
+					active.scrollIntoView({ block: 'nearest', behavior: 'auto' });
+				} else {
+					// fallback：按坐标微调 scrollTop
+					if (coords.top < rect.top + margin) {
+						scroller.scrollTop -= (rect.top + margin - coords.top);
+					} else if (coords.bottom > rect.bottom - margin) {
+						scroller.scrollTop += (coords.bottom - (rect.bottom - margin));
+					}
+				}
+			}
+
 			function maybeRecenter(force) {
-				if (!typewriterEnabled(shell)) { lastCenterY = -1; return; }
 				if (rafId) cancelAnimationFrame(rafId);
 				rafId = requestAnimationFrame(() => {
 					rafId = 0;
-					const y = currentCaretY();
-					if (y == null) return;
-					// Q2=c: only recenter on line boundary crossings. 8px = ~half of a
-					// typical line-height; anything less is intra-line micro-movement.
-					if (!force && lastCenterY >= 0 && Math.abs(y - lastCenterY) < 8) return;
-					const active = view.dom.querySelector('.vsword-focus-active');
-					if (!active) return;
-					active.scrollIntoView({ block: 'center', behavior: 'smooth' });
-					lastCenterY = y;
+					if (typewriterEnabled(shell)) {
+						const y = currentCaretY();
+						if (y == null) return;
+						// line-change gate：8px ≈ 半行，避免每键抖动
+						if (!force && lastCenterY >= 0 && Math.abs(y - lastCenterY) < 8) return;
+						// 用户要求：中下约 2/3 高度（非 center）
+						scrollCaretToRatio(2 / 3);
+						lastCenterY = y;
+						return;
+					}
+					lastCenterY = -1;
+					// normal / focus（及 reading×focus）：光标出屏则跟随
+					ensureCaretInView();
 				});
 			}
 
