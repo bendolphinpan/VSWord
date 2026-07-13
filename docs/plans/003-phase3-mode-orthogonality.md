@@ -1,9 +1,10 @@
 # 003 · Phase 3 · 模式切换正交性调研 PRD
 
-> 状态：**v2 · 用户拍板定稿**（两级菜单 · radio 互斥）
+> 状态：**v2 定稿 + T-3.13.2 修订 · RD-4 对账关闭**（2026-07-13）
 > 关联 kanban：t_4dd379f7（本卡）
 > 上游依赖：T-3.7b（视图模式全套 · commit `ce03f41f`）· T-3.10（focus/typewriter 独立化）
 > 下游拆分：本 PRD §7 定义 T-3.12.3.a / .b / .c 三张子卡
+> **现行语义指针**：`docs/decisions/0005-rd4-mode-orthogonality.md`（**阅读下二级菜单保留并三档生效**，覆盖下文 §4 M-4 / §6 AC-1～2 的「阅读隐藏」条款）
 > 类型：调研 + Fix PRD（非新增功能，收敛现有正交空间的语义歧义）
 > 语言：中文 · KISS · Phase 3 policy 不动主题/CSS 视觉调优（除非阻断功能验证）· "好看"放一放
 
@@ -373,21 +374,22 @@ v2 定稿后**无剩余 Q**，直接进入 §7 子任务执行。
 ## DoD
 
 - [x] `docs/plans/003-phase3-mode-orthogonality.md` 落盘（本文件 v2）
-- [ ] commit：`docs(plans): 003-phase3-mode-orthogonality v2 · 两级菜单 radio 互斥 (用户拍板)`
-- [ ] **本地不 push**（Phase 3 PM 类文档 review-gated；v2 已用户拍板可直接 complete，coordinator 决定 push 时机）
-- [ ] coordinator 依 §7 派 T-3.12.3.a / .b / .c 三张卡进 kanban，assignee 分派 dev / dev / qa
+- [x] T-3.12.3.a / .b / .c 落地 + T-3.13.2 阅读 × substyle 三档修订
+- [x] RD-4 对账关闭 · `docs/decisions/0005-rd4-mode-orthogonality.md`
+- [x] 单测绿：viewModes 37 / modeSwitch 8 / viewModeEditable 7（`viewModeMatrix` 旧版 pending 不阻塞）
+- [x] commit/push：实现卡已在 history；对账文档随 RD-4 提交
 
 ---
 
 ## 风险 & 备注
 
-- **memento 迁移风险**：老用户 storage 里存在 `VSWORD_MILKDOWN_FOCUS_STORAGE_KEY` + `_TYPEWRITER_STORAGE_KEY` 两 key，迁移逻辑需覆盖 4 种起始态（都无 / 仅 focus / 仅 typewriter / 都有）→ T-3.12.3.a 单测必须覆盖 4 种起始态 roundtrip
-- **协议兼容性**：主进程 `milkdownEditorProtocol.ts` 现有 `viewMode` 字段仅传一级 mode，不受影响；若未来需要 host 侧持久化 substyle（例如恢复上次会话），需扩协议 payload —— **Phase 3 不做**，v2 只用 webview localStorage/memento
-- **视觉工具栏宽度变化**：阅读模式切走时二级菜单消失、工具栏宽度收缩会有一帧跳动。Phase 3 policy 下**接受**，收官 UI 阶段再统一过渡动画
-- **CSS 迁移**：现有 CSS 若有基于 `[data-focus="on"]` / `[data-typewriter="on"]` 的选择器，需同步迁移到 `[data-substyle="focus"]` / `[data-substyle="typewriter"]` —— T-3.12.3.a/.b 落地时需 grep 全仓库确认无遗漏（估计涉及 `.vsword-focus-active` 等类的 CSS 规则文件）
-- **legacy fallback 移除影响**：`focus-mode.template.js` L52-56 "reading 时自动 typewriter" 是老用户可能有的肌肉记忆，v2 明确否定此叠加，与用户 2026-07-09 原话一致，**不加过渡兼容**
-- **与 T-3.12.1 / T-3.12.2 关系**：零文件冲突，可并行；若三卡都进 kanban，dev profile 需按 kanban dispatcher 顺序处理
+- **memento 迁移风险**：✅ 已由 T-3.12.3.a 单测覆盖 4 种起始态
+- **协议兼容性**：主进程仅一级 mode；substyle 走 webview localStorage（Phase 3 不扩协议）
+- **视觉工具栏宽度**：T-3.13.2 起阅读下二级菜单**常驻**，原「消失导致宽度跳动」风险已降
+- **CSS**：现用 `[data-substyle="focus|typewriter"]`
+- **T-3.13.2 覆盖 v2**：阅读隐藏二级条款废止，见 0005
+- **与 T-3.12.1 / T-3.12.2 关系**：零文件冲突（历史）
 
 ---
 
-**PRD v2 end · 用户拍板定稿 · 无剩余 Q · 直接进入子任务派发**
+**PRD v2 end · 实现 + RD-4 对账关闭 · 现行语义见 0005**

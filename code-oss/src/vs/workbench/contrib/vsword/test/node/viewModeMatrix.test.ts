@@ -3,31 +3,16 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// T-3.7b.e · 组合矩阵单元测试（PRD §3 + §5 AC-2 · M-1 … M-6 锁死规则）
+// T-3.7b.e · 组合矩阵单元测试（旧 PRD 3×2×2 双 toggle）
 //
-// 覆盖 PRD §3 的 6 条组合矩阵行为，每条 case 断言 **三处一致**：
-//   1. shell attribute —— DOM 上的 data-mode / data-focus / data-typewriter
-//      （由 mode-controller.template.js 维护 · webview 侧）
-//   2. service state —— IVSWordViewModeService.currentMode {mode, focus, typewriter}
-//      （host 侧内存态 · raw 值）
-//   3. ContextKey —— 5 个 boolean key
-//      （PRD §4.2 显式约定：ContextKey 直接反映 raw 值，UI 层用 when 表达式自己屏蔽视觉）
+// ⚠️ RD-4 / 0005（2026-07-13）：本 suite **整表 pending / 陈旧**。
+// 现行语义是 substyle radio（normal|focus|typewriter）+ T-3.13.2 reading×三档，
+// 权威回归在 `viewModes.test.ts` / `modeSwitchComponent.test.ts`。
+// 勿再按 data-focus / data-typewriter 双属性扩展本文件；删档延后到清理债。
 //
-// 特别语义（M-6）：
-//   source 模式下 shell attribute 视觉屏蔽（data-focus/data-typewriter=off）
-//   但 service state raw 值 + ContextKey 保留（stored 保留 · PRD §3 M-6 备注 / D-2）
-//
-// 测试策略：
-//   一边用 jsdom + createModeController 驱动 shell attribute（webview 层）
-//   一边用 VSWordViewModeService + MockContextKeyService 驱动 service state + ContextKey
-//   对每条 case 用同一 action 序列并行施加到两者上，然后三处断言。
-//   （生产环境两者通过 preferenceUpdate / preferenceResponse 消息桥接，本测试只关心一致性契约。）
-//
-// 环境提示：
-//   - 复用 viewModes.test.ts 的 jsdom 骨架（shell + buttons + toggleButtons + sourceTextarea）
-//   - 复用 vswordViewModeService.test.ts 的 MockContextKeyService pattern
-//   - dispose 顺序：ensureNoDisposablesAreLeakedInTestSuite 内置 afterEach 触发在
-//     用户 teardown 之前，因此在每个 test 末尾主动 disposables.dispose()。
+// 历史说明（归档）：
+//   覆盖旧 PRD §3 的 6 条组合矩阵；shell data-focus/data-typewriter + service + ContextKey。
+//   source 模式下 shell 视觉屏蔽、stored 保留。
 
 import * as assert from 'assert';
 import { JSDOM } from 'jsdom';
