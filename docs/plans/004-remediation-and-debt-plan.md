@@ -165,8 +165,8 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 |------|------|------|
 | RD-2.0 | **代码 fix**：save 后 suppress watcher 2s；save 期间 diverged re-dirty；external 与内存一致则不 reload | ✅ |
 | RD-2.0b | find-widget 默认 `display:none` + CSS 双保险（底部浮动条） | ✅ |
-| RD-2.1 | 手测清单签字 | ⏸ 待用户重测 |
-| RD-2.2 | 「连续输入 + auto-save」不失焦、不回退 | ⏸ 待用户重测 |
+| RD-2.1 | 手测清单签字 | ✅ 用户 2026-07-13 确认 P0 无问题 |
+| RD-2.2 | 「连续输入 + auto-save」不失焦、不回退 | ✅ 同上 |
 
 **Gate**：任意输入法（含英文）连续输入时 auto-save 静默；不 reload、不失焦、不丢字。
 

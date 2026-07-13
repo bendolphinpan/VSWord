@@ -212,11 +212,19 @@ export const focusAndContextPlugin = $prose(() => {
 					if (typewriterEnabled(shell)) {
 						const y = currentCaretY();
 						if (y == null) return;
-						// line-change gate：8px ≈ 半行，避免每键抖动
-						if (!force && lastCenterY >= 0 && Math.abs(y - lastCenterY) < 8) return;
+						// line-change gate：按行高动态阈值（约 0.85 行），避免连续敲击
+						// 时在阈值附近 1 行跳动（旧固定 8px 过小，且 scroll 后 lastY 未更新）
+						let lineH = 28;
+						try {
+							const c = view.coordsAtPos(view.state.selection.from);
+							lineH = Math.max(20, Math.min(48, (c.bottom - c.top) || 28));
+						} catch { /* keep default */ }
+						const threshold = Math.max(20, Math.min(40, lineH * 0.85));
+						if (!force && lastCenterY >= 0 && Math.abs(y - lastCenterY) < threshold) return;
 						// 用户要求：中下约 2/3 高度（非 center）
 						scrollCaretToRatio(2 / 3);
-						lastCenterY = y;
+						// 必须用滚动后的 caret Y，否则下一键 |Δy|≈视口偏移又触发滚动
+						lastCenterY = currentCaretY() ?? y;
 						return;
 					}
 					lastCenterY = -1;

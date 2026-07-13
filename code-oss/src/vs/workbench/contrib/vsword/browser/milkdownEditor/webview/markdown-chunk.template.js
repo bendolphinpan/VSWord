@@ -20,13 +20,12 @@ export const VSWORD_LARGE_DOC_CHARS = 180_000;
 
 /**
  * 首屏目标大小（可略超到下一个安全点）。
- * RD-1.3：从 120k 降到 64k，优先 time-to-interactive（Gate-R1 RD-1-lite）。
- * 全量完成时间仍受 GFM table 制约，见 ADR 0003。
+ * RD-1.4：再降到 48k；且默认 **不** 后台灌满全文，按滚动按需追加（见 entry）。
  */
-export const VSWORD_FIRST_CHUNK_CHARS = 64_000;
+export const VSWORD_FIRST_CHUNK_CHARS = 48_000;
 
-/** 后续每块目标大小。 */
-export const VSWORD_NEXT_CHUNK_CHARS = 80_000;
+/** 后续每块目标大小（滚动接近底部时再加载一块）。 */
+export const VSWORD_NEXT_CHUNK_CHARS = 48_000;
 
 /**
  * @param {string} text

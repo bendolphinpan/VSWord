@@ -168,7 +168,7 @@ suite('T-3.13.4 · typewriter · AC-4.3 intra-line 抖动不触发 recenter', ()
 
 	test('AC-4.3a · 光标水平移动 1px（同一行）→ 不 recenter', () => {
 		assert.strictEqual(
-			shouldRecenter({ lastCenterY: 400, currentY: 401, force: false, threshold: 8 }),
+			shouldRecenter({ lastCenterY: 400, currentY: 401, force: false, threshold: 24 }),
 			false,
 			'intra-line 微移动应 skip（防每字节抖动）',
 		);
@@ -176,7 +176,7 @@ suite('T-3.13.4 · typewriter · AC-4.3 intra-line 抖动不触发 recenter', ()
 
 	test('AC-4.3b · 光标垂直移动 7px（阈内 · 行高抖动）→ 不 recenter', () => {
 		assert.strictEqual(
-			shouldRecenter({ lastCenterY: 400, currentY: 407, force: false, threshold: 8 }),
+			shouldRecenter({ lastCenterY: 400, currentY: 407, force: false, threshold: 24 }),
 			false,
 			'|Δy| < threshold 应 skip',
 		);
@@ -184,7 +184,7 @@ suite('T-3.13.4 · typewriter · AC-4.3 intra-line 抖动不触发 recenter', ()
 
 	test('AC-4.3c · 光标垂直移动 3px 向上（同一行）→ 不 recenter', () => {
 		assert.strictEqual(
-			shouldRecenter({ lastCenterY: 400, currentY: 397, force: false, threshold: 8 }),
+			shouldRecenter({ lastCenterY: 400, currentY: 397, force: false, threshold: 24 }),
 			false,
 			'反向 intra-line 抖动同样应 skip',
 		);
@@ -192,18 +192,25 @@ suite('T-3.13.4 · typewriter · AC-4.3 intra-line 抖动不触发 recenter', ()
 
 	test('AC-4.3d · currentY = null（coords 取不到）→ 不 recenter（防抛错）', () => {
 		assert.strictEqual(
-			shouldRecenter({ lastCenterY: 400, currentY: null, force: false, threshold: 8 }),
+			shouldRecenter({ lastCenterY: 400, currentY: null, force: false, threshold: 24 }),
 			false,
 			'coordsAtPos 失败时 skip（focus-mode.template.js 契约保持）',
 		);
 	});
 
 	test('AC-4.3e · 自定义 threshold=0（禁用防抖）· 任意变化都 recenter', () => {
-		// 允许调用方按需覆写阈值 —— 当前 focus-mode.template.js 硬编码 8，
-		// 但 helper 保留自定义 API 供未来 QA 手测复现或降噪调参用。
+		// 允许调用方按需覆写阈值；默认阈值已抬到 ~24，scroll 后更新 lastY 见 focus-mode。
 		assert.strictEqual(
 			shouldRecenter({ lastCenterY: 400, currentY: 401, force: false, threshold: 0 }),
 			true,
+		);
+	});
+
+	test('AC-4.3f · 默认阈值约 24：行内 20px 抖动不 recenter', () => {
+		assert.strictEqual(
+			shouldRecenter({ lastCenterY: 400, currentY: 420, force: false }),
+			false,
+			'默认 threshold=24 应吞掉约 1 行内抖动',
 		);
 	});
 });

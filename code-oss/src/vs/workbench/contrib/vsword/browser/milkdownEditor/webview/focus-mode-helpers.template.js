@@ -63,12 +63,12 @@ export function hoverEnabled(shell) {
  * @param {number} params.lastCenterY  上次成功 recenter 时的 caret viewport Y。-1 表示未记录。
  * @param {number | null} params.currentY 当前 caret viewport Y。null 表示 coords 取不到（如折叠 selection）。
  * @param {boolean} [params.force] 强制信号（首次安装 / substyle 切换 / 强制 recenter）。
- * @param {number} [params.threshold=8] intra-line 抖动阈值（默认 8px ≈ 半个行高）。
+ * @param {number} [params.threshold=24] intra-line 抖动阈值（默认 ~0.85 行高，避免连续敲击跳动）。
  * @returns {boolean} true 表示应当重定位；false 表示 skip。
  */
 export function shouldRecenter({ lastCenterY, currentY, force, threshold }) {
 	if (currentY == null || !Number.isFinite(currentY)) return false;
-	const t = typeof threshold === 'number' && threshold >= 0 ? threshold : 8;
+	const t = typeof threshold === 'number' && threshold >= 0 ? threshold : 24;
 	if (force) return true;
 	if (lastCenterY == null || lastCenterY < 0) return true;
 	return Math.abs(currentY - lastCenterY) >= t;

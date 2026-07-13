@@ -94,5 +94,6 @@ node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-ty
 | 2026-07-13 | 首建：GFM 主因、setext 去重 |
 | 2026-07-13 | table 钉死；progressive C 落地 |
 | 2026-07-13 | RD-1.3：首块 64k、openProgress、加载中编辑 dirty 修复；全量 2s 改挂 RD-1.4 |
+| 2026-07-13 | RD-1.4a：默认 **不全量预取**；首块 48k + 滚动近底再装下一块；find 改 fixed 浮层 |
 
 **Decision End · 0003**

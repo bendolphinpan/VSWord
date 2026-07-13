@@ -65,12 +65,17 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			color: var(--vsword-fg);
 			font-family: var(--vscode-font-family, system-ui, sans-serif);
 		}
+		/* 彻底掐死横向滚动条（底部「灰胶囊」主因之一） */
+		html, body, .vsword-md-shell, #milkdown-root, #milkdown-root .milkdown, #milkdown-root .ProseMirror {
+			scrollbar-width: thin;
+		}
 		.vsword-md-shell {
 			height: 100%;
 			min-height: 0;
 			display: flex;
 			flex-direction: column;
 			overflow: hidden;
+			overflow-x: hidden !important;
 		}
 		/* T-3.13.5: 顶部工具栏 sticky（纯色 · 视觉延后 · PRD §5a 决策 c）——
 		 * 保证 mode-switch/substyle-group 始终置顶可见，不随文档滚走。
@@ -1353,26 +1358,53 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 		}
 
-		/* T-3.13.6 / RD-2: 查找栏默认隐藏；.vsword-hidden 与 :not(.is-open) 双保险 */
-		.vsword-hidden { display: none !important; }
+		/* T-3.13.6 / RD-2: 查找栏默认彻底不占位（用户反馈底部灰条）；打开时 fixed 浮层 */
+		.vsword-hidden { display: none !important; height: 0 !important; overflow: hidden !important; }
 		.vsword-find-widget {
-			position: sticky;
-			bottom: 0;
-			left: 0;
-			right: 0;
-			z-index: 200;
-			display: none;
+			position: fixed;
+			bottom: 12px;
+			left: 50%;
+			transform: translateX(-50%);
+			width: min(720px, calc(100vw - 48px));
+			z-index: 1000;
+			display: none !important;
 			flex-direction: column;
 			gap: 6px;
-			padding: 8px 12px;
-			background: var(--vscode-editorWidget-background, var(--vsword-bg));
-			border-top: 1px solid var(--vsword-border);
-			box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+			padding: 0;
+			margin: 0;
+			height: 0;
+			min-height: 0;
+			overflow: hidden;
+			border: 0;
+			box-shadow: none;
+			background: transparent;
 			font-size: 12px;
+			pointer-events: none;
 		}
-		.vsword-find-widget.is-open { display: flex !important; }
+		.vsword-find-widget.is-open {
+			display: flex !important;
+			height: auto;
+			min-height: 0;
+			padding: 8px 12px;
+			overflow: visible;
+			pointer-events: auto;
+			background: var(--vscode-editorWidget-background, var(--vsword-bg));
+			border: 1px solid var(--vsword-border);
+			border-radius: 8px;
+			box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+		}
 		.vsword-find-widget.vsword-hidden,
-		.vsword-find-widget:not(.is-open) { display: none !important; }
+		.vsword-find-widget:not(.is-open) {
+			display: none !important;
+			height: 0 !important;
+			min-height: 0 !important;
+			padding: 0 !important;
+			margin: 0 !important;
+			border: 0 !important;
+			box-shadow: none !important;
+			overflow: hidden !important;
+			pointer-events: none !important;
+		}
 		.vsword-find-row,
 		.vsword-replace-row {
 			display: flex;
