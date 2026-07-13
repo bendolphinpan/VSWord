@@ -77,6 +77,8 @@ Milkdown webview CSP（现行）：
 
 **Go/No-Go 门槛**：CJK 混排手测可接受 + vendor 扫无 eval + 增量 gzip 预算。
 
+**已落地（2026-07-13）**：方案 **C** · 见 `docs/requirements/RD-5.2-pretext-measure.md`。
+
 ---
 
 ## 7. 修订
@@ -84,5 +86,6 @@ Milkdown webview CSP（现行）：
 | 日期 | 说明 |
 |------|------|
 | 2026-07-13 | 首建：库选型、结合点、CSP/CJK、推荐首落点 C/A |
+| 2026-07-13 | RD-5.2 方案 C 接入：lazy Pretext + 工具栏版心 chip |
 
 **Spike End · RD-5.1**

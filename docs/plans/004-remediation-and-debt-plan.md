@@ -210,7 +210,7 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 | 子项 | 状态 |
 |------|------|
 | RD-5.1 spike 文档 | ✅ `docs/spikes/rd-5.1-pretext.md`（`@chenglou/pretext@0.0.8`；推荐首落 A/C） |
-| RD-5.2 接入 PRD + 实现 | 待 |
+| RD-5.2 接入 PRD + 实现 | ✅ 方案 C：PRD `docs/requirements/RD-5.2-pretext-measure.md` · lazy Pretext · 工具栏「约 N 字/行」 · Settings `vsword.markdown.lineMeasure` |
 
 ---
 

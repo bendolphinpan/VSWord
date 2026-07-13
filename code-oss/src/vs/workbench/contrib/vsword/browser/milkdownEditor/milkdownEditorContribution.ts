@@ -160,7 +160,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			if (
 				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.fontFamily) ||
 				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.fontSize) ||
-				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.lineHeight)
+				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.lineHeight) ||
+				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.lineMeasure)
 			) {
 				this.broadcastTypography();
 			}
@@ -535,6 +536,11 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		});
 	}
 
+	/** RD-5.2 · 版心预演开关（默认 true）。 */
+	private readLineMeasureEnabled(): boolean {
+		return this.configurationService.getValue<boolean>(VSWORD_TYPOGRAPHY_CONFIG.lineMeasure) !== false;
+	}
+
 	private sendTypographyToInput(input: MilkdownEditorInput): void {
 		const t = this.readTypography();
 		this.post(input, {
@@ -542,6 +548,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			fontFamily: t.fontFamily,
 			fontSize: t.fontSize,
 			lineHeight: t.lineHeight,
+			lineMeasure: this.readLineMeasureEnabled(),
 		});
 	}
 
@@ -552,6 +559,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			fontFamily: t.fontFamily,
 			fontSize: t.fontSize,
 			lineHeight: t.lineHeight,
+			lineMeasure: this.readLineMeasureEnabled(),
 		};
 		for (const input of this.liveInputs) {
 			this.post(input, msg);

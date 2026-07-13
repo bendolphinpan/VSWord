@@ -16,6 +16,8 @@ export const VSWORD_TYPOGRAPHY_CONFIG = {
 	fontFamily: 'vsword.markdown.fontFamily',
 	fontSize: 'vsword.markdown.fontSize',
 	lineHeight: 'vsword.markdown.lineHeight',
+	/** RD-5.2 · 版心/行宽预演 chip（Pretext lazy） */
+	lineMeasure: 'vsword.markdown.lineMeasure',
 } as const;
 
 /** Wire shape host → webview. */

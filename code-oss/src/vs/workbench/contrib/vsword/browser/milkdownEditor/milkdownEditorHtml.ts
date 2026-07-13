@@ -150,6 +150,20 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 		#vsword-large-doc-banner .vsword-md-button {
 			flex-shrink: 0;
 		}
+		/* RD-5.2 · 版心/行宽预演 chip（Pretext lazy） */
+		#vsword-line-measure {
+			flex-shrink: 0;
+			font-size: 11px;
+			color: var(--vsword-muted);
+			border: 1px solid var(--vsword-border);
+			border-radius: 4px;
+			padding: 2px 8px;
+			white-space: nowrap;
+			max-width: 220px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+		#vsword-line-measure[hidden] { display: none !important; }
 		.vsword-md-button {
 			border: 1px solid var(--vsword-border);
 			background: transparent;
@@ -1539,6 +1553,7 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			<span class="vsword-md-title">${fileName}</span>
 			<span class="vsword-md-resource" title="${resourceUri}">${resourceUri}</span>
 			<span id="milkdown-status" class="vsword-md-status">Loading…</span>
+			<span id="vsword-line-measure" class="vsword-line-measure" hidden title="当前版心估算每行字数（Pretext 度量，非浏览器像素级一致）"></span>
 			<button id="milkdown-save" class="vsword-md-button" type="button">Save</button>
 			<div id="milkdown-mode-switch" class="vsword-md-mode-switch" role="radiogroup" aria-label="预览模式">
 				<button class="vsword-md-mode-btn" data-mode="realtime" type="button" role="radio" aria-pressed="true" aria-checked="true">实时渲染</button>

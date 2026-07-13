@@ -1,9 +1,10 @@
 # VSWord Milkdown production third-party licenses
 
-Generated: 2026-07-13T10:27:44.880Z
+Generated: 2026-07-13T10:31:46.005Z
 
 | Package | Version | License | Resolved |
 | --- | --- | --- | --- |
+| @chenglou/pretext | 0.0.8 | MIT | https://registry.npmjs.org/@chenglou/pretext/-/pretext-0.0.8.tgz |
 | @iarna/toml | 2.2.5 | ISC | https://registry.npmjs.org/@iarna/toml/-/toml-2.2.5.tgz |
 | @milkdown/core | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/core/-/core-7.21.2.tgz |
 | @milkdown/ctx | 7.21.2 | MIT | https://registry.npmjs.org/@milkdown/ctx/-/ctx-7.21.2.tgz |

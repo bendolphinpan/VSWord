@@ -61,6 +61,11 @@ import {
 	VSWORD_FIRST_CHUNK_CHARS,
 	VSWORD_NEXT_CHUNK_CHARS,
 } from './markdown-chunk.mjs';
+// RD-5.2 · Pretext 版心/行宽预演（lazy import 在 measure 内）
+import {
+	measureLineCapacity,
+	readMeasureContextFromDom,
+} from './pretext-measure.mjs';
 // outline：按需加载时用全文源码扫标题，保证 Outline 完整且有正文
 import {
 	extractHeadings,
@@ -170,9 +175,14 @@ const largeDocBanner = document.getElementById('vsword-large-doc-banner');
 const largeDocMsg = document.getElementById('vsword-large-doc-msg');
 const largeDocLoadAllBtn = document.getElementById('vsword-large-doc-load-all');
 const largeDocDismissBtn = document.getElementById('vsword-large-doc-dismiss');
+const lineMeasureEl = document.getElementById('vsword-line-measure');
 const modeButtons = document.querySelectorAll('#milkdown-mode-switch .vsword-md-mode-btn');
 /** RD-1.4 · 用户点「知道了」后本 session 内不再弹 banner（新 open 仍会重置）。 */
 let largeDocBannerDismissed = false;
+/** RD-5.2 · 版心预演开关（host typographyChanged.lineMeasure）。 */
+let lineMeasureEnabled = true;
+let lineMeasureTimer = 0;
+let lineMeasureSeq = 0;
 // T-3.12.3.b: 二级 substyle radiogroup (normal | focus | typewriter, 三选一互斥).
 // T-3.13.2: 阅读模式下 substyle-group 保留在 DOM 内, NodeList 快照跨 mode 恒定;
 // controller 里所有对 substyleButtons 的 forEach 均正常工作.
@@ -460,6 +470,50 @@ function setLargeDocBannerVisible(visible) {
 	}
 	if (largeDocLoadAllBtn) {
 		largeDocLoadAllBtn.disabled = !show || progressiveLoadMoreBusy;
+	}
+}
+
+/**
+ * RD-5.2 · debounce 刷新版心 chip（lazy 拉 Pretext）。
+ * @param {number} [delayMs=120]
+ */
+function scheduleLineMeasure(delayMs = 120) {
+	if (!lineMeasureEnabled) {
+		if (lineMeasureEl) {
+			lineMeasureEl.hidden = true;
+			lineMeasureEl.textContent = '';
+		}
+		return;
+	}
+	if (lineMeasureTimer) {
+		clearTimeout(lineMeasureTimer);
+		lineMeasureTimer = 0;
+	}
+	lineMeasureTimer = setTimeout(() => {
+		lineMeasureTimer = 0;
+		void refreshLineMeasure();
+	}, delayMs);
+}
+
+async function refreshLineMeasure() {
+	if (!lineMeasureEnabled || !lineMeasureEl) { return; }
+	const seq = ++lineMeasureSeq;
+	try {
+		const ctx = readMeasureContextFromDom(root || shell);
+		const result = await measureLineCapacity(ctx);
+		if (seq !== lineMeasureSeq || !lineMeasureEnabled) { return; }
+		if (result?.label) {
+			lineMeasureEl.hidden = false;
+			lineMeasureEl.textContent = result.label;
+		} else {
+			lineMeasureEl.hidden = true;
+			lineMeasureEl.textContent = '';
+		}
+	} catch (err) {
+		reportError('line-measure', err);
+		if (lineMeasureEl) {
+			lineMeasureEl.hidden = true;
+		}
 	}
 }
 
@@ -825,6 +879,8 @@ async function createEditor(markdown) {
 	initialized = true;
 	currentMarkdown = markdown;
 	finishEditorMount({ seedOutline: true });
+	// RD-5.2 · 首屏后 lazy 度量版心（不阻塞 createEditor）
+	scheduleLineMeasure(200);
 
 	if (pendingChunks.length === 0) {
 		progressiveLoading = false;
@@ -1132,6 +1188,11 @@ window.addEventListener('message', event => {
 				if (lh > 0) { sourceTextarea.style.lineHeight = String(lh); }
 				else { sourceTextarea.style.lineHeight = ''; }
 			}
+			// RD-5.2 · 版心预演开关 + 字体变更后重测
+			if (typeof msg.lineMeasure === 'boolean') {
+				lineMeasureEnabled = msg.lineMeasure;
+			}
+			scheduleLineMeasure(80);
 		} catch (err) {
 			reportError('typographyChanged', err);
 		}
@@ -1169,6 +1230,8 @@ window.addEventListener('message', event => {
 		try { broadcastFlowchartTheme(isDark); } catch (err) { reportError('flowchart-theme', err); }
 		// T-3.5b-seq.2: 同款转发给 sequence-view（当前 simple 主题下无实际变化，链路预留）。
 		try { broadcastSequenceTheme(isDark); } catch (err) { reportError('sequence-theme', err); }
+		// RD-5.2 · 主题切换可能改 max-width / 字体 → 重测版心
+		scheduleLineMeasure(100);
 		return;
 	}
 	if (msg.type === 'hostError') {

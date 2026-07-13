@@ -79,6 +79,8 @@ const setextHelpersPath = path.join(srcDir, 'setext-helpers.mjs');
 const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
 // RD-1.2: 大文档 progressive 分块纯函数。
 const markdownChunkPath = path.join(srcDir, 'markdown-chunk.mjs');
+// RD-5.2: Pretext 版心度量（lazy chunk）。
+const pretextMeasurePath = path.join(srcDir, 'pretext-measure.mjs');
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 const frontmatterPath = path.join(srcDir, 'frontmatter.mjs');
 const frontmatterHelpersPath = path.join(srcDir, 'frontmatter-helpers.mjs');
@@ -140,6 +142,8 @@ const packages = [
 	'@iarna/toml@2.2.5',
 	'esbuild@0.27.0',
 	'jsdom@27.3.0',
+	// RD-5.2: 版心/行宽预演（entry 内 dynamic import → lazy chunk）
+	'@chenglou/pretext@0.0.8',
 ];
 
 function run(command, cwd = builderDir) {
@@ -228,6 +232,8 @@ fs.writeFileSync(setextHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'se
 fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-heading.template.js'), 'utf8'));
 // RD-1.2: progressive open chunker。
 fs.writeFileSync(markdownChunkPath, fs.readFileSync(path.join(webviewSrcDir, 'markdown-chunk.template.js'), 'utf8'));
+// RD-5.2: Pretext 版心度量。
+fs.writeFileSync(pretextMeasurePath, fs.readFileSync(path.join(webviewSrcDir, 'pretext-measure.template.js'), 'utf8'));
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 fs.writeFileSync(frontmatterPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter.template.js'), 'utf8'));
 fs.writeFileSync(frontmatterHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter-helpers.template.js'), 'utf8'));

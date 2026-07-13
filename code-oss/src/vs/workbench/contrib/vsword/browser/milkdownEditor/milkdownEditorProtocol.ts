@@ -332,6 +332,8 @@ export interface HostTypographyChangedMessage {
 	readonly fontFamily: string;
 	readonly fontSize: number;
 	readonly lineHeight: number;
+	/** RD-5.2 · 是否显示版心/行宽预演（缺省 true） */
+	readonly lineMeasure?: boolean;
 }
 
 /**

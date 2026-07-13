@@ -120,6 +120,16 @@ Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConf
 				String(VSWORD_LINE_HEIGHT_MAX),
 			),
 		},
+		// RD-5.2 · 版心/行宽预演（Pretext lazy）
+		[VSWORD_TYPOGRAPHY_CONFIG.lineMeasure]: {
+			type: 'boolean',
+			default: true,
+			scope: ConfigurationScope.RESOURCE,
+			markdownDescription: localize(
+				'vsword.markdown.lineMeasure.desc',
+				'在 Markdown 工具栏显示「约 N 字/行 · 版心 Wpx」预演（Pretext 度量，懒加载）。关闭后隐藏且不再加载度量库。',
+			),
+		},
 	},
 });
 
