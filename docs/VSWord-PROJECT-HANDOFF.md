@@ -89,7 +89,7 @@ D:\GIT\VSWord\                          ← 项目根（workspace）
 | T-3.5c 语法补齐 | ✅ | emoji / footnote / frontmatter / sub·sup 等（覆盖原 T-3.4 大部分） |
 | T-3.6 双链 | ✅ | 语法/补全/hover；backlinks 为 **footer**（面板 → RD-6） |
 | T-3.7 块/表格 · 3.7b 视图 · 3.7c 导航 · 3.7d 主题 | ✅ | 含 Round-1/2 UX 修 |
-| T-3.8 Round-trip · 3.8b 导出 | ✅ | Gate E；保真等级声明 → RD-11 |
+| T-3.8 Round-trip · 3.8b 导出 | ✅ | Gate E；保真 **L2**（`0004-rd11`）· RD-11 ✅ |
 | T-3.9 性能/IME 收口 | ⚠️ | 报告齐；open 🔴→RD-1；IME 手测→RD-2 |
 | T-3.12 / T-3.13 | ✅ 代码 | Round-2 QA：5 pass + Rime 人肉 partial → RD-2 |
 
@@ -185,7 +185,8 @@ D:\GIT\VSWord\                          ← 项目根（workspace）
 | RD-6 | Backlinks 面板 | **关闭** · 保持 footer |
 | RD-7 | 字体 Settings 三元组 | P1 |
 | RD-10 | Phase 7 最小可发布 | P0 · **B Portable** |
-| RD-11 / RD-12 | 保真等级声明 / 扩展冒烟 | P1 |
+| RD-11 | 保真等级 L2 声明 | ✅ `docs/decisions/0004-rd11-roundtrip-fidelity.md` |
+| RD-12 | 扩展冒烟 | P1 |
 | RD-3/4/8/9 | RSS / 模式对账 / lazy / Mindmap 剩余 | P2 |
 
 ### 6.4 明确延后

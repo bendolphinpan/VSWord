@@ -116,7 +116,7 @@
 | 视图模式（源码 / 阅读 / 专注 / 打字机） | T-3.7b.1..4 | `900c94cc` / `da77750e` / `ce03f41f` / `0dffffa7`（服务化收敛） | ✅ |
 | 导航（TOC / 大纲 / 查找替换） | T-3.7c.1..3 | `c0acda7b`+ / `9f76d3e0` / `4b5b5718` | ✅ |
 | 主题兼容层（内置 4 主题 + Typora `.css` + 切换命令） | T-3.7d.1..3 | `94f0f0eb` / `5b78d516`+`89912cba`+`7b356561` / `29f87452` | ✅ |
-| Round-trip 保真层 | T-3.8.1..4 | Gate E 296 pass | ✅ |
+| Round-trip 保真层 | T-3.8.1..4 | Gate E 全绿；等级 **L2** 见 `0004-rd11-roundtrip-fidelity.md`（RD-11） | ✅ |
 | 导入导出（HTML / PDF / Pandoc） | T-3.8b.1..3 | `1d051293`+`3e1f71c4`+`cbe31a55` / `fa7e6e32` / `daf95a08` | ✅ |
 | 性能与 IME 收口 | T-3.9.1..4 | 三报告 + 本文件 + `gate-g.mjs` | ✅（含 §3 未闭合项） |
 | Fix P0 · IME composition host+webview gate | T-3.12.1.a / .b | `93aa1f85` / `2844ebb4` | ✅ |

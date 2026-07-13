@@ -65,7 +65,7 @@ VSWord = Code OSS 1.124.2 基线
 | Pretext 快速排版 | ▶ **RD-5=A 做**（已拍板；待 spike） |
 | 用户字体三元组 Settings | ✅ **RD-7**（Settings 热更新） |
 | 大文档 open 性能 | 🔴 未达标 → **RD-1** |
-| Round-trip 保真等级 | Gate E 绿；语义等级待钉 → **RD-11** |
+| Round-trip 保真等级 | Gate E 绿；**L2 混合 source-mapping**（`docs/decisions/0004-rd11-roundtrip-fidelity.md`） |
 
 ---
 
@@ -93,7 +93,7 @@ VSWord = Code OSS 1.124.2 基线
 | T-3.7b.1~4 | 源码 / 阅读 / 专注 / 打字机 | ✅ | 服务化 + 正交性 v2 + Round-2 | 对账 → **RD-4** |
 | T-3.7c.1~3 | TOC / Outline / 查找替换 | ✅ | TOC 四子卡；Outline；find `4b5b5718` | — |
 | T-3.7d.1~3 | 主题兼容层 | ✅ | `94f0f0eb` / `5b78d516`… / `29f87452` | — |
-| T-3.8.1~4 | Round-trip 保真 | ✅ 主线 | Gate E 296 pass | 等级声明 → **RD-11** |
+| T-3.8.1~4 | Round-trip 保真 | ✅ 主线 | Gate E 全绿；**L2**（`0004-rd11`） | **RD-11** ✅ |
 | T-3.8b.1~3 | HTML / PDF / Pandoc | ✅ | `1d051293`…`daf95a08` | — |
 | T-3.9.1~4 | 性能与 IME 收口 | ⚠️ 部分 | 三报告 + Gate G | open 🔴 **RD-1**；IME **RD-2**；RSS **RD-3** |
 | T-3.12.x | 收官 P0 fix Round-1 | ✅ | IME gate / 表格 hover / 模式 state | — |

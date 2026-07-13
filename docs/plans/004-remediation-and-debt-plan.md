@@ -272,13 +272,19 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 ---
 
-### RD-11 — Round-trip 保真语义复核 · P1
+### RD-11 — Round-trip 保真语义复核 · P1 · ✅（2026-07-13）
 
-Gate E 296 pass 已声明。本卡不重做实现，只钉：
+Gate E 全绿已声明。本卡不重做实现，只钉：
 
 1. 「未修改区 byte-for-byte」是否对**全部** fixture 成立，还是「规范化后语义相等」  
 2. 与决策 N-1（先 Typora 级规范化，后 source-mapping）对照  
-3. 输出一页 `docs/decisions/` 或 test report：**保真等级 L1/L2/L3** 定义 + 当前等级  
+3. 输出一页 `docs/decisions/`：**保真等级 L1/L2/L3** 定义 + 当前等级  
+
+| 交付 | 状态 |
+|------|------|
+| `docs/decisions/0004-rd11-roundtrip-fidelity.md` | ✅ |
+| 当前等级 | **L2 混合 source-mapping**（safe→A/B；unsafe→C） |
+| 对外话术 | 禁止「处处 byte-for-byte / 已超越 Typora 全量字节保真」 |
 
 避免对外「超越 Typora 保真」过度承诺。
 
