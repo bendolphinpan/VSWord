@@ -34,6 +34,55 @@ export function normalizeTarget(raw: string | null | undefined): string {
 }
 
 /**
+ * Precomputed lookup tables for repeated resolve (autocomplete / backlinks graph).
+ * Built once in O(index.length); name lookups become O(1) average.
+ */
+export interface WikilinkResolveIndex {
+	readonly byNameLower: ReadonlyMap<string, readonly WikilinkIndexEntry[]>;
+	readonly byPathKey: ReadonlyMap<string, WikilinkIndexEntry>;
+}
+
+function pathKey(path: string): string {
+	return path.replace(/\\/g, '/').replace(/\.md$/i, '').toLowerCase();
+}
+
+/** Build O(1) resolve tables from a flat workspace index. */
+export function buildWikilinkResolveIndex(index: readonly WikilinkIndexEntry[]): WikilinkResolveIndex {
+	const byNameLower = new Map<string, WikilinkIndexEntry[]>();
+	const byPathKey = new Map<string, WikilinkIndexEntry>();
+	for (const f of index) {
+		const nk = f.name.toLowerCase();
+		const bucket = byNameLower.get(nk);
+		if (bucket) {
+			bucket.push(f);
+		} else {
+			byNameLower.set(nk, [f]);
+		}
+		byPathKey.set(pathKey(f.path), f);
+	}
+	return { byNameLower, byPathKey };
+}
+
+/**
+ * Resolve a wiki-link target against a precomputed index (Q1=c rules).
+ * Prefer this over {@link resolveWikilink} when resolving many targets against one workspace.
+ */
+export function resolveWikilinkWithIndex(target: string, idx: WikilinkResolveIndex): WikilinkResolution {
+	const t = normalizeTarget(target);
+	if (!t || idx.byPathKey.size === 0) { return { status: 'missing' }; }
+
+	if (t.indexOf('/') !== -1 || t.indexOf('\\') !== -1) {
+		const file = idx.byPathKey.get(pathKey(t));
+		return file ? { status: 'found', file } : { status: 'missing' };
+	}
+
+	const matches = idx.byNameLower.get(t.replace(/\.md$/i, '').toLowerCase());
+	if (!matches || matches.length === 0) { return { status: 'missing' }; }
+	if (matches.length === 1) { return { status: 'found', file: matches[0] }; }
+	return { status: 'ambiguous', candidates: matches };
+}
+
+/**
  * Resolve a wiki-link target against a file index (Q1=c rules).
  *   1. If the target contains "/" or "\", try exact workspace-relative path match
  *      (dropping any trailing `.md`).
@@ -41,28 +90,13 @@ export function normalizeTarget(raw: string | null | undefined): string {
  *        - 0 matches → 'missing'
  *        - 1 match   → 'found'
  *        - N matches → 'ambiguous' (candidates listed for UX)
+ *
+ * Convenience wrapper: builds a transient {@link WikilinkResolveIndex}. For hot loops use
+ * {@link buildWikilinkResolveIndex} + {@link resolveWikilinkWithIndex}.
  */
 export function resolveWikilink(target: string, index: readonly WikilinkIndexEntry[]): WikilinkResolution {
-	const t = normalizeTarget(target);
-	if (!t || index.length === 0) return { status: 'missing' };
-
-	if (t.indexOf('/') !== -1 || t.indexOf('\\') !== -1) {
-		const wanted = t.replace(/\\/g, '/').replace(/\.md$/i, '').toLowerCase();
-		for (const f of index) {
-			const p = f.path.replace(/\\/g, '/').replace(/\.md$/i, '').toLowerCase();
-			if (p === wanted) return { status: 'found', file: f };
-		}
-		return { status: 'missing' };
-	}
-
-	const wanted = t.replace(/\.md$/i, '').toLowerCase();
-	const matches: WikilinkIndexEntry[] = [];
-	for (const f of index) {
-		if (f.name.toLowerCase() === wanted) matches.push(f);
-	}
-	if (matches.length === 0) return { status: 'missing' };
-	if (matches.length === 1) return { status: 'found', file: matches[0] };
-	return { status: 'ambiguous', candidates: matches };
+	if (!index.length) { return { status: 'missing' }; }
+	return resolveWikilinkWithIndex(target, buildWikilinkResolveIndex(index));
 }
 
 /** Convert a resolution into the wire shape sent back to the webview. */
@@ -169,20 +203,22 @@ export function buildBacklinksGraph(
 	sources: ReadonlyArray<{ path: string; name: string; text: string }>,
 ): Map<string, WikilinkBackref[]> {
 	const graph = new Map<string, WikilinkBackref[]>();
+	// One O(|index|) index for all resolves — avoids O(|index|) per [[token]]
+	const resolveIdx = buildWikilinkResolveIndex(index);
 	for (const src of sources) {
 		const refs = extractWikilinkReferences(src.text);
-		if (refs.length === 0) continue;
+		if (refs.length === 0) { continue; }
 		// Per-source dedupe: same file citing the same target N times → count=N,
 		// one row per (fromPath, targetPath) pair.
 		const perTarget = new Map<string, number>();
 		for (const raw of refs) {
-			const resolution = resolveWikilink(raw, index);
+			const resolution = resolveWikilinkWithIndex(raw, resolveIdx);
 			const file = resolution.status === 'found'
 				? resolution.file
 				: resolution.status === 'ambiguous' && resolution.candidates
 					? resolution.candidates[0]
 					: undefined;
-			if (!file || file.path === src.path) continue; // skip self-references
+			if (!file || file.path === src.path) { continue; } // skip self-references
 			perTarget.set(file.path, (perTarget.get(file.path) ?? 0) + 1);
 		}
 		for (const [targetPath, count] of perTarget) {
@@ -192,7 +228,7 @@ export function buildBacklinksGraph(
 		}
 	}
 	// Stable ordering: refs sorted by fromPath for deterministic output.
-	for (const list of graph.values()) list.sort((a, b) => a.fromPath.localeCompare(b.fromPath));
+	for (const list of graph.values()) { list.sort((a, b) => a.fromPath.localeCompare(b.fromPath)); }
 	return graph;
 }
 

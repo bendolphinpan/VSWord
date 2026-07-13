@@ -149,6 +149,9 @@ export function detectNewlineStyle(sourceText: string): NewlineStyle {
 		} else if (c === 0x0A) {
 			hasLF = true;
 		}
+		// RD 优化：一旦 mixed 已证成立，无需扫完剩余 N 字符（大文档 open 路径）
+		const kindsSoFar = (hasCRLF ? 1 : 0) + (hasLF ? 1 : 0) + (hasCR ? 1 : 0);
+		if (kindsSoFar > 1) { return 'mixed'; }
 	}
 	const kinds = (hasCRLF ? 1 : 0) + (hasLF ? 1 : 0) + (hasCR ? 1 : 0);
 	if (kinds === 0) { return 'none'; }

@@ -30,6 +30,8 @@ import {
 } from '../../browser/milkdownEditor/webview/wikilink-preview.template.js';
 import {
 	resolveWikilink,
+	buildWikilinkResolveIndex,
+	resolveWikilinkWithIndex,
 	resolutionToWireResult,
 	normalizeTarget as hostNormalizeTarget,
 	extractPreviewSnippet as hostExtractPreviewSnippet,
@@ -219,6 +221,17 @@ suite('T-3.11.1 · resolveWikilink (host mirror)', () => {
 			const h = resolveWikilink(t, hostIdx).status;
 			const w = resolveTarget(t, hostIdx).status;
 			assert.strictEqual(h, w, `disagreement on "${t}": host=${h} webview=${w}`);
+		}
+	});
+	test('buildWikilinkResolveIndex + WithIndex 与 resolveWikilink 语义一致', () => {
+		const pre = buildWikilinkResolveIndex(idx);
+		const cases = ['MyNote', 'mynote', 'Dup', 'notes/MyNote', 'a/Dup', 'nope', ''];
+		for (const t of cases) {
+			const a = resolveWikilink(t, idx);
+			const b = resolveWikilinkWithIndex(t, pre);
+			assert.strictEqual(a.status, b.status, `status mismatch on "${t}"`);
+			assert.strictEqual(a.file?.path, b.file?.path, `file mismatch on "${t}"`);
+			assert.strictEqual(a.candidates?.length, b.candidates?.length, `candidates on "${t}"`);
 		}
 	});
 });

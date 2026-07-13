@@ -77,8 +77,12 @@ export function buildSessionFromMdast(root, sourceText, epoch, allocator) {
 		blockRanges.set(id, [from, to]);
 		mapping.push({ blockId: id, mdastNode: node, range: [from, to] });
 
-		// T-3.5c.5b：检测该 top-level 块是否在源里是 setext。
-		setextHints.push(parseSetextBlock(sourceText, from, to));
+		// T-3.5c.5b：仅 heading 才可能是 setext；其它块跳过 slice/parse（大文档 open 减负）
+		if (node.type === 'heading') {
+			setextHints.push(parseSetextBlock(sourceText, from, to));
+		} else {
+			setextHints.push(null);
+		}
 	}
 
 	const interstitial = [];

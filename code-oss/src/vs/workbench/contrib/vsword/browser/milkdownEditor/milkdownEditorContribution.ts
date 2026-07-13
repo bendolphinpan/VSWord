@@ -42,7 +42,7 @@ import { setExternalThemes as publishExternalThemes } from './milkdownEditorExte
 import { IVSWordFindService } from '../../common/vswordFindService.js';
 import { resolveExportResponse } from './exportContribution.js';
 import { getMilkdownEditorHtml } from './milkdownEditorHtml.js';
-import { WikilinkIndexEntry, resolveWikilink, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
+import { WikilinkIndexEntry, WikilinkResolveIndex, buildWikilinkResolveIndex, resolveWikilinkWithIndex, resolutionToWireResult, extractPreviewSnippet, extractPreviewTitle, buildBacklinksGraph, backlinksFor, WikilinkBackref } from './milkdownWikilinkResolver.js';
 import {
 	HostToWebviewMessage,
 	VSWORD_MILKDOWN_DEFAULT_MODE,
@@ -180,20 +180,14 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				e.rawUpdated.some(affectsMd) ||
 				e.rawDeleted.some(affectsMd);
 			if (!dirty) return;
-			this.wikilinkIndex = null;
-			this.wikilinkIndexPromise = null;
-			this.wikilinkGraph = null;
-			this.wikilinkGraphPromise = null;
+			this.invalidateWikilinkCaches();
 			for (const input of this.liveInputs) {
 				this.post(input, { type: 'workspaceIndexChanged' });
 			}
 		}));
 		// T-3.11.1: root list changed → same story.
 		this._register(this.workspaceService.onDidChangeWorkspaceFolders(() => {
-			this.wikilinkIndex = null;
-			this.wikilinkIndexPromise = null;
-			this.wikilinkGraph = null;
-			this.wikilinkGraphPromise = null;
+			this.invalidateWikilinkCaches();
 			for (const input of this.liveInputs) {
 				this.post(input, { type: 'workspaceIndexChanged' });
 			}
@@ -260,6 +254,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 
 	// ---- T-3.11.1 wiki-link file index -------------------------------------
 	private wikilinkIndex: WikilinkIndexEntry[] | null = null;
+	/** O(1) resolve tables; rebuilt with {@link wikilinkIndex}. */
+	private wikilinkResolveIndex: WikilinkResolveIndex | null = null;
 	private wikilinkIndexPromise: Promise<WikilinkIndexEntry[]> | null = null;
 	private wikilinkGraph: Map<string, WikilinkBackref[]> | null = null;
 	private wikilinkGraphPromise: Promise<Map<string, WikilinkBackref[]>> | null = null;
@@ -751,21 +747,39 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 
 	// ---- T-3.11.1 wiki-link handlers ---------------------------------------
 
+	private invalidateWikilinkCaches(): void {
+		this.wikilinkIndex = null;
+		this.wikilinkResolveIndex = null;
+		this.wikilinkIndexPromise = null;
+		this.wikilinkGraph = null;
+		this.wikilinkGraphPromise = null;
+	}
+
 	/** Lazy build/refresh the workspace-wide `.md` index. */
 	private ensureWikilinkIndex(): Promise<WikilinkIndexEntry[]> {
-		if (this.wikilinkIndex) return Promise.resolve(this.wikilinkIndex);
-		if (this.wikilinkIndexPromise) return this.wikilinkIndexPromise;
+		if (this.wikilinkIndex) { return Promise.resolve(this.wikilinkIndex); }
+		if (this.wikilinkIndexPromise) { return this.wikilinkIndexPromise; }
 		this.wikilinkIndexPromise = this.buildWikilinkIndex().then(idx => {
 			this.wikilinkIndex = idx;
+			this.wikilinkResolveIndex = buildWikilinkResolveIndex(idx);
 			this.wikilinkIndexPromise = null;
 			return idx;
 		}, err => {
 			this.logService.error('[VSWord Milkdown] wikilink index build failed', err);
 			this.wikilinkIndexPromise = null;
 			this.wikilinkIndex = [];
+			this.wikilinkResolveIndex = buildWikilinkResolveIndex([]);
 			return [];
 		});
 		return this.wikilinkIndexPromise;
+	}
+
+	private async ensureWikilinkResolveIndex(): Promise<WikilinkResolveIndex> {
+		await this.ensureWikilinkIndex();
+		if (!this.wikilinkResolveIndex) {
+			this.wikilinkResolveIndex = buildWikilinkResolveIndex(this.wikilinkIndex ?? []);
+		}
+		return this.wikilinkResolveIndex;
 	}
 
 	private async buildWikilinkIndex(): Promise<WikilinkIndexEntry[]> {
@@ -820,8 +834,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	}
 
 	private async handleWikilinkResolveRequest(input: MilkdownEditorInput, target: string): Promise<void> {
-		const index = await this.ensureWikilinkIndex();
-		const wire: WikilinkResolveResult = resolutionToWireResult(target, resolveWikilink(target, index));
+		const resolveIdx = await this.ensureWikilinkResolveIndex();
+		const wire: WikilinkResolveResult = resolutionToWireResult(target, resolveWikilinkWithIndex(target, resolveIdx));
 		this.post(input, { type: 'wikilinkResolveResponse', results: [wire] });
 	}
 
@@ -831,8 +845,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	}
 
 	private async handleWikilinkPreviewRequest(input: MilkdownEditorInput, requestId: number, target: string): Promise<void> {
-		const index = await this.ensureWikilinkIndex();
-		const resolution = resolveWikilink(target, index);
+		const resolveIdx = await this.ensureWikilinkResolveIndex();
+		const resolution = resolveWikilinkWithIndex(target, resolveIdx);
 		const roots = this.workspaceService.getWorkspace().folders;
 		const root = roots[0]?.uri;
 		const file = resolution.status === 'found'
@@ -943,8 +957,8 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	}
 
 	private async handleOpenWikilink(input: MilkdownEditorInput, target: string, newSplit: boolean): Promise<void> {
-		const index = await this.ensureWikilinkIndex();
-		const resolution = resolveWikilink(target, index);
+		const resolveIdx = await this.ensureWikilinkResolveIndex();
+		const resolution = resolveWikilinkWithIndex(target, resolveIdx);
 		const roots = this.workspaceService.getWorkspace().folders;
 		if (resolution.status === 'found' && resolution.file) {
 			const root = roots[0]?.uri;
@@ -1004,9 +1018,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			);
 			// Index will pick it up via onDidFilesChange; broadcast now so webview
 			// stops showing the ✎ badge immediately.
-			this.wikilinkIndex = null;
-			this.wikilinkGraph = null;
-			this.wikilinkGraphPromise = null;
+			this.invalidateWikilinkCaches();
 			for (const live of this.liveInputs) {
 				this.post(live, { type: 'workspaceIndexChanged' });
 			}
