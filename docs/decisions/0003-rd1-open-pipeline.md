@@ -1,26 +1,24 @@
 # Decision 0003 · RD-1 大文档 open pipeline（阶段结论）
 
 - **日期**：2026-07-13  
-- **状态**：In progress（RD-1.1 基线拆解 + 第一刀落地）  
+- **状态**：In progress（RD-1.2 progressive 已落地；全量 ≤2s 仍待 table 算法/D）  
 - **关联**：`004-remediation-and-debt-plan.md` RD-1 · 历史 `phase-3.9-perf.md`
 
 ---
 
-## 1. 测量结论（1MB mixed fixture）
+## 1. 测量结论（1MB mixed · ~606k chars / 1 000 356 bytes）
 
-本机 Node 24 · `.tmp/milkdown-prod-builder` remark 栈：
+本机 Node 24 · `.tmp/milkdown-prod-builder`：
 
 | 路径 | 约耗时 |
 |------|--------|
-| remark-parse only | ~0.4–0.5 s |
-| + frontmatter / + math | 同量级 |
-| **+ remark-gfm** | **~12–20 s** |
-| parse + gfm + front + math（bench 同款） | ~11–13 s P95 量级 |
+| micromark plain | ~0.5 s |
+| **micromark + gfm-table only** | **~8.3 s** |
+| micromark + strike / autolink / task | ~0.4 s |
+| micromark + gfm-all | ~11 s |
+| remark + gfm 切片 | 50k~0.13s · 100k~0.27s · 200k~0.86s · 400k~3.5s · 606k~24s |
 
-**结论**：**remark-gfm（micromark GFM 扩展，尤其表格等）是 open 的主瓶颈**，不是 `buildSessionFromMdast` 本身。  
-5MB 超线性变慢与 GFM 在大输入上的行为一致。
-
-历史报告写「remark-parse + buildSession O(N²)」方向正确，**根因应钉在 GFM 层**。
+**结论**：**GFM table 扩展**是主瓶颈（超线性）。历史 O(N²) 判断正确。
 
 ---
 
@@ -44,29 +42,39 @@ unified().use(remarkParse).parse(整篇 markdown)  → 仅为 setext hint 抽 bl
 
 ---
 
-## 3. 未采纳 / 下一阶段选项
+## 3. 方案选择
 
 | 方案 | 预期 | 风险 | 状态 |
 |------|------|------|------|
-| A. 大文档关闭 GFM | 1MB 可到 ~1s | 表格/删除线语义变 | 否（破坏 Typora 对等） |
-| B. Worker 中 GFM parse | 主线程不卡，总 CPU 仍 ~12s | 首交互仍慢；Milkdown 接 AST 难 | 待评 |
-| C. 分块 progressive open | 先编前 N 屏 | 跨块表格/roundtrip 复杂 | **首选下一刀设计** |
-| D. 换/裁剪 micromark-gfm 扩展 | 可能数量级下降 | 需兼容矩阵 | spike |
+| A. 大文档关闭 GFM/table | 快 | 破坏 Typora 表格对等 | ❌ 不做默认 |
+| B. Worker 全量 parse | 不卡死 UI | 首交互仍等全量 | 备选 |
+| **C. Progressive 分块 open** | 首屏 ~100–200k GFM ≤1s 级 | 跨块表格需安全切点 | ✅ **已实现** |
+| D. 裁剪/替换 table 实现 | 全量也快 | 兼容矩阵 | 后续可选 |
 
-**RD-1-lite 目标**（仍有效）：1MB open P95 ≤ 2s。  
-当前判断：**必须 C 或 D**，仅 A 不可接受。
+### C 实现要点（RD-1.2 · 2026-07-13）
+
+- 纯函数：`webview/markdown-chunk.template.js`  
+  - `shouldUseProgressiveOpen`（默认 >180k chars）  
+  - `splitMarkdownProgressive` / `findSafeSplitOffset`（避 fence、优先空行、尽量避表格行中）  
+- `entry.template.js`：`createEditor` 首屏 `defaultValueCtx = chunks[0]` → Ready 可编辑 → `yieldToMain` 循环 `parser(chunk)+tr.insert`  
+- `progressiveLoading` 期间不向 host 报 dirty  
+- 新 `createEditor` 用 `progressiveEpoch` 取消在途追加  
+
+**RD-1-lite**：首交互（首屏 Ready）目标 ≤2s；**全量加载完成**仍可能 >2s（总 CPU 近似分块之和，但 UI 可响应）。
 
 ---
 
 ## 4. 验收与命令
 
 ```bash
-# setext 扫描单测
-cd code-oss && node test/unit/node/index.js --run src/vs/workbench/contrib/vsword/test/node/setextScan.test.ts
+node code-oss/test/scripts/run-setext-scan-test.mjs
+node code-oss/test/scripts/run-markdown-chunk-test.mjs
 
-# 历史 open bench（仍含 GFM，预期仍 breach，作回归锚点）
+# 历史 open bench（整篇 GFM 仍可能 breach，作回归锚点）
 node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-type
 ```
+
+手测：打开 >180k 字符 `.md`，状态栏应见「大文档加载中（首屏）…」→ 可输入 → 「Ready」。
 
 ---
 
@@ -74,6 +82,7 @@ node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-ty
 
 | 日期 | 说明 |
 |------|------|
-| 2026-07-13 | 首建：GFM 主因、setext 去重 parse 落地、C/D 为后续 |
+| 2026-07-13 | 首建：GFM 主因、setext 去重 |
+| 2026-07-13 | table 钉死；progressive C 落地 |
 
 **Decision End · 0003**

@@ -143,11 +143,11 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 | 子项 | 内容 | 状态 |
 |------|------|------|
-| RD-1.1 | 分阶段耗时 + GFM 主因落盘 | ✅ 0003 |
-| RD-1.1b | createEditor 去掉 full remark-parse；setext O(N) 扫描 | ✅ |
-| RD-1.2 | progressive 分块 **或** 裁剪 GFM 扩展 | 下一刀 |
-| RD-1.3 | 实现选定方案 | 待 |
-| RD-1.4 | 1MB open P95 ≤ 2s；5MB ≤ 8s | 待 |
+| RD-1.1 | 分阶段耗时；**table 扩展**主因 | ✅ 0003 |
+| RD-1.1b | createEditor 去掉 full remark-parse；setext O(N) | ✅ |
+| RD-1.2 | progressive 分块 open（首屏可编辑） | ✅ |
+| RD-1.3 | 全量 1MB P95≤2s（可能需 table 算法/D 方案） | 部分（首交互） |
+| RD-1.4 | 5MB ≤8s 全量 | 待 |
 
 **非目标**：极致 RSS（RD-3）；为性能永久关掉 GFM 表格。
 

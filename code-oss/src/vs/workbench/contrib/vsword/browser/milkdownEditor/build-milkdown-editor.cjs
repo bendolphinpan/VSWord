@@ -77,6 +77,8 @@ const footnotePreviewPath = path.join(srcDir, 'footnote-preview.mjs');
 // T-3.5c.5b: setext heading 保真。
 const setextHelpersPath = path.join(srcDir, 'setext-helpers.mjs');
 const setextHeadingPath = path.join(srcDir, 'setext-heading.mjs');
+// RD-1.2: 大文档 progressive 分块纯函数。
+const markdownChunkPath = path.join(srcDir, 'markdown-chunk.mjs');
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 const frontmatterPath = path.join(srcDir, 'frontmatter.mjs');
 const frontmatterHelpersPath = path.join(srcDir, 'frontmatter-helpers.mjs');
@@ -224,6 +226,8 @@ fs.writeFileSync(footnotePreviewPath, fs.readFileSync(path.join(webviewSrcDir, '
 // T-3.5c.5b: setext heading 保真。
 fs.writeFileSync(setextHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-helpers.template.js'), 'utf8'));
 fs.writeFileSync(setextHeadingPath, fs.readFileSync(path.join(webviewSrcDir, 'setext-heading.template.js'), 'utf8'));
+// RD-1.2: progressive open chunker。
+fs.writeFileSync(markdownChunkPath, fs.readFileSync(path.join(webviewSrcDir, 'markdown-chunk.template.js'), 'utf8'));
 // T-3.5c.3: frontmatter YAML/TOML 折叠 NodeView 保源码。
 fs.writeFileSync(frontmatterPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter.template.js'), 'utf8'));
 fs.writeFileSync(frontmatterHelpersPath, fs.readFileSync(path.join(webviewSrcDir, 'frontmatter-helpers.template.js'), 'utf8'));

@@ -55,6 +55,13 @@ import {
 } from './setext-heading.mjs';
 // RD-1: setext hints 改 O(N) 行扫描（setext-helpers.scanSetextHintsFromSource），
 // 不再在 createEditor 前 unified+remark-parse 整篇（与 Milkdown GFM parse 双倍开销）。
+// RD-1.2: 大文档 progressive 分块（table/GFM 超线性 → 首屏可编辑）。
+import {
+	shouldUseProgressiveOpen,
+	splitMarkdownProgressive,
+	VSWORD_FIRST_CHUNK_CHARS,
+	VSWORD_NEXT_CHUNK_CHARS,
+} from './markdown-chunk.mjs';
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
@@ -168,6 +175,9 @@ let saveSeq = 0;
 let slashController;
 let blockHandleController;
 let modeController;
+// RD-1.2: progressive 加载期间抑制 markdownUpdated → host dirty，并允许中途 createEditor 取消。
+let progressiveLoading = false;
+let progressiveEpoch = 0;
 // T-3.7b.c: 视图模式 → editable 切换器。整个 webview 一份，跨 createEditor 重建。
 // createEditor 拆掉旧 Editor 时先 setSessionReady(false)，新 editor.create() 完成后再 setSessionReady(true)。
 const viewModeApplier = createViewModeApplier({
@@ -225,8 +235,80 @@ function reportError(prefix, err) {
 	console.error('[vsword-milkdown]', prefix, err);
 }
 
+function yieldToMain() {
+	return new Promise(resolve => {
+		if (typeof requestAnimationFrame === 'function') {
+			requestAnimationFrame(() => setTimeout(resolve, 0));
+		} else {
+			setTimeout(resolve, 0);
+		}
+	});
+}
+
+/**
+ * RD-1.2 · 把一段 markdown 解析后追加到当前 PM doc 末尾。
+ * @param {string} chunk
+ */
+async function appendMarkdownChunk(chunk) {
+	if (!editor || typeof chunk !== 'string' || chunk.length === 0) { return; }
+	await editor.action(ctx => {
+		const parser = ctx.get(parserCtx);
+		const view = ctx.get(editorViewCtx);
+		if (!parser || !view) { return; }
+		let parsed;
+		try {
+			parsed = parser(chunk);
+		} catch (err) {
+			reportError('progressive-parse', err);
+			return;
+		}
+		if (!parsed || !parsed.content || parsed.content.size === 0) { return; }
+		const end = view.state.doc.content.size;
+		const tr = view.state.tr.insert(end, parsed.content);
+		view.dispatch(tr);
+	});
+}
+
+/**
+ * 挂载后公共收尾（outline / backlinks / handle / view-mode）。
+ * @param {{ seedOutline?: boolean }} [opts]
+ */
+function finishEditorMount(opts) {
+	const seedOutline = !opts || opts.seedOutline !== false;
+	try {
+		mountBacklinksFooter(root.parentElement || root);
+		refreshBacklinks();
+	} catch (err) {
+		reportError('backlinks-mount', err);
+	}
+	try {
+		editor.action(ctx => { blockHandleController = installBlockHandle(ctx, root); });
+	} catch (err) {
+		reportError('block-handle-mount', err);
+	}
+	if (seedOutline) {
+		try {
+			editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
+		} catch (err) {
+			reportError('outline-seed', err);
+		}
+	}
+	try {
+		viewModeApplier.setSessionReady(true);
+		const currentMode = modeController?.getMode?.();
+		if (typeof currentMode === 'string' && currentMode.length > 0) {
+			viewModeApplier.apply(currentMode);
+		}
+	} catch (err) {
+		reportError('view-mode-editable/seed', err);
+	}
+}
+
 async function createEditor(markdown) {
 	if (!root) throw new Error('Missing #milkdown-root');
+	// 取消进行中的 progressive 追加
+	const myEpoch = ++progressiveEpoch;
+	progressiveLoading = false;
 	// T-3.7b.c: 旧 editor 拆掉 + 新 editor 未 create() 完毕的空档期 apply 会踩空 ctx，
 	// 先关 sessionReady，等到 initialized = true 后再打开并 replay。
 	viewModeApplier.setSessionReady(false);
@@ -254,10 +336,22 @@ async function createEditor(markdown) {
 		blockHandleController.destroy();
 		blockHandleController = undefined;
 	}
+
+	// RD-1.2: 大文档 progressive —— 首屏小块先可编辑，其余 yield 追加。
+	const useProgressive = shouldUseProgressiveOpen(markdown);
+	const chunks = useProgressive
+		? splitMarkdownProgressive(markdown, VSWORD_FIRST_CHUNK_CHARS, VSWORD_NEXT_CHUNK_CHARS)
+		: [markdown];
+	const head = chunks[0] ?? '';
+	if (useProgressive && chunks.length > 1) {
+		progressiveLoading = true;
+		setStatus('大文档加载中（首屏）… ' + chunks.length + ' 段', 'dirty');
+	}
+
 	editor = await Editor.make()
 		.config(ctx => {
 			ctx.set(rootCtx, root);
-			ctx.set(defaultValueCtx, markdown);
+			ctx.set(defaultValueCtx, head);
 			ctx.set(remarkStringifyOptionsCtx, TYPORA_STRINGIFY_OPTIONS);
 			// T-3.5c.4: 关掉 GFM strikethrough 的 singleTilde（默认 true 会把 `~x~` 也当删除线），
 			// 把单波浪 `~x~` 让给 subscript 装饰族，双波浪 `~~x~~` 依旧走 GFM strike。
@@ -289,7 +383,8 @@ async function createEditor(markdown) {
 			});
 			ctx.get(listenerCtx).markdownUpdated((ctxRef, nextMarkdown) => {
 				currentMarkdown = nextMarkdown;
-				if (!initialized) return;
+				// progressive 追加阶段 / 未 initialized：不报 dirty（避免 host auto-save 中间态）
+				if (!initialized || progressiveLoading) { return; }
 				dirty = true;
 				setStatus('Unsaved changes…', 'dirty');
 				vscode?.postMessage({ type: 'markdownUpdated', markdown: nextMarkdown });
@@ -298,7 +393,7 @@ async function createEditor(markdown) {
 			});
 			// T-3.4: cursor moves update the active heading (highlight in Outline pane).
 			ctx.get(listenerCtx).selectionUpdated(ctxRef => {
-				if (!initialized) return;
+				if (!initialized || progressiveLoading) { return; }
 				refreshOutlineActiveOnly(ctxRef.get(editorViewCtx));
 			});
 			// Register slash view via SlashProvider once the editor context is ready.
@@ -357,42 +452,49 @@ async function createEditor(markdown) {
 		.use($prose(() => createFindPlugin(() => getFindWidget().getFindState())))
 		.use($prose(() => createFindKeymap(getFindWidget(), { getMode: () => (modeController?.getMode?.() || 'wysiwyg') })))
 		.create();
-	currentMarkdown = serialize();
+
+	// 首屏就绪：允许编辑；progressive 时先不刷 full outline（避免半文档 TOC 误导）
 	initialized = true;
-	setStatus('Ready', 'ok');
-	// T-3.11.4: pin the backlinks footer to the editor container and kick off
-	// the first inverse-index query. Repaints itself on host response.
-	try {
-		mountBacklinksFooter(root.parentElement || root);
-		refreshBacklinks();
-	} catch (err) {
-		reportError('backlinks-mount', err);
+	currentMarkdown = useProgressive ? markdown : serialize();
+	finishEditorMount({ seedOutline: !useProgressive || chunks.length === 1 });
+
+	if (!useProgressive || chunks.length <= 1) {
+		progressiveLoading = false;
+		if (!useProgressive) {
+			currentMarkdown = serialize();
+		}
+		setStatus('Ready', 'ok');
+		return;
 	}
-	// T-3.8: mount the hover block handle. Kept separate from `.use()` because
-	// the handle DOM listens on the editor root, which only exists post-create.
-	try {
-		editor.action(ctx => { blockHandleController = installBlockHandle(ctx, root); });
-	} catch (err) {
-		reportError('block-handle-mount', err);
+
+	// 追加剩余 chunk（可被新的 createEditor 取消）
+	for (let i = 1; i < chunks.length; i++) {
+		if (myEpoch !== progressiveEpoch) { return; }
+		await yieldToMain();
+		if (myEpoch !== progressiveEpoch || !editor) { return; }
+		setStatus('大文档加载中… ' + (i + 1) + '/' + chunks.length, 'dirty');
+		try {
+			await appendMarkdownChunk(chunks[i]);
+		} catch (err) {
+			reportError('progressive-append-' + i, err);
+		}
 	}
-	// T-3.4: seed the initial outline snapshot so the Outline pane fills as soon as it opens.
+	if (myEpoch !== progressiveEpoch) { return; }
+	progressiveLoading = false;
+	// 以序列化结果为当前编辑态；原文 markdown 若与 serialize 规范化不同，以 PM 为准
+	try {
+		currentMarkdown = serialize();
+	} catch (err) {
+		currentMarkdown = markdown;
+		reportError('progressive-serialize', err);
+	}
+	dirty = false;
 	try {
 		editor.action(ctx => refreshOutline(ctx.get(editorViewCtx)));
 	} catch (err) {
 		reportError('outline-seed', err);
 	}
-	// T-3.7b.c: 新 editor 就绪，打开 sessionReady 闸门并把当前视图模式立即刷进 editable。
-	// modeController 若已存在（重新加载场景）→ 立即 apply；首次加载它尚未构造，走 pendingMode 通道，
-	// 等 modeController 首次 onModeChange / applyPersistedPreference 时补上。
-	try {
-		viewModeApplier.setSessionReady(true);
-		const currentMode = modeController?.getMode?.();
-		if (typeof currentMode === 'string' && currentMode.length > 0) {
-			viewModeApplier.apply(currentMode);
-		}
-	} catch (err) {
-		reportError('view-mode-editable/seed', err);
-	}
+	setStatus('Ready', 'ok');
 }
 
 // T-3.3.2: rebuild the editor from source-mode textarea content.
