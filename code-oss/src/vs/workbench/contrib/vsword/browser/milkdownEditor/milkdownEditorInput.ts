@@ -164,6 +164,20 @@ export class MilkdownEditorInput extends WebviewInput {
 		return super.matches(otherInput);
 	}
 
+	/**
+	 * 未注册 serializer 的备用路径：部分 workbench 逻辑会先 toUntyped 再 resolve。
+	 * 带上 override = Milkdown editorId，确保仍走 Milkdown 而非默认文本编辑器。
+	 */
+	public override toUntyped(): IUntypedEditorInput {
+		return {
+			resource: this._fileResource,
+			options: {
+				override: VSWORD_MILKDOWN_EDITOR_ID,
+				pinned: true,
+			},
+		};
+	}
+
 	// --- T-3.4: outline surface ------------------------------------------------
 
 	public updateOutlineData(data: MilkdownOutlineData): void {

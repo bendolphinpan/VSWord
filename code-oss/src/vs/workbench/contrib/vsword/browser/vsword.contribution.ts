@@ -8,6 +8,7 @@ import { VswordWorkbenchShellContribution } from './vswordHomeView.js';
 import { VswordWordCountContribution } from './vswordWordCount.js';
 import { VswordMindmapAutoOpenContribution } from './vswordMindmapAutoOpen.js';
 import { VswordMilkdownEditorContribution } from './milkdownEditor/milkdownEditorContribution.js';
+import { MilkdownWorkingCopyEditorHandler } from './milkdownEditor/milkdownWorkingCopyEditorHandler.js';
 import { VswordMilkdownThemeStatusContribution } from './milkdownEditor/vswordMilkdownThemeStatus.js';
 import { VswordPandocDetectionContribution } from './milkdownEditor/exportPandocContribution.js';
 
@@ -41,6 +42,8 @@ registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbe
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordMindmapAutoOpenContribution.ID, VswordMindmapAutoOpenContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordMilkdownEditorContribution.ID, VswordMilkdownEditorContribution, WorkbenchPhase.BlockStartup);
+// 会话/hot-exit：WorkingCopy backup 恢复时用 Milkdown 页签打开 .md
+registerWorkbenchContribution2(MilkdownWorkingCopyEditorHandler.ID, MilkdownWorkingCopyEditorHandler, WorkbenchPhase.BlockStartup);
 // T-3.7d.3 · 状态栏 item：仅在 Milkdown editor 激活时展示，命令入口 vsword.selectMarkdownTheme
 registerWorkbenchContribution2(VswordMilkdownThemeStatusContribution.ID, VswordMilkdownThemeStatusContribution, WorkbenchPhase.AfterRestored);
 // T-3.8b.3 · Pandoc 检测器：workbench idle 后跑一次 detectPandoc，把结果写进 ContextKey

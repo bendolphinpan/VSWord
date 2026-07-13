@@ -5,7 +5,6 @@
 
 import { Disposable, DisposableStore } from '../../../../../base/common/lifecycle.js';
 import { VSBuffer } from '../../../../../base/common/buffer.js';
-import { FileAccess } from '../../../../../base/common/network.js';
 import { basename, dirname, joinPath } from '../../../../../base/common/resources.js';
 import { URI } from '../../../../../base/common/uri.js';
 import { localize, localize2 } from '../../../../../nls.js';
@@ -15,11 +14,12 @@ import { IDialogService } from '../../../../../platform/dialogs/common/dialogs.j
 import { FileChangeType, IFileService, IFileStat } from '../../../../../platform/files/common/files.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../../platform/log/common/log.js';
+import { Registry } from '../../../../../platform/registry/common/platform.js';
 import { IStorageService, StorageScope, StorageTarget } from '../../../../../platform/storage/common/storage.js';
 import { IThemeService } from '../../../../../platform/theme/common/themeService.js';
 import { ColorScheme } from '../../../../../platform/theme/common/theme.js';
 import { IWorkbenchContribution } from '../../../../common/contributions.js';
-import { EditorInputWithOptions, SaveReason } from '../../../../common/editor.js';
+import { EditorExtensions, EditorInputWithOptions, IEditorFactoryRegistry, SaveReason } from '../../../../common/editor.js';
 import {
 	IEditorResolverService,
 	RegisteredEditorPriority,
@@ -30,7 +30,13 @@ import { IWebviewService } from '../../../webview/browser/webview.js';
 import { asWebviewUri } from '../../../webview/common/webview.js';
 import { IWorkspaceContextService } from '../../../../../platform/workspace/common/workspace.js';
 import { IEnvironmentService } from '../../../../../platform/environment/common/environment.js';
+import {
+	createMilkdownEditorInput,
+	getMilkdownWebviewResources,
+	setMilkdownEditorAttachHandler,
+} from './milkdownEditorFactory.js';
 import { MilkdownEditorInput } from './milkdownEditorInput.js';
+import { MilkdownEditorInputSerializer } from './milkdownEditorInputSerializer.js';
 import {
 	ExternalTheme,
 	isExternalThemeId,
@@ -55,7 +61,6 @@ import {
 	VSWORD_MILKDOWN_EDITOR_ID,
 	VSWORD_MILKDOWN_MODE_STORAGE_KEY,
 	VSWORD_MILKDOWN_MODES,
-	VSWORD_MILKDOWN_ORIGIN,
 	VswordMilkdownMode,
 	WebviewImageUploadRequestMessage,
 	WebviewToHostMessage,
@@ -80,11 +85,9 @@ import {
 	resolveRelativeDirSegments,
 } from './imageStorageStrategy.js';
 
-interface WebviewResources {
-	readonly vendorRoot: URI;
-	readonly scriptUri: URI;
-	readonly katexCssUri: URI;
-}
+// 会话恢复：注册 typeId serializer（必须在 restore 前完成；模块加载即注册）
+Registry.as<IEditorFactoryRegistry>(EditorExtensions.EditorFactory)
+	.registerEditorSerializer(MilkdownEditorInput.TYPE_ID, MilkdownEditorInputSerializer);
 
 /**
  * Wires `.md` files to the Milkdown WYSIWYG editor and owns the per-input
@@ -92,6 +95,9 @@ interface WebviewResources {
  * {@link MilkdownEditorInput}) is instantiated by the resolver on demand and
  * carries the working copy; this class only attaches the message pump and
  * external-change dialog once the webview is live.
+ *
+ * 页签会话恢复：`MilkdownEditorInputSerializer` + factory attach hook，
+ * 保证关窗再开仍打开同一批 .md Milkdown 页签（不是空白/丢失）。
  */
 export class VswordMilkdownEditorContribution extends Disposable implements IWorkbenchContribution {
 
@@ -115,6 +121,10 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		@IVSWordFindService private readonly findService: IVSWordFindService,
 	) {
 		super();
+		// factory / serializer 创建的 input 统一走 attach（幂等）
+		setMilkdownEditorAttachHandler(input => this.ensureAttach(input));
+		this._register({ dispose: () => setMilkdownEditorAttachHandler(undefined) });
+
 		this._register(editorResolverService.registerEditor(
 			'*.md',
 			{
@@ -280,28 +290,30 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	private externalThemes: ExternalTheme[] = [];
 
 	private createEditorInput(resource: URI, group: IEditorGroup): EditorInputWithOptions {
-		const { vendorRoot, scriptUri, katexCssUri } = getMilkdownWebviewResources();
-		const webview = this.webviewService.createWebviewOverlay({
-			providedViewType: VSWORD_MILKDOWN_EDITOR_ID,
-			extension: undefined,
-			origin: VSWORD_MILKDOWN_ORIGIN,
-			title: basename(resource),
-			options: { enableFindWidget: true, retainContextWhenHidden: true },
-			contentOptions: {
-				allowScripts: true,
-				// T-3.5.1: parent dir instead of the .md file itself so images written
-				// under `assets/`, `<name>.assets/`, or same-folder are loadable via
-				// the webview URI scheme once inserted with a relative path.
-				localResourceRoots: [vendorRoot, dirname(resource)],
-			},
-		});
-		const input = this.instantiationService.createInstance(MilkdownEditorInput, resource, webview);
-		input.updateGroup(group.id);
-		this.attach(input, scriptUri, katexCssUri);
+		const input = createMilkdownEditorInput(
+			this.instantiationService,
+			this.webviewService,
+			resource,
+			group.id,
+		);
+		// attach 已由 factory hook 调用；再 ensure 一次幂等
+		this.ensureAttach(input);
 		return { editor: input };
 	}
 
+	/** 幂等 attach：同一 input 只装一次 message pump / HTML。 */
+	private ensureAttach(input: MilkdownEditorInput): void {
+		if (this.liveInputs.has(input)) {
+			return;
+		}
+		const { scriptUri, katexCssUri } = getMilkdownWebviewResources();
+		this.attach(input, scriptUri, katexCssUri);
+	}
+
 	private attach(input: MilkdownEditorInput, scriptUri: URI, katexCssUri: URI): void {
+		if (this.liveInputs.has(input)) {
+			return;
+		}
 		const disposables = new DisposableStore();
 		this.liveInputs.add(input);
 
@@ -1091,11 +1103,4 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 	}
 }
 
-function getMilkdownWebviewResources(): WebviewResources {
-	const vendorRoot = FileAccess.asFileUri('vs/workbench/contrib/vsword/browser/milkdownEditor/vendor');
-	return {
-		vendorRoot,
-		scriptUri: URI.joinPath(vendorRoot, 'index.js'),
-		katexCssUri: URI.joinPath(vendorRoot, 'katex', 'katex.min.css'),
-	};
-}
+
