@@ -1,10 +1,11 @@
 # VSWord 主开发计划（全景 + 进度）
 
-> **文档定位**：VSWord 的**唯一权威开发路线图**，从头梳理全部阶段、任务、进度与技术决策。
-> 取代 `002-development-task-breakdown.md` 的"当前状态"章节（该文档保留作历史任务细节归档）。
-> **作者**：Hermes 主代理
-> **创建**：2026-06-30
-> **基线**：Code OSS `1.124.2`（`D:\GIT\VSWord\code-oss`，分支 `dev`）
+> **文档定位**：VSWord 的**全景路线图与模块进度权威**（Phase 0–7 含义、产品决策、历史交付）。  
+> **债务 / 修复 / 发布前硬门槛**的执行清单不在本文展开，见 → **`004-remediation-and-debt-plan.md`（RD- 号）**。  
+> 取代 `002-development-task-breakdown.md` 的「当前状态」章节（该文档保留作历史任务细节归档）。  
+> **作者**：Hermes 主代理 · **创建**：2026-06-30 · **修订**：2026-07-13（真相表 + 债务指针）  
+> **基线**：Code OSS `1.124.2`（`D:\GIT\VSWord\code-oss`，分支 `dev`）  
+> **功能线水位**：Phase 3 主线归档 + Round-2 `T-3.13.x`（至 `1889e82e` / handoff `e65f8411`）
 
 ---
 
@@ -19,6 +20,25 @@
 | **日志根** (log) | `D:\GIT\VSWord\docs\phase0\logs\` |
 | **需求文档** | `D:\GIT\VSWord\docs\requirements\` |
 | **计划文档** | `D:\GIT\VSWord\docs\plans\` |
+| **债务执行清单** | `D:\GIT\VSWord\docs\plans\004-remediation-and-debt-plan.md` |
+
+### 0.1 文档权威分工（2026-07-13 起）
+
+| 问题 | 读哪份 |
+|------|--------|
+| 产品是什么、Phase 0–7 各自做什么 | 本文 + `000-vsword-master-plan.md` |
+| **下一步修什么 / 债务优先级** | **`004-remediation-and-debt-plan.md`** |
+| Phase 3 归档 Gate 证据 | `docs/decisions/phase-3-acceptance.md` |
+| **UI 改造边界 L0–L3** | **`docs/decisions/0002-ui-modification-boundary.md`** |
+| 代码目录与构建命令速查 | `docs/VSWord-PROJECT-HANDOFF.md` |
+
+### 0.2 Phase 序号冻结规则
+
+- **Phase 4 = Canvas 模块**，已 100% 完成。
+- **禁止**再把「未闭合优化 / 性能债 / IME 手测」称为「转交 Phase 4」。
+- 新工作使用 **RD- 债务号**（见 `004`）或未启动的 **Phase 6 / Phase 7**。
+- 实际交付时间线（供理解历史，**不是**推荐执行序）：  
+  `0 → 1 → 2 → 4(Canvas) → 5(Mindmap) → 3旧废弃 → 3新 Milkdown → 3 收官/Round-2 → **RD 债务桶** → 7 产品化`
 
 ---
 
@@ -26,87 +46,77 @@
 
 VSWord = Code OSS 1.124.2 基线
 + VS Code 扩展生态
-+ **Typora 级 / 超越 Typora 的 Markdown WYSIWYG 编辑**（本次重建核心）
++ **Typora 级 Markdown WYSIWYG 编辑**（Milkdown；「超越 Typora」能力见下，部分仍为债务）
 + XMind 参考的 `.mm` 思维导图
-+ Miro 参考的"文件夹即 Canvas"组织视图
++ Miro 参考的「文件夹即 Canvas」组织视图
 + Code OSS 内置 Git 作为版本管理
 − 默认 Copilot / 程序员默认噪音 / 实时协作 / 云账号
 
-**核心原则**：本地优先 · 数据透明 · 数据无损 · 扩展生态保留 · 最小侵入 · Git 即历史 · 成熟开源库优先不造轮子。
+**核心原则**：本地优先 · 数据透明 · 数据无损 · 扩展生态保留 · 最小侵入 · Git 即历史 · 成熟开源库优先不造轮子 · **功能优先视觉延后**（UI 大重构另立阶段）。
+
+**「超越 Typora」对账（避免过度承诺）**：
+
+| 能力 | 状态 |
+|------|------|
+| 图片位置 / 大小拖拽 | ✅ |
+| 双向链接 + 反向链接 | ✅ 语法/补全/hover；反向链接 **footer 为正式形态**（不做侧栏面板） |
+| Notion-like 块拖拽 / 转换 | ✅ |
+| 图表三件套 | ✅ Mermaid + Flowchart.js + js-sequence |
+| Pretext 快速排版 | ▶ **RD-5=A 做**（已拍板；待 spike） |
+| 用户字体三元组 Settings | ⏸ 未闭合 → **RD-7** |
+| 大文档 open 性能 | 🔴 未达标 → **RD-1** |
+| Round-trip 保真等级 | Gate E 绿；语义等级待钉 → **RD-11** |
 
 ---
 
-## T-号对照表（Phase 3 · commit ↔ plan）
+## 1b. Phase 3 功能真相表（plan 语义 · 现行状态）
 
-> **背景**：Phase 3 中期 commit 里的 T-3.6 ~ T-3.11 与本 plan 里同名 T-号语义已漂移（编号被复用于不同含义）。此表以 **commit 实际含义** 为主，反查 **plan 中对应的功能条目**，为后续继续拆解 / 完成度对账做统一口径。生成时间：2026-07-04。
-> 依据：`git log --oneline -30`（最新提交 2f93e63c）。
+> **本表为 2026-07-13 起的进度权威**。只使用 **plan 功能领域 T 号**。  
+> commit 曾用过的冲突 T 号见文末 **附录 A（ARCHIVE）**，不得再当现行状态引用。
 
-| plan T-号 | plan 含义（一句话） | 实际 commit T-号 | commit hash | commit 含义（一句话） | 一致 | 备注 |
-|-----------|--------------------|------------------|-------------|----------------------|------|------|
-| T-3.0 | 清理旧 Block Editor（前置） | T-3.0 | c361b402 / 4ccbb95a | Phase 3 rebuild — remove BlockNote block editor, add Milkdown WYSIWYG MVP + gitignore 收紧 | ✅ | 与 T-3.2 合并落地 |
-| T-3.1 | Milkdown spike | T-3.1 | （历史，此 30 条外） | Milkdown spike | ✅ | spike 已归档 |
-| T-3.2 | WYSIWYG MVP（文件类型关联） | T-3.2 | c361b402 | add Milkdown WYSIWYG MVP | ✅ | 与 T-3.0 同 commit |
-| T-3.2b | EditorPane + WorkingCopy 升级 | T-3.2b | 0f6bc00a | native dirty/save/revert via WorkingCopy | ✅ | |
-| T-3.3.1~3.3.7 | Typora 级即时渲染 + 排版基础全套（主题 / 光标进出 / slash / KaTeX / Prism / remark / 智能输入） | T-3.3 全套 | 9f76d3e0 | Phase 3 完成 T-3.3 全套 + T-3.4 Outline 面板 | ✅ | Outline 面板一并落地（本属 T-3.7c.2） |
-| T-3.4 | 自定义排版 + Typora 缺失语法（mark / emoji / footnote / 字体 / pretext / frontmatter） | T-3.4（Outline 部分） | 9f76d3e0 | Outline 面板 | ⚠️ | 完整 T-3.4 六子项未逐项交付；commit 只覆盖 Outline 面板（属 plan T-3.7c.2） |
-| T-3.5.1 | 粘贴/拖拽 → assets/ + 相对路径 | T-3.5.1 | 8bd1650d | paste/drop image → assets/ + relative path | ✅ | |
-| T-3.5.2 | 图片拖拽调整大小 | T-3.5.2 | f3b0597a | image resize NodeView with locked aspect ratio | ✅ | |
-| T-3.5.3 | 图注（alt / caption） | T-3.5.3 | 2304e746 | image caption (alt-as-caption) with popover editor | ✅ | |
-| T-3.5.4 | 图片对齐（左/中/右 via HTML align 保真） | T-3.5.4 | 3f43dc6a | image alignment via `<p align>` wrapper | ✅ | |
-| T-3.5b.1~4 | 图表全套（Mermaid / Flowchart / js-seq / 懒加载） | — | — | 未启动 | ⛔ | |
-| T-3.6.1 | `[[wiki link]]` 语法 | **T-3.11.1** | 5cad963d | wiki-links (syntax + resolver + click-to-open) | ⚠️ 编号漂移 | commit 用了 T-3.11.1，实为 plan T-3.6.1 |
-| T-3.6.2 | 自动补全 UI | **T-3.11.2** | 635b9a1b | wiki-link autocomplete popover | ⚠️ 编号漂移 | 实为 plan T-3.6.2 |
-| T-3.6.3 | 全局反向链接索引服务 | **T-3.11.4**（含） | f664d47e | wiki-link backlinks footer | ⚠️ 编号漂移 | 索引服务与面板一并交付 |
-| T-3.6.4 | 反向链接面板 | **T-3.11.4** | f664d47e | wiki-link backlinks footer | ⚠️ 编号漂移 | 目前为 footer 形态，非独立面板 |
-| T-3.6.5 | 链接跳转 / 悬停预览 | **T-3.11.3** | a78cb8f9 | wiki-link hover preview | ⚠️ 编号漂移 | 跳转在 T-3.11.1 已覆盖 |
-| T-3.7.1 | 块拖拽手柄 | **T-3.8**（commit） | 00daab60 | block hover handle (drag + transform menu) | ⚠️ 编号漂移 | commit T-3.8 语义 ≠ plan T-3.8（Round-trip） |
-| T-3.7.2 | 块转换菜单（H1↔H2↔段落↔引用等） | **T-3.8**（commit） | 00daab60 | transform menu | ⚠️ 编号漂移 | 与拖拽手柄同 commit 落地 |
-| T-3.7.3 | 表格可视化操作（增删行列 / 对齐） | **T-3.6**（commit） | fe241cb1 | table chrome (col/row/align/resize) | ⚠️ 编号漂移 | commit T-3.6 语义 ≠ plan T-3.6（双链） |
-| T-3.7b.1 | 源码模式 | **T-3.7b** | 900c94cc + da77750e | Action2 `toggleSource` + Milkdown editable 切换 · reading 真只读 | ✅ 已交付 | T-3.7b.a…f 收官 · Gate D/E/F 全绿 |
-| T-3.7b.2 | 预览/阅读模式 | **T-3.7b** | da77750e | editable=false + shell aria-pressed | ✅ 已交付 | T-3.7b.a…f 收官 |
-| T-3.7b.3 | 专注模式 | **T-3.7b** | ce03f41f + 0dffffa7 | decoupled focus toggle · 服务化收敛到 `IVSWordViewModeService` | ✅ 已交付（服务化） | 从 commit T-3.10 起 · T-3.7b.a 服务化收敛 |
-| T-3.7b.4 | 打字机模式 | **T-3.7b** | ce03f41f + 0dffffa7 | typewriter toggle · 服务化收敛到 `IVSWordViewModeService` | ✅ 已交付（服务化） | 与专注模式同 commit + T-3.7b.a 服务化 |
-| T-3.7c.1 | TOC 自动生成（`[TOC]`） | **T-3.7c.1** | c0acda7b + f7499753 + 739e1c24 + 728fd034 | Typora `[TOC]` 占位符 · remark + PM schema + NodeView + 事务级重算 + 点击跳转 + `vsword.toc.insertToc` 命令 · 62 单测（remark 15 / roundtrip 17 / interop 15 / interaction 10 / PM schema 5）· Gate D/E/F 全绿 | ✅ 已交付 | 4 子卡 a→b→c→d 顺序完成 |
-| T-3.7c.2 | 大纲面板（Outline View） | T-3.4（commit 附带） | 9f76d3e0 | Outline 面板 | ⚠️ 编号漂移 | commit T-3.4 里同时含 T-3.3 全套 + 本项 |
-| T-3.7c.3 | 查找替换 | 4b5b5718 | Gate D/E/F | ✅ 已交付 | ✅ | Ctrl+F/H · Decoration+tr · reading gate · 7c2 host service |
-| T-3.7d.1~3 | 主题兼容层（内置 4 主题 / Typora .css / 切换命令） | — | — | 未启动 | ⛔ | 3.3.1 已做内置主题系统，Typora .css 兼容与切换命令未落 |
-| T-3.8.1~4 | Round-trip 保真层（source-mapping） | — | — | 未启动 | ⛔ | 高优先级欠项 |
-| T-3.8b.1~3 | 导入导出（HTML / PDF / Pandoc） | — | — | 未启动 | ⛔ | |
-| T-3.3.4（数学公式） | KaTeX 行内 + 块（原属 T-3.3.4） | **T-3.9**（commit） | dec56efc | math NodeView (click-to-edit + KaTeX safety) | ⚠️ 编号漂移 | commit T-3.9 语义 ≠ plan T-3.9（性能收口） |
-| T-3.3.5（Prism） | Prism 代码高亮（原属 T-3.3.5） | **T-3.7**（commit） | 51d25a3b | code block chrome (prism + lang picker + copy + keymap) | ⚠️ 编号漂移 | commit T-3.7 语义 ≠ plan T-3.7（Notion 块增强） |
-| T-3.9.1~4 | 性能与 IME 全矩阵收口 | — | — | 未启动 | ⛔ | Gate D/E/G 未启 |
-| — | tsc baseline 清零（非计划任务） | 无 T-号 | 2f93e63c | chore: fix pre-existing tsc errors in Phase 3 baseline | — | 工程债偿还，非 plan 追踪项 |
+| plan T-号 | 含义 | 状态 | 关键证据 | 残余 / 债务 |
+|-----------|------|------|----------|-------------|
+| T-3.0 | 清理旧 Block Editor | ✅ | `c361b402` / `4ccbb95a` | — |
+| T-3.1 | Milkdown spike | ✅ | `docs/phase0/milkdown-spike.md` | — |
+| T-3.2 / 3.2b | WYSIWYG MVP + WorkingCopy | ✅ | `c361b402` / `0f6bc00a` | — |
+| T-3.3.x | 即时渲染 + 排版基础 | ✅ | `9f76d3e0` 等；数学曾标 commit T-3.9；Prism 曾标 commit T-3.7 | — |
+| T-3.4.1~3 / 3.4.6 | mark 系 / emoji / footnote / frontmatter | ✅ | 由 **T-3.5c** 覆盖（`003c-syntax-completion.md`） | — |
+| T-3.4.4 | 用户字体三元组 Settings | ⏸ | 决策 L-1 有；实现未收官 | **RD-7** |
+| T-3.4.5 | Pretext 快速排版 | ▶ 已立项 | 用户拍板 RD-5=**A 做**（2026-07-13） | **RD-5** spike→接入 |
+| T-3.5.1~4 | 图片增强 | ✅ | `8bd1650d` → `3f43dc6a` | — |
+| T-3.5b | 图表全套 + 懒加载 | ✅ | Gate F 81 pass；`e557e475` 等 | 再优化 → **RD-8** |
+| T-3.5c | 语法补齐 | ✅ | Gate G-A | — |
+| T-3.6.1~3 / 3.6.5 | 双链语法 / 补全 / 索引 / 跳转·hover | ✅ | commit 曾标 T-3.11.x | — |
+| T-3.6.4 | 反向链接 | ✅ footer 正式形态 | `f664d47e`；用户拍板保持 footer、**不做面板**（2026-07-13） | RD-6 关闭 |
+| T-3.7.1~2 | 块拖拽 + 转换菜单 | ✅ | commit 曾标 T-3.8：`00daab60` | — |
+| T-3.7.3 | 表格 chrome | ✅ | commit 曾标 T-3.6；UX `T-3.12.2` | — |
+| T-3.7b.1~4 | 源码 / 阅读 / 专注 / 打字机 | ✅ | 服务化 + 正交性 v2 + Round-2 | 对账 → **RD-4** |
+| T-3.7c.1~3 | TOC / Outline / 查找替换 | ✅ | TOC 四子卡；Outline；find `4b5b5718` | — |
+| T-3.7d.1~3 | 主题兼容层 | ✅ | `94f0f0eb` / `5b78d516`… / `29f87452` | — |
+| T-3.8.1~4 | Round-trip 保真 | ✅ 主线 | Gate E 296 pass | 等级声明 → **RD-11** |
+| T-3.8b.1~3 | HTML / PDF / Pandoc | ✅ | `1d051293`…`daf95a08` | — |
+| T-3.9.1~4 | 性能与 IME 收口 | ⚠️ 部分 | 三报告 + Gate G | open 🔴 **RD-1**；IME **RD-2**；RSS **RD-3** |
+| T-3.12.x | 收官 P0 fix Round-1 | ✅ | IME gate / 表格 hover / 模式 state | — |
+| T-3.13.x | 用户反馈 Round-2 | ✅ 代码 | `400227ed`→`1889e82e` | Rime 人肉 → **RD-2** |
 
-### 漂移根因
-
-commit 提交时使用的 T-号（T-3.6 / 3.7 / 3.8 / 3.9 / 3.10 / 3.11.x）是 **交付顺序编号**，与 plan 中的 **功能领域编号**（T-3.6 双链 / T-3.7 Notion 块 / T-3.8 Round-trip / T-3.9 性能 / …）语义完全脱钩。以下 6 组编号已被 commit 复用：
-
-- commit **T-3.6**（表格）≠ plan T-3.6（双链） → 实为 plan T-3.7.3
-- commit **T-3.7**（代码块）≠ plan T-3.7（Notion 块） → 实为 plan T-3.3.5
-- commit **T-3.8**（块 hover）≠ plan T-3.8（Round-trip） → 实为 plan T-3.7.1 + 3.7.2
-- commit **T-3.9**（数学）≠ plan T-3.9（性能收口） → 实为 plan T-3.3.4
-- commit **T-3.10**（focus / typewriter）→ 实为 plan T-3.7b.3 + 3.7b.4
-- commit **T-3.11.x**（双链系列）→ 实为 plan T-3.6.x
-
-**后续策略**：新 commit 一律以 plan 原始 T-号为准（三段式 `T-3.<主项>.<子项>`），本表钉住漂移期映射，避免再次错位。
+**主线口径**：可称「Phase 3 主线完成」；**不得**宣称「无债务 / 性能达标 / IME 全矩阵签字」。
 
 ---
 
 ## 2. 全景进度矩阵
 
-| Phase | 模块 | 状态 | 进度 |
-|-------|------|------|------|
-| **Phase 0** | 基线（checkout / Copilot 移除 / Open VSX） | ✅ 完成 | 100% |
-| **Phase 1** | Writer Workbench Shell（Home / writer-mode / 布局） | ✅ 完成 | 100% |
-| **Phase 2** | Markdown Core（frontmatter / 字数 / round-trip） | ✅ 完成 | 100% |
-| **Phase 3（旧）** | Block Editor（BlockNote） | ❌ **废弃** | 卡死不可用，本次移除 |
-| **Phase 3（新）** | **Markdown WYSIWYG 编辑器（Milkdown 重建）** | ✅ 主线完成 | T-3.0..T-3.12 主线 18/19 交付；未闭合项 U-1..U-5 转 Phase 4（见 §7） |
-| **Phase 4** | Canvas（React Flow，文件夹视图） | ✅ 完成 | 100% |
-| **Phase 5** | Mindmap（`.mm` XMind 对齐，mind-elixir） | ✅ 深度完成 | ~90%（T-5.1~5.9） |
-| **Phase 6** | 多维表（Notion-like 数据库） | ⚪ 后期规划 | 标记为后期功能 |
-| **Phase 7** | 产品化收口（打包 / 品牌 / 分发） | ⚪ 未启动 | 0% |
-
----
+| Phase / 桶 | 模块 | 状态 | 进度 | 备注 |
+|------------|------|------|------|------|
+| **Phase 0** | 基线（checkout / Copilot 移除 / Open VSX） | ✅ 完成 | 100% | |
+| **Phase 1** | Writer Workbench Shell | ✅ 完成 | 100% | |
+| **Phase 2** | Markdown Core | ✅ 完成 | 100% | |
+| **Phase 3（旧）** | BlockNote | ❌ 废弃 | — | 有损 MD + 卡死 |
+| **Phase 3（新）** | Milkdown WYSIWYG | ✅ 主线 + Round-2 | ~95% 功能 | 残余见 **RD-*** / §1b |
+| **Phase 4** | Canvas（React Flow） | ✅ 完成 | 100% | **仅指 Canvas，不是 backlog** |
+| **Phase 5** | Mindmap（`.mm`） | ✅ 深度完成 | ~90% | 剩余 → **RD-9** |
+| **Debt 桶** | 体验债 / 治理 / 发布门槛 | 🔴 进行中 | 见 `004` | **当前推荐主线** |
+| **Phase 6** | 多维表 | ⚪ 后期 | 0% | 发布前不启动 |
+| **Phase 7** | 产品化收口 | ⚪ 未启动 | 0% | 最小可发布 → **RD-10** |
 
 ## 3. 已完成阶段详情（存档）
 
@@ -151,7 +161,7 @@ commit 提交时使用的 T-号（T-3.6 / 3.7 / 3.8 / 3.9 / 3.10 / 3.11.x）是 
 - T-5.9 arrowlink 跨子树关联线
 - 53/53 单测通过；三视图切换（XML / mindmap / MD bullet）
 
-**Phase 5 剩余（P1/P2）**：Markdown ↔ `.mm` 互转完善、richcontent 富文本可视化编辑、10k 节点性能矩阵、IME 全矩阵专项。
+**Phase 5 剩余（P1/P2）**：Markdown ↔ `.mm` 互转完善、richcontent 富文本可视化编辑、10k 节点性能矩阵、IME 全矩阵专项。统一登记为债务 **RD-9**（见 `004-remediation-and-debt-plan.md`），**不**再写入「Phase 4」。
 
 ---
 
@@ -278,6 +288,10 @@ Markdown 文本 ← remark 序列化 ← ProseMirror 文档 ← 编辑后文档
 
 ## 4a. Phase 3 最终任务清单（决策后 v3.1，2026-07-01 定稿）
 
+> **历史清单**：本节保留 2026-07-01 决策与任务树原文结构，便于追溯「当时打算做什么」。  
+> **现行完成度**请只看 **§1b 真相表**；未闭合项执行看 **`004`（RD- 号）**。  
+> 决策表中的 **D-1**（Prism）≠ 债务 **RD-1**（大文档 open）。
+
 ### 用户决策记录（2026-07-01）
 
 | ID | 决策项 | 用户选择 |
@@ -299,7 +313,7 @@ T-3.1  Milkdown spike                               ✅ 已完成
 T-3.2  WYSIWYG MVP（文件类型关联）                  ✅ 已完成
 T-3.2b EditorPane + WorkingCopy 升级                ✅ 已完成（2026-07-01）
 ────────── 以下是决策后拆解的完整 Typora 1:1 复刻任务 ──────────
-T-3.3  Typora 级即时渲染 + 排版基础                  ← 下一步
+T-3.3  Typora 级即时渲染 + 排版基础                  ← 历史清单（已交付，见 §1b）
        ├─ 3.3.1 CSS 主题系统（内置 4 主题：Light / Dark / GitHub / Serif）
        ├─ 3.3.2 光标进出代码块/表格切换源码/渲染（inline WYSIWYG 精髓）
        ├─ 3.3.3 slash menu（/ 插入块）
@@ -308,12 +322,12 @@ T-3.3  Typora 级即时渲染 + 排版基础                  ← 下一步
        ├─ 3.3.6 remark 配置贴近 Typora 输出（bullet '-' / tablePipeAlign:false）
        └─ 3.3.7 智能输入 & 快捷键（自动括号、Ctrl+1..6 段落风格、Ctrl+B/I 等）
 T-3.4  自定义排版 + Typora 缺失语法
-       ├─ 3.4.1 mark 扩展：上标 (^) / 下标 (~) / 高亮 (==) / 下划线 (<u>)
-       ├─ 3.4.2 Emoji `:smile:`（remark-emoji）
-       ├─ 3.4.3 脚注 (remark-footnotes)
-       ├─ 3.4.4 用户字体三元组 Settings（fontFamily/fontSize/lineHeight）
-       ├─ 3.4.5 Pretext 快速排版
-       └─ 3.4.6 frontmatter 可视化编辑
+       ├─ 3.4.1 mark 扩展：上标 (^) / 下标 (~) / 高亮 (==) / 下划线 (<u>)  ✅→T-3.5c
+       ├─ 3.4.2 Emoji `:smile:`（remark-emoji）  ✅→T-3.5c
+       ├─ 3.4.3 脚注 (remark-footnotes)  ✅→T-3.5c
+       ├─ 3.4.4 用户字体三元组 Settings（fontFamily/fontSize/lineHeight）  ⏸→RD-7
+       ├─ 3.4.5 Pretext 快速排版  ⏸→RD-5
+       └─ 3.4.6 frontmatter 可视化编辑  ✅→T-3.5c
 T-3.5  图片增强（决策 G-1，不做图床）
        ├─ 3.5.1 粘贴/拖拽自动写入 assets/ + 相对路径
        ├─ 3.5.2 拖拽调整大小（自定义 NodeView + resize handle）
@@ -394,60 +408,60 @@ T-3.9  性能与 IME 全矩阵收口
 
 ---
 
-## 7. 本次执行顺序（Phase 3 新建）· **Phase 3 完成 · Phase 4 待启动**
+## 7. 当前执行序（2026-07-13 修订）
 
-### 7.1 Phase 3 主线交付（已完成 · 2026-07-09 归档）
+### 7.1 Phase 3 主线交付（已完成 · 2026-07-09 归档 · Round-2 至 2026-07-11）
 
 ```
-T-3.0 清理旧 Block Editor            ✅ c361b402 / 4ccbb95a
+T-3.0 清理旧 Block Editor            ✅
   ↓
-T-3.1 Milkdown spike                 ✅ 历史 spike
+T-3.1 Milkdown spike                 ✅
   ↓
-T-3.2 / 3.2b WYSIWYG MVP + WorkingCopy ✅ c361b402 / 0f6bc00a
+T-3.2 / 3.2b WYSIWYG MVP + WorkingCopy ✅
   ↓
-T-3.3 Typora 级排版与即时渲染        ✅ 9f76d3e0 等
+T-3.3 排版与即时渲染                  ✅
   ↓
-T-3.4 自定义排版  →  T-3.5 图片增强  →  T-3.6 双链  →  T-3.7 块增强
-       (n/a)         ✅ 8bd1650d 等    ✅ T-3.11.x 系列  ✅ T-3.6/3.7/3.8 commits
+T-3.5 图片 → T-3.5b 图表 → T-3.5c 语法 → T-3.6 双链 → T-3.7 块增强  ✅
   ↓
-T-3.5b 图表全套（mermaid / flow / seq / mixed）  ✅ Gate F 81 pass
-T-3.5c 语法补齐（emoji/footnote/frontmatter/…）  ✅ Gate G-A 六步
-T-3.7b 视图模式（源码/阅读/专注/打字机）          ✅ 服务化收敛
-T-3.7c 导航（TOC/大纲/查找替换）                  ✅
-T-3.7d 主题兼容层（内置 4 主题 + Typora .css）    ✅
+T-3.7b 视图模式 / T-3.7c 导航 / T-3.7d 主题  ✅
   ↓
-T-3.8 Round-trip 保真层              ✅ Gate E 296 pass
-T-3.8b 导入导出（HTML/PDF/Pandoc）    ✅
+T-3.8 Round-trip / T-3.8b 导入导出     ✅
   ↓
-T-3.9 性能与 IME 收口                ✅ Gate G 三报告 + IME 9 pass + tsc 0
+T-3.9 性能与 IME 收口（报告齐；open/手测未闭合）  ⚠️ → RD-1 / RD-2
   ↓
-T-3.12 收官 P0 fix（IME gate / 表格 chrome / 模式正交）
-  ├─ 3.12.1 IME gate（host + webview）      ✅ 93aa1f85 / 2844ebb4
-  ├─ 3.12.2 表格 chrome hover-gated          ✅ 52426d5f / dc234dd4 / 59a09c7e
-  └─ 3.12.3 模式正交性 · state machine       ✅ da60f2d8（.a 已交付 · .b/.c 转 Phase 4）
+T-3.12 Round-1 P0 fix                 ✅
+T-3.13 Round-2 用户反馈 fix           ✅ 代码（Rime 手测 → RD-2）
 ```
 
-**归档决策**：见 `docs/decisions/phase-3-acceptance.md`（Gate D/E/F/G 四声明齐 · 主线 94.7% 交付 · 未闭合项 U-1..U-5 转 Phase 4）
-**Gate G 一键回归**：`node code-oss/test/scripts/gate-g.mjs --phase3-only`
+**归档决策**：`docs/decisions/phase-3-acceptance.md`（Gate D/E/F/G）。  
+**旧 U-1..U-5**：已映射到 **RD-1..RD-4 / RD-8**，见 `004` §4。  
+**Gate G 回归**：`node code-oss/test/scripts/gate-g.mjs --phase3-only`
 
-### 7.2 Phase 3 未闭合项 · 转 Phase 4 承接
+### 7.2 当前推荐主线 = Debt 桶（不是 Phase 4）
 
-| # | 项目 | 承接方式 | 优先级 |
-|---|---|---|:-:|
-| U-1 | 大文档 open pipeline 优化（1MB > 2s · 5MB > 2s） | Phase 4 独立立项「Milkdown open pipeline v2」 | 高 |
-| U-2 | IME 检查表 14 行人肉签字 | Phase 4 首周执行（单测通道已双证保底） | 中 |
-| U-3 | Editor idle / peak RSS 采集 | 首建 electron dev-build 后同批采集 | 中 |
-| U-4 | 模式正交性 UI 分层收尾（T-3.12.3.b/.c） | 已在 `003-phase3-mode-orthogonality.md` §7 定义 | 低 |
-| U-5 | Milkdown vendor bundle lazy split | 可选 · 若 U-1 走 worker 路线可合并 | 可选 |
+| 顺序 | ID | 内容 | 优先级 |
+|------|-----|------|--------|
+| 1 | **RD-0** | 规划/文档真相收敛 | P0 · 本轮文档 |
+| 2 | **RD-2** | 真实 IME 手测签字 | P0 · 发布硬门槛 |
+| 3 | **RD-1** | 大文档 open pipeline | P0 · 发布硬门槛 |
+| 4 | **RD-11** | Round-trip 保真等级声明 | P1 |
+| 5 | **RD-7** | 字体三元组 Settings | P1 |
+| 6 | **RD-5** | Pretext（已拍板 **A 做** · spike 穿插） | P1 |
+| 7 | **RD-10** | Phase 7 最小可发布（**B Portable**） | P0 |
+| 8 | **RD-12** | Open VSX / VSIX 冒烟 | P1 |
+| 9 | RD-4 / RD-3 / RD-8 / RD-9 | 对账 / 度量 / lazy / Mindmap 剩余 | P2 穿插（**RD-6 已关闭**） |
 
-### 7.3 下一 Phase 待启动
+完整 AC、子任务、禁止项 → **`004-remediation-and-debt-plan.md`**。
 
-Phase 4（Canvas）已在 §2 状态矩阵中标 **✅ 完成 100%**（React Flow 方案 · T-4.1..4.7 全交付）。**新 Phase 起点由用户下一 turn 拍板**，候选方向：
-- U-1..U-4（Phase 3 遗留优化）
-- Phase 5 mindmap 剩余 P1（Markdown ↔ .mm 互转、richcontent、10k 节点性能、IME 全矩阵）
-- Phase 7 产品化收口（品牌 / 打包 / 分发 / 用户文档）
+### 7.3 明确不启动
 
-**验收节奏**：用户每天早上集中验收；模块内技术自主拍板（可维护 > 性能 > 效果，成熟开源库优先）；仅产品方向问题用 🚨【需要你批准】。
+- **Phase 6 多维表**：后期；可发布前不做。  
+- **整体 UI 视觉大重构**：功能债与发行之后另立阶段。  
+- **重开 BlockNote / 图床 / 实时协作**：非目标。
+
+### 7.4 验收节奏
+
+用户每天早上集中验收；模块内技术自主拍板（可维护 > 性能 > 效果）；仅产品方向问题用 🚨【需要你批准】（RD-5 做/砍、RD-6 是否做面板、RD-10 安装形态等）。
 
 ---
 
@@ -464,6 +478,32 @@ Phase 4（Canvas）已在 §2 状态矩阵中标 **✅ 完成 100%**（React Flo
 
 ## 9. 与旧文档的关系
 
-- `002-development-task-breakdown.md`：保留作 Phase 0/1/2/4/5 历史任务细节归档，其"当前状态"章节已过时，以本文档为准。
-- `PRD-vsword-v1.md`：产品总需求不变；FR-01 需重写为 Milkdown WYSIWYG 方案（见 T-3.2 前置）。
+- `002-development-task-breakdown.md`：保留作 Phase 0/1/2/4/5 历史任务细节归档，其「当前状态」已过时，以本文 §1b/§2 与 `004` 为准。
+- `004-remediation-and-debt-plan.md`：**债务与修复执行权威**（RD- 号）；取代一切「转交 Phase 4」表述。
+- `PRD-vsword-v1.md`：产品总需求仍有效；FR-01 已切换为 Milkdown 路线。
 - 各 FR 文档（FR-02~FR-06）：Canvas / Mindmap 需求仍有效。
+- `003-phase3-fix-p0.md` / `003-phase3-fix-p0-round2.md` / `003-phase3-mode-orthogonality.md`：Phase 3 修复与模式设计归档，不改写历史结论。
+- `docs/decisions/phase-3-acceptance.md`：主线归档证据；未闭合项以 `004` RD- 号为准（文内已加 supersede 指针）。
+
+---
+
+## 附录 A · T 号漂移映射（ARCHIVE · 仅考古）
+
+> 生成于 2026-07-04；**冻结**。commit 提交时的 T 号是**交付顺序编号**，与 plan **功能领域编号**脱钩。  
+> 现行进度请只看 **§1b**，不要把本附录的「未启动」当成 2026-07 之后的状态。
+
+| commit 标签 | commit 实际含义 | 对应 plan 语义 |
+|-------------|-----------------|----------------|
+| commit T-3.6 | 表格 chrome | plan T-3.7.3 |
+| commit T-3.7 | 代码块 Prism chrome | plan T-3.3.5 |
+| commit T-3.8 | 块 hover + 转换菜单 | plan T-3.7.1 + 3.7.2 |
+| commit T-3.9 | 数学 NodeView | plan T-3.3.4 |
+| commit T-3.10 | focus / typewriter | plan T-3.7b.3 + 3.7b.4 |
+| commit T-3.11.x | 双链系列 | plan T-3.6.x |
+| commit T-3.4（历史） | 常含 Outline | plan T-3.7c.2（Outline） |
+
+**后续 commit 策略**：新工作优先 `RD-x.y` 或明确 plan 语义三段号；**禁止**再复用上表左侧冲突标签指代新功能。
+
+---
+
+**文档修订 End · 2026-07-13 · 真相表 + Debt 指针**

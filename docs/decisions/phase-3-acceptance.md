@@ -1,17 +1,20 @@
 # Phase 3 · 阶段验收报告
 
-- **版本**：v1（首建 · Phase 3 归档决策）
+- **版本**：v1（首建 · Phase 3 归档决策）· **v1.1 指针修订 2026-07-13**
 - **作者**：PM（kanban `t_93994ac1` · T-3.9.4）
 - **日期**：2026-07-09
 - **上游 PRD**：`docs/requirements/phase-3.9-perf-ime.md` §4.6 / §7 / §8
 - **验收范围**：Phase 3（新）· Markdown WYSIWYG 编辑器（Milkdown 重建）· T-3.0 → T-3.12 全部主线子任务
-- **合规声明**：本报告是 Phase 3 归档决策依据，Gate D/E/F/G 四张证据合成后可将 Phase 3 主线判定为**收官 · 允许升级 Phase 4**（含明确未闭合项转交清单）
+- **合规声明**：本报告是 Phase 3 **主线归档**决策依据（Gate D/E/F/G）。  
+  **v1.1 纠偏**：文中「转交 Phase 4 / 升级 Phase 4」为 **2026-07-09 误用**——Phase 4 在主计划中专指 **Canvas（已完成）**，不是 backlog。  
+  未闭合项现行执行清单 → **`docs/plans/004-remediation-and-debt-plan.md`（RD- 号）**。  
+  后续尚有 T-3.13 Round-2 修复（至 `1889e82e`），不改变本报告主线归档结论。
 
 ---
 
 ## 0. 结论（一句话）
 
-**Phase 3（新）主线收官 ✅** —— Gate D（tsc 0）/ Gate E（round-trip 100%）/ Gate F（mermaid+flow+seq 28 类）/ Gate G（perf + IME + bundle 三报告 + IME 单测）四张证据齐全，可升级 Phase 4；两项**未闭合项**（3.9.2.a 14 行 IME 手测未签字 · T-3.12.3.b/c 模式正交性 UI 分层收尾）明确转交 Phase 4 首周或独立立项，不阻塞主线归档。
+**Phase 3（新）主线收官 ✅** —— Gate D（tsc 0）/ Gate E（round-trip 100%）/ Gate F（mermaid+flow+seq 28 类）/ Gate G（perf + IME + bundle 三报告 + IME 单测）四张证据齐全；未闭合项（大文档 open、IME 人肉、模式 UI 收尾等）**不阻塞主线归档**，改由 **RD 债务桶**（`004`）承接，**不是** Phase 4。
 
 ---
 
@@ -79,19 +82,21 @@
 
 ---
 
-## 3. Phase 3 未闭合项（转交 Phase 4）
+## 3. Phase 3 未闭合项（历史 U 号 · 已映射 RD）
 
-四项，均**已有明确 owner 与承接路径**，不阻塞本次归档：
+> **v1.1**：下表保留归档时的 U 编号；**执行请用 RD 号**，详见 `docs/plans/004-remediation-and-debt-plan.md` §4。  
+> 「承接 Phase 4」字样作废。
 
-| # | 未闭合项 | 承接卡 | 承接优先级 |
+| # | 未闭合项 | 现行 ID | 承接优先级 |
 |---|---|---|---|
-| **U-1** | 大文档 open pipeline 优化（1MB > 2s · 5MB > 2s） | Phase 4 独立立项「Milkdown open pipeline v2」（分块 parse / 增量 hydration / worker 卸载三选一） | 高（用户可感知） |
-| **U-2** | IME 检查表 14 行人肉签字（微软拼音 / 搜狗 / Google 日文 / MS Korean） | Phase 4 首周执行 · 已有骨架 + 环境采集就位 · 单测通道已双证 | 中（单测已保底） |
-| **U-3** | Editor idle RSS + 打开 1MB 峰值 RSS 采集 | Phase 4 首建 electron dev-build 环境后同批采集 | 中（bundle 数字已定性） |
-| **U-4** | 模式正交性 UI 分层收尾 · T-3.12.3.b（UI 改造）+ T-3.12.3.c（单测扩展 + 手测） | 已在 `docs/plans/003-phase3-mode-orthogonality.md` §7 明确定义子任务，未启动 | 低（.a state machine 已落 · 视觉延后策略） |
-| **U-5** | Milkdown vendor bundle lazy split（可选，非阻断） | Phase 4 独立立项，若 U-1 走 worker 卸载路线可合并 | 可选 |
+| **U-1** | 大文档 open pipeline 优化（1MB > 2s · 5MB > 2s） | **RD-1** | P0（发布相关） |
+| **U-2** | IME 检查表 14 行人肉签字 | **RD-2** | P0（发布相关） |
+| **U-3** | Editor idle RSS + 打开 1MB 峰值 RSS 采集 | **RD-3** | P2 |
+| **U-4** | 模式正交性 UI 分层收尾 · T-3.12.3.b/.c | **RD-4**（Round-2 已部分落地，以对账为主） | P2 |
+| **U-5** | Milkdown vendor bundle lazy split | **RD-8**（可与 RD-1 合并） | P2 可选 |
 
-**归档判据**：以上 5 项**均不属于**「Phase 3 主线未交付」，全部是「模块内 v2 迭代」或「验证信度加强」，符合 master plan L416 "可维护 > 性能 > 效果" + AGENTS.md "功能优先视觉延后" 双约束下的合规延后。
+**归档判据**：以上项**均不属于**「Phase 3 主线未交付」，全部是「模块内 v2 迭代」或「验证信度加强」，符合 "可维护 > 性能 > 效果" + AGENTS.md "功能优先视觉延后" 下的合规延后。  
+**2026-07-13 补充**：对写作用户，U-1/U-2 在**对外试用前**应视为硬门槛（见 `004` Gate-R1）。
 
 ---
 
@@ -117,9 +122,9 @@
 | Fix P0 · IME composition host+webview gate | T-3.12.1.a / .b | `93aa1f85` / `2844ebb4` | ✅ |
 | Fix P0 · 表格 chrome hover-gated | T-3.12.2.a / .b / .c | `52426d5f` / `dc234dd4` / `59a09c7e` | ✅ |
 | 模式正交性 · state machine | T-3.12.3.a | `da60f2d8` | ✅ |
-| 模式正交性 · UI 分层收尾 | T-3.12.3.b / .c | — | ⏸ 转 U-4 |
+| 模式正交性 · UI 分层收尾 | T-3.12.3.b / .c | Round-2 部分落地 | ⏸ → **RD-4** |
 
-**主线交付率**：18/19 = 94.7%（未收官项 T-3.12.3.b/.c 为策略性延后到 Phase 4）
+**主线交付率**：18/19 = 94.7%（未收官项策略性延后；执行见 **RD** 桶，非 Phase 4）
 
 ---
 
@@ -144,17 +149,21 @@ node code-oss/test/scripts/run-ime-composition-test.mjs  # G-unit · 9 passing
 
 ## 6. 决策记录
 
-- **Gate G 定义首建**：本文件锁定 Gate G = perf 数字齐 + IME checklist 骨架 + bundle 复盘 + 单测 9 pass + tsc 0 error。CI 自动化留下一 Phase（PRD §4.3 Q2 默认）
-- **Phase 3 归档判据**：主线 94.7% 交付 + 四 Gate 声明齐 + 未闭合项**均有承接卡**——**允许归档**，不等 U-1..U-5 完成
-- **AGENTS.md "视觉延后" 政策延伸**：性能优化亦"够用即可"（PRD §7），Phase 3 不追求极致；U-1 大文档 open 即使延到 Phase 4 也在同一策略框架下
-- **T-3.9.2.a 手测延后合规性**：单测覆盖 IME 状态机全路径 + T-3.12.1.a/.b 集成层已修 P0-1 保存打断，人肉手测在双证保底下可延后
+- **Gate G 定义首建**：本文件锁定 Gate G = perf 数字齐 + IME checklist 骨架 + bundle 复盘 + 单测 9 pass + tsc 0 error。CI 自动化留下一阶段（PRD §4.3 Q2 默认）
+- **Phase 3 归档判据**：主线 94.7% 交付 + 四 Gate 声明齐 + 未闭合项**均有承接卡**——**允许归档**，不等 U-1..U-5 / RD-* 完成
+- **AGENTS.md "视觉延后" 政策延伸**：Phase 3 内性能「够用即可」；**v1.1**：对外试用前 RD-1/RD-2 升为硬门槛（`004` Gate-R1），与「主线可归档」不矛盾
+- **T-3.9.2.a 手测延后合规性**：单测 + T-3.12.1 集成可支持**归档延后**；**不可**替代发布前 D-2/RD-2 人肉签字
 
 ---
 
-## 7. 后续升级 Phase 4 入口
+## 7. 归档后入口（v1.1 纠偏）
 
-Phase 4（原 plan Canvas）在 master plan §2 状态矩阵里已标 **"✅ 完成 100%"**。**本报告不启动新 Phase**，仅声明 Phase 3 主线归档 + 未闭合项转交清单；下一步开工方向由用户在**下一 turn 决定**（选项候选：U-1 大文档 pipeline / U-2 IME 手测 / U-4 模式正交性收尾 / Phase 5 mindmap 剩余 P1 / Phase 7 产品化收口）。
+- **Phase 4 = Canvas**，早已 100%，**不是**本报告的下一步。  
+- **下一步权威**：`docs/plans/004-remediation-and-debt-plan.md`（RD-0 文档 → RD-2 IME → RD-1 open → … → RD-10 最小可发布）。  
+- **进度全景**：`docs/plans/003-master-development-plan.md` §1b / §2 / §7。  
+- Phase 6 多维表仍后期；整体 UI 重构另立阶段。
 
 ---
 
-**报告 End · Phase 3 主线归档 · dev @ da60f2d8**
+**报告 End · Phase 3 主线归档 · dev @ da60f2d8**  
+**指针修订 · 2026-07-13 · 未闭合项 → RD 桶（004）**

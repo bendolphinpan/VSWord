@@ -77,9 +77,17 @@ VSWord = 基于 Code-OSS（VS Code fork）的**中文写作友好文本编辑器
 
 - 需求：`docs/requirements/`
 - 决策记录：`docs/decisions/`
-- Phase 计划：`docs/plans/`（当前主计划 `003-*`）
+- Phase 计划：`docs/plans/`
+  - 全景进度权威：`003-master-development-plan.md`（§1b 真相表）
+  - **当前执行 / 债务修复**：`004-remediation-and-debt-plan.md`（**RD-x** 号）
 - 研究调研：`docs/research/`
 - Spike 实验：`docs/spikes/`
 - Phase 0 归档：`docs/phase0/`
 
-Master plan 里的 T-x.x 任务号是当前 Phase 3 的唯一权威索引，讨论进度时优先引用它。
+**编号**：历史 Phase 3 用 plan 语义 `T-3.x`；**新工作优先 `RD-x.y`**。Phase 4 专指 Canvas（已完成），禁止把 backlog 叫「Phase 4」。决策表里的 D-1（Prism）≠ 债务 RD-1（大文档 open）。
+
+## UI 改造边界
+
+- 权威决策：`docs/decisions/0002-ui-modification-boundary.md`（**L0–L3**）
+- 口令：**壳层允许 L2，扩展契约不可破**；L3（换壳废扩展）默认禁止
+- 新 UI 任务卡面/commit 须标明 L0 / L1 / L2；Figma：`6YryVesDzsyNOuYtojsehd`

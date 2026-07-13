@@ -283,11 +283,11 @@ plan `003-master-development-plan.md` 中的 T-3.4 "自定义排版 + Typora 缺
 - ✅ 3.4.3 Footnote → T-3.5c.2
 - ✅ 3.4.6 Frontmatter → T-3.5c.3
 
-**不覆盖**（留给后续独立任务）：
-- ⛔ 3.4.4 用户字体三元组 Settings — 属主题层，Phase 3 收尾统一
-- ⛔ 3.4.5 Pretext 快速排版 — 独立能力，另立任务
+**不覆盖**（留给后续独立任务 · 2026-07-13 登记）：
+- ⏸ 3.4.4 用户字体三元组 Settings — → 债务 **RD-7**（`004-remediation-and-debt-plan.md`）
+- ⏸ 3.4.5 Pretext 快速排版 — → 债务 **RD-5**（须做/砍/延后决策）
 
-plan 主表 T-号对账建议在 T-3.5c 全套 push 后统一补一次（类比 T-3.5b 收官后）。
+plan 主表 T 号对账已在 2026-07-13 写入 `003-master-development-plan.md` §1b。
 
 ---
 

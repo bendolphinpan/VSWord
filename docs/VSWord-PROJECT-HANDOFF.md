@@ -1,9 +1,10 @@
 # VSWord 项目交接文档
 
-> **生成时间**：2026-07-11
+> **生成时间**：2026-07-11 · **修订**：2026-07-13（进度/债务指针与 003/004 对齐）
 > **分支**：`dev`（唯一开发分支）
-> **最新 commit**：`1889e82e`（T-3.13.7 Round-2 QA 回归报告）
+> **最新功能 commit**：`1889e82e`（T-3.13.7 Round-2 QA 回归报告）
 > **基线**：Code OSS `1.124.2`
+> **下一步执行清单**：`docs/plans/004-remediation-and-debt-plan.md`（**RD- 号**，不是 Phase 4）
 
 ---
 
@@ -23,9 +24,10 @@
 
 ```
 D:\GIT\VSWord\                          ← 项目根（workspace）
-├── docs\plans\                         ← 所有 PRD 文档（权威）
+├── docs\plans\                         ← 计划 / PRD（分工见 003 §0.1）
 │   ├── 000-vsword-master-plan.md       ← 产品定义 + 全景目标
-│   ├── 003-master-development-plan.md  ← 开发主线 + 进度 + T号对照表
+│   ├── 003-master-development-plan.md  ← 全景进度权威（§1b 真相表）
+│   ├── 004-remediation-and-debt-plan.md← **债务/修复执行清单（RD- 号）**
 │   ├── 003b-mermaid.md                 ← Mermaid 图表模块 PRD
 │   ├── 003b-flowchart-jsseq.md         ← Flowchart.js + js-sequence-diagrams PRD
 │   ├── 003c-syntax-completion.md       ← 模块 c 语法补全 PRD
@@ -68,27 +70,34 @@ D:\GIT\VSWord\                          ← 项目根（workspace）
 
 ## 3. 当前进度总览
 
-### Phase 3 已完成模块
+### 全景（与 003 §2 一致）
 
-| 模块 | commit 范围 | 状态 | 说明 |
-|------|------------|------|------|
-| T-3.0 ~ T-3.4 | `c361b402` → `9f76d3e0` | ✅ done | Milkdown MVP + 即时渲染 + 排版 + KaTeX + Prism + Outline |
-| T-3.5 图片全套 | `8bd1650d` → `3f43dc6a` | ✅ done | 粘贴/拖拽/resize/caption/alignment |
-| T-3.6 表格 chrome | `52426d5f` | ✅ done | hover-gated handle NodeView 重写 |
-| T-3.7b 图表（模块 b 剩余） | 见下方 | ✅ done | Mermaid / Flowchart.js / js-sequence-diagrams |
-| T-3.8b 模块 c 语法 | `a1a963d2` → `3bd20467` | ✅ done | emoji / footnote / frontmatter / sub·sup / code-meta / setext |
-| T-3.9.2 IME 状态机 | `93aa1f85` | ✅ done | composition state 纯函数 + 6+3 单测 |
-| T-3.11 wiki-link | `5cad963d` → `f664d47e` | ✅ done | 语法 + resolver + autocomplete + backlinks footer |
-| T-3.10 模式正交性 | `79c07850` | ✅ done | v2 两级菜单 radio 互斥（已拍板） |
-| T-3.12.1 IME+auto-save 修 | `93aa1f85` → `2844ebb4` | ✅ done | host gate + webview 事件桥 |
-| T-3.12.2 表格 chrome UX | `52426d5f` → `dc234dd4` | ✅ done | hover-gated + CSS |
-| T-3.12.3 模式 substyle UI | `da60f2d8` → `3b6cdf3f` | ✅ done | radiogroup + reading DOM 隐藏 |
-| **T-3.13.x Round-2 修** | `400227ed` → `3cb43364` | ✅ done | 6 项 P0/P1 修复 |
-| T-3.13.7 QA 回归 | `1889e82e` | ✅ done | 5 pass + 1 partial（R1 待手测） |
+| 桶 | 状态 |
+|----|------|
+| Phase 0–2 / 4 Canvas / 5 Mindmap(~90%) | ✅ |
+| Phase 3 Milkdown 主线 + Round-2 | ✅ 主线；残余见 RD |
+| **Debt 桶（RD-）** | 🔴 **当前推荐主线** → `004` |
+| Phase 6 多维表 | ⚪ 后期 |
+| Phase 7 产品化 | ⚪ 未启动（最小可发布 = **RD-10**） |
 
-### 所有本地 commits（未 push 的 0 个）
+### Phase 3 已完成模块（plan 语义摘要）
 
-**全部已 push origin/dev**。`git log origin/dev..dev` 为空。
+| 模块 | 状态 | 说明 |
+|------|------|------|
+| T-3.0~3.3 / 3.5 图片 | ✅ | MVP + WorkingCopy + 排版 + 图片全套 |
+| T-3.5b 图表 | ✅ | Mermaid + Flowchart.js + js-sequence · Gate F 81 · **非「剩余」** |
+| T-3.5c 语法补齐 | ✅ | emoji / footnote / frontmatter / sub·sup 等（覆盖原 T-3.4 大部分） |
+| T-3.6 双链 | ✅ | 语法/补全/hover；backlinks 为 **footer**（面板 → RD-6） |
+| T-3.7 块/表格 · 3.7b 视图 · 3.7c 导航 · 3.7d 主题 | ✅ | 含 Round-1/2 UX 修 |
+| T-3.8 Round-trip · 3.8b 导出 | ✅ | Gate E；保真等级声明 → RD-11 |
+| T-3.9 性能/IME 收口 | ⚠️ | 报告齐；open 🔴→RD-1；IME 手测→RD-2 |
+| T-3.12 / T-3.13 | ✅ 代码 | Round-2 QA：5 pass + Rime 人肉 partial → RD-2 |
+
+> T 号曾在 commit 中漂移（表格/代码块/双链等）；考古见 `003` 附录 A，**现行只看 003 §1b**。
+
+### Git
+
+以仓库当前 `git status` / `git log` 为准。文档修订可能产生尚未 commit 的 docs 变更。
 
 ---
 
@@ -151,24 +160,37 @@ D:\GIT\VSWord\                          ← 项目根（workspace）
 
 ## 6. 未完成 / 待决策事项
 
-### 6.1 用户拍板问题（来自 Round-2 PRD §7）
+> **权威清单**：`docs/plans/004-remediation-and-debt-plan.md`。以下为速查。
 
-| 问题 | 选项 | 当前值 | 说明 |
-|------|------|--------|------|
-| Q1 · toolbar 毛玻璃 | a=纯色 / b=毛玻璃 / c=视觉延后 | **c（已执行）** | 当前是纯色 sticky，毛玻璃留 UI 阶段 |
-| Q2 · Focus 高亮判定 | a=cursor / b=hover / c=叠加 / d=优先hover | **c（已执行）** | cursor + hover 叠加，上限 ≤ 2 |
-| Q3 · 阅读模式下 typewriter | a=保留 / b=隐藏 | **a（已执行）** | 阅读下三个 radio 全渲染 |
+### 6.1 Round-2 已拍板（归档）
 
-### 6.2 模块 b 剩余 · Flowchart.js + js-sequence-diagrams
+| 问题 | 当前值 |
+|------|--------|
+| Q1 · toolbar 毛玻璃 | **c 视觉延后**（纯色 sticky） |
+| Q2 · Focus 高亮 | **c 叠加**（cursor+hover ≤2） |
+| Q3 · 阅读 × typewriter | **a 保留** 三级 radio |
 
-PRD 在 `docs/plans/003b-flowchart-jsseq.md`，spike 已有结果：
-- `code-oss/src/vs/workbench/contrib/vsword/browser/spikes/milkdown/` 里有 spike 产物
-- Mermaid 已集成（懒加载），Flowchart.js 和 js-sequence-diagrams 已通过 esbuild 打包进 vendor
+### 6.2 图表三件套
 
-### 6.3 用户历史提及但尚未处理的需求
+**已完成**（Gate F），不是「模块 b 剩余」。vendor lazy 再优化 → **RD-8**。
 
-1. **5 个预览格式 3+2 关系**：已在 v2 正交性调研中拍板（两级菜单 radio），代码已落地
-2. **用户 `0710反馈.md`**：R1~R6 逐条对应 T-3.13.1~6 已修 + T-3.13.7 已回归
+### 6.3 债务速查（RD）
+
+| ID | 内容 | 优先级 |
+|----|------|--------|
+| RD-0 | 文档真相（本轮） | P0 |
+| RD-2 | IME 真实手测（含 Rime） | P0 发布硬门槛 |
+| RD-1 | 大文档 open pipeline | P0 发布硬门槛 |
+| RD-5 | Pretext | P1 · **拍板 A 做**（spike 待排） |
+| RD-6 | Backlinks 面板 | **关闭** · 保持 footer |
+| RD-7 | 字体 Settings 三元组 | P1 |
+| RD-10 | Phase 7 最小可发布 | P0 · **B Portable** |
+| RD-11 / RD-12 | 保真等级声明 / 扩展冒烟 | P1 |
+| RD-3/4/8/9 | RSS / 模式对账 / lazy / Mindmap 剩余 | P2 |
+
+### 6.4 明确延后
+
+- Phase 6 多维表；整体 UI 视觉大重构；图床；实时协作
 
 ---
 
@@ -238,7 +260,11 @@ npx mocha --config test/unit/mocharc.json "src/vs/workbench/contrib/vsword/test/
 | 用途 | 文件路径 |
 |------|---------|
 | 产品定义 | `docs/plans/000-vsword-master-plan.md` |
-| 开发主线 + T 号表 | `docs/plans/003-master-development-plan.md` |
+| 全景进度 + 真相表 | `docs/plans/003-master-development-plan.md` |
+| **债务 / 下一步** | **`docs/plans/004-remediation-and-debt-plan.md`** |
+| Phase 3 归档 | `docs/decisions/phase-3-acceptance.md` |
+| **UI 改造边界 L0–L3** | **`docs/decisions/0002-ui-modification-boundary.md`** |
+| Figma VSWord | `https://www.figma.com/design/6YryVesDzsyNOuYtojsehd/VSWord` |
 | Round-1 fix PRD | `docs/plans/003-phase3-fix-p0.md`（已归档） |
 | Round-2 fix PRD | `docs/plans/003-phase3-fix-p0-round2.md`（已落地） |
 | 模式正交性 v2 | `docs/plans/003-phase3-mode-orthogonality.md` |
@@ -263,8 +289,9 @@ npx mocha --config test/unit/mocharc.json "src/vs/workbench/contrib/vsword/test/
 ## 10. 给新团队的建议
 
 1. **先读 PRD 再看代码**：`docs/plans/` 里的文档是需求源头，代码是实现。PRD 里有现状分析、假设、AC、拆子任务，信息密度高
-2. **T 号可能漂移**：`003-master-development-plan.md` 里的 T-号对照表记录了 plan T 号 vs commit T 号的对应关系，注意区分
-3. **构建产物不入库**：`vendor/` 被 .gitignore，每次 build 重新生成。改了源码要重新跑 `node build-milkdown-editor.cjs`
-4. **视觉延后**：Phase 3 政策是"好看放一放"，功能完善无 bug 优先。毛玻璃/动效/精细样式留 UI 阶段统一改
-5. **微信 coordinator**：原来的项目管理通过 Hermes Agent + 微信 gateway 自动推进，cron 每 5 分钟扫 kanban。新团队可以按需调整
-6. **IME 是高风险区**：Rime 行为与 Chromium 内置 IME 不同，需要真实环境手测。自动化能覆盖状态机逻辑但覆盖不了真实输入法交互
+2. **T 号可能漂移**：只信 `003` **§1b 真相表**；附录 A 仅考古。新工作用 **RD-x.y**（见 `004`），勿再发明冲突 T 号
+3. **Phase 4 = Canvas 已完成**，不是 backlog。债务在 **RD 桶**
+4. **构建产物不入库**：`vendor/` 被 .gitignore，改源码后跑 `node build-milkdown-editor.cjs`
+5. **视觉延后**：功能优先；毛玻璃/动效留 UI 阶段
+6. **IME 是高风险区**：Rime 等人肉手测是 **RD-2** 发布硬门槛，单测不能结案
+7. **微信 coordinator**：Hermes + gateway / kanban 可按需调整
