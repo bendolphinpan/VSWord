@@ -346,12 +346,15 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			overflow-x: auto;
 		}
 		#milkdown-root .ProseMirror .katex-display { margin: 0; }
-		/* T-3.3.3 Slash menu — floating grouped command palette (Q2=b). */
+		/* T-3.3.3 Slash menu — floating grouped command palette (Q2=b).
+		   高亮全宽；滚动条覆盖在内容上（不占右侧 gutter），仅 hover 渐显。 */
 		.vsword-slash-menu {
 			position: absolute;
 			z-index: 1000;
-			min-width: 220px;
+			min-width: 240px;
+			max-width: min(360px, 80vw);
 			max-height: 320px;
+			overflow-x: hidden;
 			overflow-y: auto;
 			padding: 4px 0;
 			background: var(--vscode-menu-background, var(--vsword-bg));
@@ -361,6 +364,28 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			box-shadow: 0 4px 16px rgba(0, 0, 0, 0.24);
 			font-family: var(--vscode-font-family);
 			font-size: 13px;
+			/* 不预留滚动条槽：高亮可铺满整行 */
+			scrollbar-gutter: auto;
+			scrollbar-width: thin;
+			scrollbar-color: transparent transparent;
+		}
+		.vsword-slash-menu:hover {
+			scrollbar-color: rgba(128, 128, 128, 0.45) transparent;
+		}
+		.vsword-slash-menu::-webkit-scrollbar {
+			width: 6px;
+			height: 0;
+			background: transparent;
+		}
+		.vsword-slash-menu::-webkit-scrollbar-track {
+			background: transparent;
+		}
+		.vsword-slash-menu::-webkit-scrollbar-thumb {
+			background: transparent;
+			border-radius: 3px;
+		}
+		.vsword-slash-menu:hover::-webkit-scrollbar-thumb {
+			background: rgba(128, 128, 128, 0.45);
 		}
 		.vsword-slash-menu[hidden], .vsword-slash-menu[data-hidden="true"] { display: none; }
 		.vsword-slash-group {
@@ -376,13 +401,26 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			justify-content: space-between;
 			align-items: center;
 			gap: 12px;
+			/* 全宽高亮：左右贴菜单边 */
+			width: 100%;
+			box-sizing: border-box;
 			padding: 6px 12px;
+			margin: 0;
 			cursor: pointer;
 		}
 		.vsword-slash-item.active,
-		.vsword-slash-item:hover { background: var(--vscode-menu-selectionBackground, rgba(120, 120, 120, 0.24)); color: var(--vscode-menu-selectionForeground, inherit); }
-		.vsword-slash-label { flex: 1 1 auto; }
-		.vsword-slash-hint { font-family: var(--vscode-editor-font-family, monospace); font-size: 11px; color: var(--vscode-descriptionForeground, #888); opacity: 0.85; }
+		.vsword-slash-item:hover {
+			background: var(--vscode-menu-selectionBackground, rgba(120, 120, 120, 0.24));
+			color: var(--vscode-menu-selectionForeground, inherit);
+		}
+		.vsword-slash-label { flex: 1 1 auto; min-width: 0; }
+		.vsword-slash-hint {
+			flex: 0 0 auto;
+			font-family: var(--vscode-editor-font-family, monospace);
+			font-size: 11px;
+			color: var(--vscode-descriptionForeground, #888);
+			opacity: 0.85;
+		}
 		.vsword-slash-empty { padding: 8px 12px; color: var(--vscode-descriptionForeground, #888); font-style: italic; }
 		#milkdown-root .ProseMirror table { border-collapse: collapse; width: 100%; }
 		#milkdown-root .ProseMirror th, #milkdown-root .ProseMirror td { border: 1px solid var(--vsword-border); padding: 4px 8px; }

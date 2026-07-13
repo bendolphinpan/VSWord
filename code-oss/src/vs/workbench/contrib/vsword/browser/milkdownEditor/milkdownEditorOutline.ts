@@ -91,13 +91,14 @@ function forEachEntry(roots: readonly MilkdownOutlineEntry[], fn: (e: MilkdownOu
 // Tree plumbing (delegate / renderer / data source / comparator / picks)
 // ---------------------------------------------------------------------------
 
+/** 用 keyword 图标；标题正文走 label，避免 symbolNumber 看起来像光秃秃的 ## */
 const HEADING_ICONS: Record<number, ThemeIcon> = {
-	1: Codicon.symbolNumber,
-	2: Codicon.symbolNumber,
-	3: Codicon.symbolNumber,
-	4: Codicon.symbolNumber,
-	5: Codicon.symbolNumber,
-	6: Codicon.symbolNumber,
+	1: Codicon.symbolKeyword,
+	2: Codicon.symbolKeyword,
+	3: Codicon.symbolKeyword,
+	4: Codicon.symbolKeyword,
+	5: Codicon.symbolKeyword,
+	6: Codicon.symbolKeyword,
 };
 
 class MilkdownOutlineTemplate {
@@ -123,13 +124,15 @@ class MilkdownOutlineRenderer implements ITreeRenderer<MilkdownOutlineEntry, Fuz
 		const level = Math.min(6, Math.max(1, node.element.level));
 		const icon = HEADING_ICONS[level];
 		template.iconClass.className = 'element-icon ' + ThemeIcon.asClassNameArray(icon).join(' ');
+		// 主标签必须是标题正文；description 用 H1..H6，避免「只有 ## 没字」
+		const title = (node.element.label && node.element.label.trim()) || `(H${level})`;
 		const options: IIconLabelValueOptions = {
 			matches: createMatches(node.filterData),
 			labelEscapeNewLines: true,
-			title: node.element.label,
+			title: `H${level} ${title}`,
 			extraClasses: [`vsword-outline-h${level}`],
 		};
-		template.iconLabel.setLabel(node.element.label, undefined, options);
+		template.iconLabel.setLabel(title, `H${level}`, options);
 	}
 
 	disposeTemplate(template: MilkdownOutlineTemplate): void {

@@ -43,7 +43,6 @@ import { createViewModeApplier } from './view-mode-editable.mjs';
 import { createImeCompositionState } from './ime-composition-state.mjs';
 // T-3.7b.d + T-3.12.3.b: ModeSwitchComponent 接管 #milkdown-mode-switch + #milkdown-substyle-group 的 click 派发。
 import { createModeSwitchComponent } from './mode-switch.mjs';
-import { extractHeadings, findEnclosingHeadingId } from './outline-extractor.mjs';
 import { configureImageUpload, imageUploadPlugins, installImageUploadMessageBridge } from './image-upload.mjs';
 import { imageResizePlugins } from './image-node-view.mjs';
 import { remarkLiftImgHtmlPlugin } from './image-schema-override.mjs';
@@ -62,6 +61,12 @@ import {
 	VSWORD_FIRST_CHUNK_CHARS,
 	VSWORD_NEXT_CHUNK_CHARS,
 } from './markdown-chunk.mjs';
+// outline：按需加载时用全文源码扫标题，保证 Outline 完整且有正文
+import {
+	extractHeadings,
+	extractHeadingsFromMarkdownSource,
+	findEnclosingHeadingId,
+} from './outline-extractor.mjs';
 import { tableChromeView } from './table-chrome.mjs';
 import { codeBlockChromePlugins, configureCodeBlockCtx } from './code-block-chrome.mjs';
 import { blockHandlePlugins, configureBlockHandle, installBlockHandle } from './block-handle.mjs';
@@ -208,7 +213,33 @@ function publishOutline() {
 	vscode?.postMessage({ type: 'outlineChanged', headings: outlineHeadings, activeId: outlineActiveId });
 }
 
+/**
+ * 刷新 Outline。
+ * - 有 pending 未加载段：用**全文源码**扫标题（完整目录 + 正文标题），active 尽量用 PM 光标匹配。
+ * - 已全量：用 PM extractHeadings（pos 精确，可直接 reveal）。
+ */
 function refreshOutline(view) {
+	if (pendingChunks.length > 0 && progressiveOriginalMarkdown) {
+		outlineHeadings = extractHeadingsFromMarkdownSource(progressiveOriginalMarkdown);
+		// active：用 PM 已加载标题的 text 对齐源码列表
+		let activeId = null;
+		if (view) {
+			try {
+				const pmHeads = extractHeadings(view.state.doc);
+				const activePm = findEnclosingHeadingId(pmHeads, view.state.selection.from);
+				const activePmEntry = pmHeads.find(h => h.id === activePm);
+				if (activePmEntry) {
+					const hit = outlineHeadings.find(
+						h => h.text === activePmEntry.text && h.level === activePmEntry.level,
+					) || outlineHeadings.find(h => h.text === activePmEntry.text);
+					activeId = hit ? hit.id : null;
+				}
+			} catch { /* ignore */ }
+		}
+		outlineActiveId = activeId;
+		publishOutline();
+		return;
+	}
 	if (!view) return;
 	outlineHeadings = extractHeadings(view.state.doc);
 	outlineActiveId = findEnclosingHeadingId(outlineHeadings, view.state.selection.from);
@@ -217,10 +248,78 @@ function refreshOutline(view) {
 
 function refreshOutlineActiveOnly(view) {
 	if (!view) return;
+	if (pendingChunks.length > 0 && progressiveOriginalMarkdown) {
+		// 半加载：按 PM 光标对齐全文大纲 active
+		refreshOutline(view);
+		return;
+	}
 	const next = findEnclosingHeadingId(outlineHeadings, view.state.selection.from);
 	if (next === outlineActiveId) return;
 	outlineActiveId = next;
 	publishOutline();
+}
+
+/**
+ * 点击 Outline 跳转：源码 pos 可能不是 PM pos；按 text+level 在 PM 中查找，
+ * 找不到则继续 load 后续 chunk。
+ * @param {number} pos  outline 条目 pos（全量时为 PM pos；半加载时为源码偏移）
+ */
+async function revealOutlineHeading(pos) {
+	if (!editor || !Number.isFinite(pos)) return;
+	const targetMeta = outlineHeadings.find(h => h.pos === pos)
+		|| outlineHeadings.find(h => h.pos <= pos);
+	const wantText = targetMeta?.text;
+	const wantLevel = targetMeta?.level;
+
+	const trySelectInPm = () => {
+		let found = null;
+		try {
+			editor.action(ctx => {
+				const view = ctx.get(editorViewCtx);
+				const heads = extractHeadings(view.state.doc);
+				found = (wantText
+					? heads.find(h => h.text === wantText && h.level === wantLevel)
+						|| heads.find(h => h.text === wantText)
+					: null)
+					|| heads.find(h => h.pos === pos)
+					|| null;
+				if (!found) return;
+				const doc = view.state.doc;
+				const safePos = Math.max(0, Math.min(found.pos + 1, doc.content.size));
+				const sel = view.state.selection.constructor.near(doc.resolve(safePos));
+				view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+				view.focus();
+			});
+		} catch (err) {
+			reportError('revealOutlineHeading', err);
+			return false;
+		}
+		return !!found;
+	};
+
+	if (trySelectInPm()) return;
+
+	// 半加载：逐块装到找到为止（或装完）
+	const epoch = progressiveEpoch;
+	let guard = 0;
+	while (pendingChunks.length && epoch === progressiveEpoch && guard < 200) {
+		guard++;
+		await loadNextProgressiveChunk(epoch);
+		if (trySelectInPm()) return;
+	}
+	// 兜底：按 pos clamp 跳转
+	try {
+		editor.action(ctx => {
+			const view = ctx.get(editorViewCtx);
+			const doc = view.state.doc;
+			const safePos = Math.max(0, Math.min(pos, doc.content.size));
+			const sel = view.state.selection.constructor.near(doc.resolve(safePos));
+			view.dispatch(view.state.tr.setSelection(sel).scrollIntoView());
+			view.focus();
+		});
+	} catch (err) {
+		reportError('revealOutlineHeading/fallback', err);
+	}
 }
 
 function setStatus(message, kind = 'info') {
@@ -1091,23 +1190,10 @@ window.addEventListener('message', event => {
 		return;
 	}
 	if (msg.type === 'revealHeading') {
-		// T-3.4: user clicked a heading in the Outline pane. Move selection + scroll into view.
+		// T-3.4 + RD-1.4: Outline 点击。半加载时 pos 可能是源码偏移，走 text+level 解析并按需装块。
 		const pos = Number(msg.pos);
 		if (!editor || !Number.isFinite(pos)) return;
-		try {
-			editor.action(ctx => {
-				const view = ctx.get(editorViewCtx);
-				const doc = view.state.doc;
-				const safePos = Math.max(0, Math.min(pos, doc.content.size));
-				const tr = view.state.tr.setSelection(
-					view.state.selection.constructor.near(doc.resolve(safePos))
-				).scrollIntoView();
-				view.dispatch(tr);
-				view.focus();
-			});
-		} catch (err) {
-			reportError('revealHeading', err);
-		}
+		void revealOutlineHeading(pos);
 	}
 });
 

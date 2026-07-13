@@ -148,6 +148,7 @@ function renderMenu(container, orderedItems, activeIndex) {
 		return;
 	}
 	let lastGroup = null;
+	let activeEl = null;
 	orderedItems.forEach((it, idx) => {
 		if (it.group !== lastGroup) {
 			const header = document.createElement('div');
@@ -161,6 +162,10 @@ function renderMenu(container, orderedItems, activeIndex) {
 		row.dataset.id = it.id;
 		row.dataset.index = String(idx);
 		row.setAttribute('role', 'option');
+		if (idx === activeIndex) {
+			row.setAttribute('aria-selected', 'true');
+			activeEl = row;
+		}
 		const label = document.createElement('span');
 		label.className = 'vsword-slash-label';
 		label.textContent = it.label;
@@ -171,6 +176,14 @@ function renderMenu(container, orderedItems, activeIndex) {
 		row.appendChild(hint);
 		container.appendChild(row);
 	});
+	// 键盘上下：让 active 项滚进可视区（nearest，不抖整页）
+	if (activeEl && typeof activeEl.scrollIntoView === 'function') {
+		try {
+			activeEl.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+		} catch {
+			try { activeEl.scrollIntoView(false); } catch { /* noop */ }
+		}
+	}
 }
 
 /**
@@ -257,15 +270,27 @@ export function attachSlashMenu(ctx, editorRoot) {
 			if (event.key === 'ArrowDown') {
 				state.activeIndex = (state.activeIndex + 1) % state.visible.length;
 				renderMenu(content, state.visible, state.activeIndex);
+				try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
 				return true;
 			}
 			if (event.key === 'ArrowUp') {
 				state.activeIndex = (state.activeIndex - 1 + state.visible.length) % state.visible.length;
 				renderMenu(content, state.visible, state.activeIndex);
+				try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
 				return true;
 			}
-			if (event.key === 'Enter') return runActive();
-			if (event.key === 'Escape') { provider.hide(); return true; }
+			if (event.key === 'Enter') {
+				const ok = runActive();
+				if (ok) {
+					try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
+				}
+				return ok;
+			}
+			if (event.key === 'Escape') {
+				provider.hide();
+				try { event.preventDefault(); event.stopPropagation(); } catch { /* noop */ }
+				return true;
+			}
 			return false;
 		},
 	};
