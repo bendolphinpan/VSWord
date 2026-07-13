@@ -1,0 +1,17 @@
+{
+  "builtAt": "2026-07-13T11:14:23.050Z",
+  "fixture": "large-1k-nodes.mm",
+  "bytes": 33891,
+  "nodeCount": 1001,
+  "runs": 5,
+  "parseMsAvg": 4.79,
+  "parseMsMax": 8.1,
+  "serializeMsAvg": 0.01,
+  "serializeMsMax": 0.03,
+  "roundTripOk": true,
+  "extrapolate10kParseMs": 47.9,
+  "notes": [
+    "Node parse/serialize only — not mind-elixir layout/render.",
+    "10k extrapolate assumes linear scaling (layout may be superlinear)."
+  ]
+}
