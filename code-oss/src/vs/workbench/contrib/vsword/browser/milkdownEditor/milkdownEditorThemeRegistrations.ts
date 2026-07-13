@@ -27,6 +27,13 @@ import {
 	VSWORD_EXPORT_IMAGE_MODE_DEFAULT,
 	VSWORD_EXPORT_OUTPUT_DIR_CONFIG,
 } from './milkdownEditorProtocol.js';
+import {
+	VSWORD_TYPOGRAPHY_CONFIG,
+	VSWORD_FONT_SIZE_MIN,
+	VSWORD_FONT_SIZE_MAX,
+	VSWORD_LINE_HEIGHT_MIN,
+	VSWORD_LINE_HEIGHT_MAX,
+} from './milkdownEditorTypography.js';
 import { buildThemeQuickPickItems } from './milkdownEditorThemeQuickPick.js';
 import { getExternalThemes } from './milkdownEditorExternalThemeRegistry.js';
 import { isExternalThemeId } from './milkdownEditorExternalThemes.js';
@@ -74,6 +81,42 @@ Registry.as<IConfigurationRegistry>(ConfigExtensions.Configuration).registerConf
 			type: 'string',
 			default: '',
 			markdownDescription: localize('vsword.export.outputDir.desc', 'VSWord 导出 HTML 的默认目录（绝对路径）。为空时打开 SaveAs 对话框，默认落到当前 Markdown 文件同目录。'),
+		},
+		// RD-7 · 用户字体三元组（决策 L-1）：仅覆盖正文 font/size/line，不碰主题色。
+		[VSWORD_TYPOGRAPHY_CONFIG.fontFamily]: {
+			type: 'string',
+			default: '',
+			scope: ConfigurationScope.RESOURCE,
+			markdownDescription: localize(
+				'vsword.markdown.fontFamily.desc',
+				'VSWord Markdown 正文字体（CSS `font-family`）。留空则使用当前主题默认字体。示例：`"Georgia, \\"PingFang SC\\", serif"`。',
+			),
+		},
+		[VSWORD_TYPOGRAPHY_CONFIG.fontSize]: {
+			type: 'number',
+			default: 0,
+			minimum: 0,
+			maximum: VSWORD_FONT_SIZE_MAX,
+			scope: ConfigurationScope.RESOURCE,
+			markdownDescription: localize(
+				'vsword.markdown.fontSize.desc',
+				'VSWord Markdown 正文字号（px）。`0` = 跟随主题；有效范围 {0}–{1}。',
+				String(VSWORD_FONT_SIZE_MIN),
+				String(VSWORD_FONT_SIZE_MAX),
+			),
+		},
+		[VSWORD_TYPOGRAPHY_CONFIG.lineHeight]: {
+			type: 'number',
+			default: 0,
+			minimum: 0,
+			maximum: VSWORD_LINE_HEIGHT_MAX,
+			scope: ConfigurationScope.RESOURCE,
+			markdownDescription: localize(
+				'vsword.markdown.lineHeight.desc',
+				'VSWord Markdown 正文行高（无单位倍数，如 `1.7`）。`0` = 跟随主题；有效范围 {0}–{1}。',
+				String(VSWORD_LINE_HEIGHT_MIN),
+				String(VSWORD_LINE_HEIGHT_MAX),
+			),
 		},
 	},
 });

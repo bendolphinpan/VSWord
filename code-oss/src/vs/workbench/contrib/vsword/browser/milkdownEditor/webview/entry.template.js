@@ -741,6 +741,34 @@ window.addEventListener('message', event => {
 		}
 		return;
 	}
+	if (msg.type === 'typographyChanged') {
+		// RD-7 · 用户字体三元组：写到 #milkdown-root 的 CSS 变量，覆盖主题 token。
+		// 空 / 0 = removeProperty，回退主题默认。
+		try {
+			const el = document.getElementById('milkdown-root') || document.body;
+			const family = typeof msg.fontFamily === 'string' ? msg.fontFamily.trim() : '';
+			const size = typeof msg.fontSize === 'number' ? msg.fontSize : 0;
+			const lh = typeof msg.lineHeight === 'number' ? msg.lineHeight : 0;
+			if (family) { el.style.setProperty('--vsword-body-font', family); }
+			else { el.style.removeProperty('--vsword-body-font'); }
+			if (size > 0) { el.style.setProperty('--vsword-body-size', size + 'px'); }
+			else { el.style.removeProperty('--vsword-body-size'); }
+			if (lh > 0) { el.style.setProperty('--vsword-body-line', String(lh)); }
+			else { el.style.removeProperty('--vsword-body-line'); }
+			// 源码模式 textarea 同步字号/行高（字体可选）
+			if (sourceTextarea) {
+				if (family) { sourceTextarea.style.fontFamily = family; }
+				else { sourceTextarea.style.fontFamily = ''; }
+				if (size > 0) { sourceTextarea.style.fontSize = size + 'px'; }
+				else { sourceTextarea.style.fontSize = ''; }
+				if (lh > 0) { sourceTextarea.style.lineHeight = String(lh); }
+				else { sourceTextarea.style.lineHeight = ''; }
+			}
+		} catch (err) {
+			reportError('typographyChanged', err);
+		}
+		return;
+	}
 	if (msg.type === 'themeChanged') {
 		// T-3.3.1: set body[data-theme] so the CSS layer swaps tokens. `default` = drop the attr.
 		const theme = String(msg.theme || 'default');

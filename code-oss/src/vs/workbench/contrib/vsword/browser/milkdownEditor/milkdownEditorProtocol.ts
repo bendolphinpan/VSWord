@@ -309,6 +309,17 @@ export interface HostThemeChangedMessage {
 }
 
 /**
+ * RD-7 · host → webview：用户字体三元组。
+ * `fontFamily` 空 / `fontSize|lineHeight` 为 0 → webview 移除对应 CSS 变量覆盖。
+ */
+export interface HostTypographyChangedMessage {
+	readonly type: 'typographyChanged';
+	readonly fontFamily: string;
+	readonly fontSize: number;
+	readonly lineHeight: number;
+}
+
+/**
  * T-3.7d.2 · host → webview：切换到外挂（`ext:*`）主题时，先推送 CSS 文本再 broadcast themeChanged。
  *
  * webview 收到后把 `cssText` 挂到 `<style id="vsword-external-theme">` 之类的容器上；随后配合
@@ -474,6 +485,7 @@ export type HostToWebviewMessage =
 	| HostErrorMessage
 	| HostPreferenceResponseMessage
 	| HostThemeChangedMessage
+	| HostTypographyChangedMessage
 	| HostThemeCssPayloadMessage
 	| HostRevealHeadingMessage
 	| HostImageUploadedMessage

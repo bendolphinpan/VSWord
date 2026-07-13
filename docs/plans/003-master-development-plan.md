@@ -63,7 +63,7 @@ VSWord = Code OSS 1.124.2 基线
 | Notion-like 块拖拽 / 转换 | ✅ |
 | 图表三件套 | ✅ Mermaid + Flowchart.js + js-sequence |
 | Pretext 快速排版 | ▶ **RD-5=A 做**（已拍板；待 spike） |
-| 用户字体三元组 Settings | ⏸ 未闭合 → **RD-7** |
+| 用户字体三元组 Settings | ✅ **RD-7**（Settings 热更新） |
 | 大文档 open 性能 | 🔴 未达标 → **RD-1** |
 | Round-trip 保真等级 | Gate E 绿；语义等级待钉 → **RD-11** |
 
@@ -81,7 +81,7 @@ VSWord = Code OSS 1.124.2 基线
 | T-3.2 / 3.2b | WYSIWYG MVP + WorkingCopy | ✅ | `c361b402` / `0f6bc00a` | — |
 | T-3.3.x | 即时渲染 + 排版基础 | ✅ | `9f76d3e0` 等；数学曾标 commit T-3.9；Prism 曾标 commit T-3.7 | — |
 | T-3.4.1~3 / 3.4.6 | mark 系 / emoji / footnote / frontmatter | ✅ | 由 **T-3.5c** 覆盖（`003c-syntax-completion.md`） | — |
-| T-3.4.4 | 用户字体三元组 Settings | ⏸ | 决策 L-1 有；实现未收官 | **RD-7** |
+| T-3.4.4 | 用户字体三元组 Settings | ✅ | RD-7：`vsword.markdown.fontFamily/fontSize/lineHeight` | **RD-7** |
 | T-3.4.5 | Pretext 快速排版 | ▶ 已立项 | 用户拍板 RD-5=**A 做**（2026-07-13） | **RD-5** spike→接入 |
 | T-3.5.1~4 | 图片增强 | ✅ | `8bd1650d` → `3f43dc6a` | — |
 | T-3.5b | 图表全套 + 懒加载 | ✅ | Gate F 81 pass；`e557e475` 等 | 再优化 → **RD-8** |

@@ -67,6 +67,11 @@ import {
 	isValidTheme,
 } from './milkdownEditorThemes.js';
 import {
+	VSWORD_TYPOGRAPHY_CONFIG,
+	normalizeTypography,
+	type VswordTypographyPayload,
+} from './milkdownEditorTypography.js';
+import {
 	VSWORD_IMAGE_STRATEGY_CONFIG,
 	VSWORD_IMAGE_STRATEGY_DEFAULT,
 	VswordImageStorageStrategy,
@@ -127,6 +132,7 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			},
 		));
 		// T-3.3.1: broadcast theme changes to every live webview.
+		// RD-7: 字体三元组变更 → typographyChanged。
 		this._register(this.configurationService.onDidChangeConfiguration(e => {
 			if (
 				e.affectsConfiguration(VSWORD_THEME_CONFIG.followWorkbench) ||
@@ -134,6 +140,13 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 				e.affectsConfiguration(VSWORD_THEME_CONFIG.dark)
 			) {
 				void this.broadcastTheme();
+			}
+			if (
+				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.fontFamily) ||
+				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.fontSize) ||
+				e.affectsConfiguration(VSWORD_TYPOGRAPHY_CONFIG.lineHeight)
+			) {
+				this.broadcastTypography();
 			}
 		}));
 		this._register(this.themeService.onDidColorThemeChange(() => {
@@ -447,6 +460,39 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 		});
 		this.post(input, { type: 'dirtyChanged', dirty: input.workingCopy.isDirty() });
 		await this.sendThemeToInput(input);
+		this.sendTypographyToInput(input);
+	}
+
+	/** RD-7 · 读 Settings 并规范化字体三元组。 */
+	private readTypography(): VswordTypographyPayload {
+		return normalizeTypography({
+			fontFamily: this.configurationService.getValue(VSWORD_TYPOGRAPHY_CONFIG.fontFamily),
+			fontSize: this.configurationService.getValue(VSWORD_TYPOGRAPHY_CONFIG.fontSize),
+			lineHeight: this.configurationService.getValue(VSWORD_TYPOGRAPHY_CONFIG.lineHeight),
+		});
+	}
+
+	private sendTypographyToInput(input: MilkdownEditorInput): void {
+		const t = this.readTypography();
+		this.post(input, {
+			type: 'typographyChanged',
+			fontFamily: t.fontFamily,
+			fontSize: t.fontSize,
+			lineHeight: t.lineHeight,
+		});
+	}
+
+	private broadcastTypography(): void {
+		const t = this.readTypography();
+		const msg = {
+			type: 'typographyChanged' as const,
+			fontFamily: t.fontFamily,
+			fontSize: t.fontSize,
+			lineHeight: t.lineHeight,
+		};
+		for (const input of this.liveInputs) {
+			this.post(input, msg);
+		}
 	}
 
 	private async onExternalChange(input: MilkdownEditorInput, changeType: FileChangeType): Promise<void> {

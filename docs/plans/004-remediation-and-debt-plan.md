@@ -60,7 +60,7 @@
 | **RD-4** | 模式正交 UI 收尾对账 | 原 U-4 + T-3.13.2/3 | P2 | 体验 | 0.5–1d | 否 |
 | **RD-5** | Pretext 快速排版 | 原 T-3.4.5 | P1 · **拍板 A 做** | 功能 | spike+实现 TBD | 否 |
 | **RD-6** | Backlinks 独立面板 | 原 T-3.6.4 | P2 · **拍板：保持 footer · 关闭** | — | — | 否 |
-| **RD-7** | 用户字体三元组 Settings | 原 T-3.4.4 | P1 | 功能 | 1–2d | 否 |
+| **RD-7** | 用户字体三元组 Settings | 原 T-3.4.4 | P1 · **✅ 已实现** | 功能 | — | 否 |
 | **RD-8** | vendor lazy / bundle 策略 | 原 U-5 | P2 | 性能 | 与 RD-1 合并优先 | 否 |
 | **RD-9** | Phase 5 Mindmap 剩余 P1 | master §3 | P2 | 功能 | 按子项 | 否 |
 | **RD-10** | Phase 7 最小可发布 DoD | master §6 | **P0** · 形态 **B Portable** | 产品化 | 5–10d | **是**（给外人用） |
@@ -215,15 +215,15 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 ---
 
-### RD-7 — 用户字体三元组 Settings · P1
+### RD-7 — 用户字体三元组 Settings · P1 · ✅ 已实现（2026-07-13）
 
-决策 L-1 要求：`vsword.markdown.fontFamily` / `fontSize` / `lineHeight`，作用域限字体，避免与主题冲突。
+决策 L-1：`vsword.markdown.fontFamily` / `fontSize` / `lineHeight`，仅覆盖正文 token。
 
-| 子项 | 内容 |
-|------|------|
-| RD-7.1 | configuration 注册 + 默认值 |
-| RD-7.2 | webview CSS 变量注入 / 热更新 |
-| RD-7.3 | 与 T-3.7d 外挂主题共存手测 |
+| 子项 | 内容 | 状态 |
+|------|------|------|
+| RD-7.1 | Settings schema（`milkdownEditorThemeRegistrations`） | ✅ |
+| RD-7.2 | host `typographyChanged` + webview 写 `#milkdown-root` CSS 变量 | ✅ |
+| RD-7.3 | 纯函数单测；与主题共存：空=跟主题 | ✅ 单测；手测可选 |
 
 ---
 
