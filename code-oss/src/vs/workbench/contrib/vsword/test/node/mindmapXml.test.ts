@@ -9,7 +9,12 @@ import { dirname, join } from 'path';
 import { fileURLToPath } from 'url';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../base/test/common/utils.js';
 import { mindElixirNodeToMindmapNode, mindmapToMindElixirData } from '../../common/mindmapElixir.js';
-import { mindmapToMarkdownBullets } from '../../common/mindmapMarkdown.js';
+import {
+	markdownBulletsToMindmap,
+	markdownToMindmapXml,
+	mindmapToMarkdownBullets,
+	mindmapToMmXml,
+} from '../../common/mindmapMarkdown.js';
 import { addMindmapNodeIcon, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, moveMindmapNode, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, serializeMindmapXml, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText } from '../../common/mindmapXml.js';
 
 suite('VSWord Mindmap XML', () => {
@@ -132,6 +137,56 @@ suite('VSWord Mindmap XML', () => {
 		assert.ok(root);
 
 		assert.strictEqual(mindmapToMarkdownBullets(root), '- Product \\*Plan\\*\n  - Phase 1\n    - Design \\[UI\\]\n  - Line 1 Line 2\n');
+	});
+
+	// RD-9.1 · Markdown → mindmap → Markdown 结构往返（有损：转义/空白）
+	test('RD-9.1 · markdownBulletsToMindmap 解析缩进树', () => {
+		const md = '- Root\n  - Child A\n    - Grand\n  - Child B\n';
+		const tree = markdownBulletsToMindmap(md);
+		assert.ok(tree);
+		assert.strictEqual(tree.text, 'Root');
+		assert.strictEqual(tree.children.length, 2);
+		assert.strictEqual(tree.children[0]!.text, 'Child A');
+		assert.strictEqual(tree.children[0]!.children[0]!.text, 'Grand');
+		assert.strictEqual(tree.children[1]!.text, 'Child B');
+	});
+
+	test('RD-9.1 · 多顶层 bullet 合成 Outline 根', () => {
+		const tree = markdownBulletsToMindmap('- A\n- B\n  - B1\n');
+		assert.ok(tree);
+		assert.strictEqual(tree.text, 'Outline');
+		assert.strictEqual(tree.children.length, 2);
+		assert.strictEqual(tree.children[0]!.text, 'A');
+		assert.strictEqual(tree.children[1]!.children[0]!.text, 'B1');
+	});
+
+	test('RD-9.1 · markdown → .mm XML 可被 parseMindmapXml 读回', () => {
+		const md = '- Product\n  - Phase 1\n    - Design\n  - Phase 2\n';
+		const xml = markdownToMindmapXml(md);
+		assert.ok(xml);
+		const doc = parseMindmapXml(xml);
+		assert.ok(doc.root);
+		assert.strictEqual(doc.root.text, 'Product');
+		assert.strictEqual(doc.root.children.length, 2);
+		// 投影回 MD：结构一致（无特殊字符时）
+		const back = mindmapToMarkdownBullets(doc.root);
+		assert.ok(back.includes('- Product'));
+		assert.ok(back.includes('  - Phase 1'));
+		assert.ok(back.includes('    - Design'));
+	});
+
+	test('RD-9.1 · mindmapToMmXml 往返 parse', () => {
+		const root = markdownBulletsToMindmap('- R\n  - a\n')!;
+		const xml = mindmapToMmXml(root);
+		const again = parseMindmapXml(xml).root!;
+		assert.strictEqual(again.text, 'R');
+		assert.strictEqual(again.children[0]!.text, 'a');
+	});
+
+	test('RD-9.1 · 空 / 无列表 → undefined', () => {
+		assert.strictEqual(markdownBulletsToMindmap(''), undefined);
+		assert.strictEqual(markdownBulletsToMindmap('# just heading\n\nparagraph\n'), undefined);
+		assert.strictEqual(markdownToMindmapXml('no lists'), undefined);
 	});
 
 	test('parses summary bracket hook correctly', () => {

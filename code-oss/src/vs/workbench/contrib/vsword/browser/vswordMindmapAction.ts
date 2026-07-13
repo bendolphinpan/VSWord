@@ -5,17 +5,20 @@
 
 import { VSBuffer } from '../../../../base/common/buffer.js';
 import { Disposable } from '../../../../base/common/lifecycle.js';
-import { basename } from '../../../../base/common/resources.js';
+import { basename, dirname, joinPath } from '../../../../base/common/resources.js';
 import { URI } from '../../../../base/common/uri.js';
-import { localize2 } from '../../../../nls.js';
+import { localize, localize2 } from '../../../../nls.js';
 import { Action2, MenuId, registerAction2 } from '../../../../platform/actions/common/actions.js';
 import { ContextKeyExpr } from '../../../../platform/contextkey/common/contextkey.js';
 import { IFileService } from '../../../../platform/files/common/files.js';
 import { IInstantiationService, ServicesAccessor } from '../../../../platform/instantiation/common/instantiation.js';
 import { ILogService } from '../../../../platform/log/common/log.js';
+import { INotificationService } from '../../../../platform/notification/common/notification.js';
+import { getCodeEditor } from '../../../../editor/browser/editorBrowser.js';
 import { IEditorService } from '../../../services/editor/common/editorService.js';
 import { IExplorerService } from '../../files/browser/files.js';
 import { IWebviewWorkbenchService } from '../../webviewPanel/browser/webviewWorkbenchService.js';
+import { markdownToMindmapXml } from '../common/mindmapMarkdown.js';
 import { addMindmapNodeIcon, addMindmapSummary, appendMindmapArrowlink, appendMindmapChild, appendMindmapSibling, MindmapArrowlinkPatch, MindmapEdgePatch, MindmapFontPatch, moveMindmapNode, NewMindmapArrowlinkOptions, parseMindmapXml, removeMindmapArrowlink, removeMindmapNode, removeMindmapNodeIcon, removeMindmapSummary, setMindmapNodeBackgroundColor, setMindmapNodeColor, setMindmapNodeEdge, setMindmapNodeFolded, setMindmapNodeFont, updateMindmapArrowlink, updateMindmapNodeText, updateMindmapSummary, VSWordMindmapNode } from '../common/mindmapXml.js';
 import { getMindmapHtml } from './mindmapHtml.js';
 
@@ -590,4 +593,66 @@ function parseNullableColor(raw: unknown): string | null {
 	return value;
 }
 
+/**
+ * RD-9.1 · 从当前编辑器 Markdown 大纲生成 `.mm` 并打开 Mindmap。
+ * 有损导入：仅列表缩进结构 → FreeMind 树。
+ */
+class VswordMarkdownOutlineToMindmapAction extends Action2 {
+	static readonly ID = 'vsword.actions.markdownOutlineToMindmap';
+
+	constructor() {
+		super({
+			id: VswordMarkdownOutlineToMindmapAction.ID,
+			title: localize2('vswordMarkdownToMindmap', 'VSWord: Markdown Outline to Mindmap (.mm)'),
+			category: VSWORD_CATEGORY,
+			f1: true,
+		});
+	}
+
+	override async run(accessor: ServicesAccessor): Promise<void> {
+		const editorService = accessor.get(IEditorService);
+		const fileService = accessor.get(IFileService);
+		const notification = accessor.get(INotificationService);
+		const instantiationService = accessor.get(IInstantiationService);
+		const logService = accessor.get(ILogService);
+
+		const codeEditor = getCodeEditor(editorService.activeTextEditorControl);
+		const model = codeEditor?.getModel();
+		if (!model) {
+			notification.info(localize('vsword.mindmap.noEditor', 'Open a text/Markdown editor with a bullet outline first.'));
+			return;
+		}
+		const text = model.getValue();
+		const xml = markdownToMindmapXml(text);
+		if (!xml) {
+			notification.info(localize('vsword.mindmap.noOutline', 'No Markdown list items found (use - / * / 1. outlines).'));
+			return;
+		}
+
+		const src = model.uri;
+		if (src.scheme !== 'file') {
+			notification.info(localize('vsword.mindmap.saveFirst', 'Save the Markdown file to disk first, then run this command again.'));
+			return;
+		}
+		const base = basename(src).replace(/\.[^.]+$/, '') || 'outline';
+		let target = joinPath(dirname(src), `${base}.mm`);
+		// Avoid silent overwrite
+		if (await fileService.exists(target)) {
+			const stamp = Date.now().toString(36);
+			target = joinPath(dirname(src), `${base}-${stamp}.mm`);
+		}
+
+		try {
+			await fileService.writeFile(target, VSBuffer.fromString(xml));
+			const manager = instantiationService.createInstance(MindmapEditorManager, target);
+			await manager.openMindmap();
+			notification.info(localize('vsword.mindmap.created', 'Created mindmap: {0}', basename(target)));
+		} catch (err) {
+			logService.error('[VSWord Mindmap] markdown→.mm failed:', err);
+			notification.error(localize('vsword.mindmap.createFailed', 'Failed to create .mm: {0}', String(err)));
+		}
+	}
+}
+
 registerAction2(VswordOpenMindmapAction);
+registerAction2(VswordMarkdownOutlineToMindmapAction);
