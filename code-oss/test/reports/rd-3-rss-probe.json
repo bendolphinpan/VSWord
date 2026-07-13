@@ -1,0 +1,45 @@
+{
+  "builtAt": "2026-07-13T11:02:59.993Z",
+  "node": "v24.15.0",
+  "platform": "win32",
+  "arch": "x64",
+  "baseline": {
+    "rss": 55730176,
+    "heapUsed": 4919368,
+    "heapTotal": 6750208,
+    "external": 1879557,
+    "rssMiB": 53.1,
+    "heapUsedMiB": 4.7
+  },
+  "fixture": {
+    "path": "code-oss/src/vs/workbench/contrib/vsword/test/fixtures/roundtrip/perf/1mb-mixed.md",
+    "bytes": 1007146,
+    "chars": 612826
+  },
+  "afterRead": {
+    "rss": 56893440,
+    "heapUsed": 6162352,
+    "heapTotal": 7979008,
+    "external": 1879597,
+    "rssMiB": 54.3,
+    "heapUsedMiB": 5.9
+  },
+  "deltaRead": {
+    "rss": 1163264,
+    "heapUsed": 1242984,
+    "rssMiB": 1.1,
+    "heapUsedMiB": 1.2
+  },
+  "progressive": {
+    "enabled": true,
+    "tableDensity": 0.17556008146639512,
+    "tier": "med",
+    "firstMax": 32000,
+    "nextMax": 24000,
+    "chunkCount": 25,
+    "firstChunkChars": 32094,
+    "joinOk": true
+  },
+  "notes": [],
+  "elapsedMs": 90
+}

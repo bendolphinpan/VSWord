@@ -1,0 +1,146 @@
+{
+  "builtAt": "2026-07-13T10:45:24.850Z",
+  "milkdownVersion": "7.21.2",
+  "stubGzipBytes": 383463,
+  "stubBytes": 1353824,
+  "allJsCount": 91,
+  "allJsConcatGzip9": 1319622,
+  "byCategory": {
+    "stub": {
+      "count": 1,
+      "bytes": 1353824,
+      "gzipBytes": 383463
+    },
+    "misc": {
+      "count": 34,
+      "bytes": 1122499,
+      "gzipBytes": 322539
+    },
+    "mermaid": {
+      "count": 53,
+      "bytes": 1979115,
+      "gzipBytes": 570739
+    },
+    "raphael": {
+      "count": 1,
+      "bytes": 94320,
+      "gzipBytes": 33434
+    },
+    "sequence": {
+      "count": 1,
+      "bytes": 80549,
+      "gzipBytes": 29880
+    },
+    "flowchart": {
+      "count": 1,
+      "bytes": 35188,
+      "gzipBytes": 8482
+    }
+  },
+  "topChunks": [
+    {
+      "file": "index.js",
+      "bytes": 1353824,
+      "gzipBytes": 383463,
+      "category": "stub"
+    },
+    {
+      "file": "chunk-HY2QOTCU.js",
+      "bytes": 500504,
+      "gzipBytes": 113404,
+      "category": "misc"
+    },
+    {
+      "file": "chunk-P6NXMQAN.js",
+      "bytes": 443111,
+      "gzipBytes": 142000,
+      "category": "misc"
+    },
+    {
+      "file": "chunk-ANIDRJMS.js",
+      "bytes": 267710,
+      "gzipBytes": 77349,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-IYYZ5EOJ.js",
+      "bytes": 222026,
+      "gzipBytes": 33819,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-NAEOPHBX.js",
+      "bytes": 150350,
+      "gzipBytes": 42391,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-W3GVYYMS.js",
+      "bytes": 116638,
+      "gzipBytes": 30994,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-XJCA4J6A.js",
+      "bytes": 108824,
+      "gzipBytes": 35464,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-55LYHATG.js",
+      "bytes": 98596,
+      "gzipBytes": 24498,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-6PR6WVW4.js",
+      "bytes": 94320,
+      "gzipBytes": 33434,
+      "category": "raphael"
+    },
+    {
+      "file": "chunk-OUJJ6HXZ.js",
+      "bytes": 82420,
+      "gzipBytes": 22547,
+      "category": "mermaid"
+    },
+    {
+      "file": "chunk-L767DLEE.js",
+      "bytes": 80549,
+      "gzipBytes": 29880,
+      "category": "sequence"
+    }
+  ],
+  "recommendations": [
+    {
+      "id": "keep-mermaid-lazy",
+      "status": "done",
+      "detail": "mermaid / flowchart / sequence 已 dynamic import + splitting，首屏不内联全量图库"
+    },
+    {
+      "id": "keep-pretext-lazy",
+      "status": "done",
+      "detail": "RD-5.2 @chenglou/pretext 为 lazy chunk（misc）"
+    },
+    {
+      "id": "stub-is-milkdown-core",
+      "status": "accept",
+      "detail": "index.js stub gzip ≈ 374 KiB：Milkdown+PM+插件骨架，短期不可零成本压半"
+    },
+    {
+      "id": "optional-prism-split",
+      "status": "defer",
+      "detail": "misc 大块可能含 Prism 语言包；可改为按语言 lazy，工作量中等，不阻塞发布"
+    },
+    {
+      "id": "optional-katex-already-css",
+      "status": "done-enough",
+      "detail": "KaTeX CSS/fonts 已外置 vendor/katex/；JS 若在 stub 内则与 math NodeView 绑定，拆分收益有限"
+    },
+    {
+      "id": "no-replace-gfm-for-size",
+      "status": "wont",
+      "detail": "不为瘦身关掉 GFM table（产品对等优先；性能见 RD-1 分块）"
+    }
+  ]
+}

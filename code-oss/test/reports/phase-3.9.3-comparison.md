@@ -83,6 +83,18 @@ Bundle gzip **×3.04 > 2**，PRD §4.5 DoD 3 触发。
 
 ---
 
+## RD-3 补录（2026-07-13）
+
+| 交付 | 路径 |
+|------|------|
+| Node 自动探针 | `node code-oss/test/scripts/rd-3-rss-probe.mjs` → `test/reports/rd-3-rss-probe.json` |
+| Electron 手测表 | `test/reports/rd-3-rss-handmeasure.md` |
+| 口径 | 探针 = Node RSS/heap + 1MB 读入 + progressive 分块元数据；**不等于** renderer RSS |
+
+**结论（RD-3 卡关闭条件）**：采集通道与手测表齐备；renderer 绝对值由手测表在固定 electron 构建上补填。**不**因缺 electron 数字阻塞功能债。
+
+---
+
 ## 复现命令
 
 ```bash

@@ -56,16 +56,16 @@
 | **RD-0** | 规划与文档真相收敛 | 审查结论 | P0 · ✅ 本轮 | 治理 | 0.5d | 否（但阻塞正确派工） |
 | **RD-1** | 大文档 open pipeline | 原 U-1 / T-3.9.1 | **P0** | 性能 | 3–8d | **是**（长文用户） |
 | **RD-2** | 真实 IME 手测矩阵 + 回归锁 | 原 U-2 + T-3.13.1 R1 | **P0** | 质量 | 1–2d | **是**（中文写作） |
-| **RD-3** | 内存 / RSS 基线采集 | 原 U-3 | P2 | 度量 | 0.5d | 否 |
-| **RD-4** | 模式正交 UI 收尾对账 | 原 U-4 + T-3.13.2/3 | P2 | 体验 | 0.5–1d | 否 |
-| **RD-5** | Pretext 快速排版 | 原 T-3.4.5 | P1 · **拍板 A 做** | 功能 | spike+实现 TBD | 否 |
+| **RD-3** | 内存 / RSS 基线采集 | 原 U-3 | P2 · **✅ 通道齐** | 度量 | 0.5d | 否 |
+| **RD-4** | 模式正交 UI 收尾对账 | 原 U-4 + T-3.13.2/3 | P2 · **✅** | 体验 | 0.5–1d | 否 |
+| **RD-5** | Pretext 快速排版 | 原 T-3.4.5 | P1 · **✅** | 功能 | — | 否 |
 | **RD-6** | Backlinks 独立面板 | 原 T-3.6.4 | P2 · **拍板：保持 footer · 关闭** | — | — | 否 |
 | **RD-7** | 用户字体三元组 Settings | 原 T-3.4.4 | P1 · **✅ 已实现** | 功能 | — | 否 |
-| **RD-8** | vendor lazy / bundle 策略 | 原 U-5 | P2 | 性能 | 与 RD-1 合并优先 | 否 |
+| **RD-8** | vendor lazy / bundle 策略 | 原 U-5 | P2 · **✅ 审计完成** | 性能 | — | 否 |
 | **RD-9** | Phase 5 Mindmap 剩余 P1 | master §3 | P2 | 功能 | 按子项 | 否 |
-| **RD-10** | Phase 7 最小可发布 DoD | master §6 | **P0** · 形态 **B Portable** | 产品化 | 5–10d | **是**（给外人用） |
-| **RD-11** | Round-trip 保真语义复核 | Gate E 通过但超越 Typora 主张需钉死 | P1 | 质量 | 1d | 否 |
-| **RD-12** | 扩展市场冒烟（Open VSX + VSIX） | P0 硬需求 | P1 | 兼容 | 1d | 发布前建议 |
+| **RD-10** | Phase 7 最小可发布 DoD | master §6 | **P0** · 形态 **B Portable** · **UI 后** | 产品化 | 5–10d | **是**（给外人用） |
+| **RD-11** | Round-trip 保真语义复核 | Gate E 通过但超越 Typora 主张需钉死 | P1 · **✅** | 质量 | 1d | 否 |
+| **RD-12** | 扩展市场冒烟（Open VSX + VSIX） | P0 硬需求 | P1 · **清单就绪 · 待手测签字** | 兼容 | 1d | 发布前建议 |
 
 **执行顺序（推荐，不可再把 Canvas 叫「下一步 Phase」）**：
 
@@ -174,11 +174,16 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 ---
 
-### RD-3 — Editor idle / peak RSS 采集 · P2
+### RD-3 — Editor idle / peak RSS 采集 · P2 · ✅ 通道（2026-07-13）
 
-- 在固定 electron dev-build 上采集：idle RSS、打开 1MB 峰值 RSS  
-- 写入 `code-oss/test/reports/phase-3.9.3-comparison.md` 补表  
-- **不**因数字差单独开优化，除非显著内存泄漏；优化优先并入 RD-1/RD-8  
+| 交付 | 状态 |
+|------|------|
+| Node 探针 `rd-3-rss-probe.mjs` → `rd-3-rss-probe.json` | ✅ |
+| Electron 手测表 `rd-3-rss-handmeasure.md` | ✅ 待真机填数 |
+| `phase-3.9.3-comparison.md` RD-3 补录 | ✅ |
+
+- **不**因数字差单独开优化，除非显著泄漏；优化优先并入 RD-1/RD-8  
+- renderer 绝对值：固定 electron 构建上补手测表即可  
 
 ---
 
@@ -237,11 +242,15 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 ---
 
-### RD-8 — vendor lazy split · P2
+### RD-8 — vendor lazy split · P2 · ✅ 审计（2026-07-13）
 
-- 现状：mermaid / flowchart / sequence 已有 lazy chunk 基础（T-3.5b-flowseq.3b）  
-- 本卡：审计首屏 gzip、可再拆 KaTeX/Prism 等  
-- **优先与 RD-1.2 同 ADR**，避免两套卸载方案打架  
+| 交付 | 状态 |
+|------|------|
+| `rd-8-vendor-audit.mjs` + `test/reports/rd-8-vendor-audit.md` | ✅ |
+| 决策 `docs/decisions/0006-rd8-vendor-lazy.md` | ✅ accept stub · 图类 lazy 保持 · Prism 再拆 defer |
+
+- 现状：mermaid / flowchart / sequence / pretext 已 lazy  
+- **不**为本卡强砍 stub 50%  
 
 ---
 
@@ -299,7 +308,12 @@ Gate E 全绿已声明。本卡不重做实现，只钉：
 
 ---
 
-### RD-12 — 扩展市场冒烟 · P1
+### RD-12 — 扩展市场冒烟 · P1 · 清单就绪
+
+| 交付 | 状态 |
+|------|------|
+| 手测清单 `docs/checklists/rd-12-extension-smoke.md`（S1–S6 + Gate-R12） | ✅ |
+| 真机签字（S1+S3+S5 pass） | 待用户/QA 环境 |
 
 | 场景 | 期望 |
 |------|------|
