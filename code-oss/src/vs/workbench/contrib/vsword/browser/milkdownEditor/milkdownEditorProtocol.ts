@@ -58,6 +58,10 @@ export interface WebviewOpenProgressMessage {
 	readonly loadedChunks: number;
 	readonly totalChunks: number;
 	readonly sourceChars: number;
+	/** RD-1.4b · 表格行占比 0–1（可选诊断）。 */
+	readonly tableDensity?: number;
+	/** RD-1.4b · 分块档位 low|med|high。 */
+	readonly chunkTier?: 'low' | 'med' | 'high' | string;
 }
 
 /** T-3.3.2: webview asks the host for the persisted global mode preference. */

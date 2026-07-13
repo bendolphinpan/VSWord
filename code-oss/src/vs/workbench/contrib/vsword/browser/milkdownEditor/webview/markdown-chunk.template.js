@@ -4,11 +4,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-// RD-1.2 · 大文档 progressive open 的纯函数分块。
+// RD-1.2 / RD-1.4b · 大文档 progressive open 的纯函数分块。
 //
 // 背景（ADR 0003）：remark-gfm 中 **table** 扩展在 ~1MB 上 ~8s+，且随长度超线性。
 // 策略：按安全边界把全文切成首屏 + 后续 chunk；首屏先喂给 Milkdown，其余 yield 后
 // 通过 parser + tr.insert 追加，降低 time-to-interactive。
+//
+// RD-1.4b：table 密度高时 **自适应缩小** first/next chunk，避免单块 GFM-table 超线性爆炸。
 //
 // 安全边界（尽量）：
 //   - 不在 fenced code（``` / ~~~）内切开
@@ -20,12 +22,77 @@ export const VSWORD_LARGE_DOC_CHARS = 180_000;
 
 /**
  * 首屏目标大小（可略超到下一个安全点）。
- * RD-1.4：再降到 48k；且默认 **不** 后台灌满全文，按滚动按需追加（见 entry）。
+ * RD-1.4：默认 48k；且默认 **不** 后台灌满全文，按滚动按需追加（见 entry）。
+ * RD-1.4b：table 密文档由 resolveProgressiveChunkSizes 下调。
  */
 export const VSWORD_FIRST_CHUNK_CHARS = 48_000;
 
 /** 后续每块目标大小（滚动接近底部时再加载一块）。 */
 export const VSWORD_NEXT_CHUNK_CHARS = 48_000;
+
+/** table 中密：首屏 / 后续（字符）。 */
+export const VSWORD_FIRST_CHUNK_CHARS_TABLE_MED = 32_000;
+export const VSWORD_NEXT_CHUNK_CHARS_TABLE_MED = 24_000;
+/** table 高密。 */
+export const VSWORD_FIRST_CHUNK_CHARS_TABLE_HIGH = 24_000;
+export const VSWORD_NEXT_CHUNK_CHARS_TABLE_HIGH = 16_000;
+
+/**
+ * 估算 GFM 表格行占比 [0,1]。
+ * 对超长文只采样：头 8k 行扫描预算内扫完全文行指针步进（O(n) 字符，可接受）。
+ * @param {string} text
+ * @returns {number}
+ */
+export function estimateTableDensity(text) {
+	if (typeof text !== 'string' || text.length === 0) { return 0; }
+	let lines = 0;
+	let tableLines = 0;
+	let i = 0;
+	const n = text.length;
+	// 采样上限：最多统计 ~2e5 行，避免极端巨文件卡死（仍 O(chars) 扫一遍但行计数有 cap）
+	const maxLines = 200_000;
+	while (i < n && lines < maxLines) {
+		let j = text.indexOf('\n', i);
+		if (j === -1) { j = n; }
+		const line = text.slice(i, j);
+		lines++;
+		if (looksLikeTableLine(line)) { tableLines++; }
+		i = j + 1;
+	}
+	if (lines === 0) { return 0; }
+	return tableLines / lines;
+}
+
+/**
+ * RD-1.4b · 按 table 密度选 first/next chunk 目标。
+ * @param {string} text
+ * @returns {{ firstMax: number, nextMax: number, tableDensity: number, tier: 'low'|'med'|'high' }}
+ */
+export function resolveProgressiveChunkSizes(text) {
+	const tableDensity = estimateTableDensity(text);
+	if (tableDensity >= 0.20) {
+		return {
+			firstMax: VSWORD_FIRST_CHUNK_CHARS_TABLE_HIGH,
+			nextMax: VSWORD_NEXT_CHUNK_CHARS_TABLE_HIGH,
+			tableDensity,
+			tier: 'high',
+		};
+	}
+	if (tableDensity >= 0.05) {
+		return {
+			firstMax: VSWORD_FIRST_CHUNK_CHARS_TABLE_MED,
+			nextMax: VSWORD_NEXT_CHUNK_CHARS_TABLE_MED,
+			tableDensity,
+			tier: 'med',
+		};
+	}
+	return {
+		firstMax: VSWORD_FIRST_CHUNK_CHARS,
+		nextMax: VSWORD_NEXT_CHUNK_CHARS,
+		tableDensity,
+		tier: 'low',
+	};
+}
 
 /**
  * @param {string} text
@@ -212,9 +279,15 @@ export const __TEST__ = {
 	VSWORD_LARGE_DOC_CHARS,
 	VSWORD_FIRST_CHUNK_CHARS,
 	VSWORD_NEXT_CHUNK_CHARS,
+	VSWORD_FIRST_CHUNK_CHARS_TABLE_MED,
+	VSWORD_NEXT_CHUNK_CHARS_TABLE_MED,
+	VSWORD_FIRST_CHUNK_CHARS_TABLE_HIGH,
+	VSWORD_NEXT_CHUNK_CHARS_TABLE_HIGH,
 	findSafeSplitOffset,
 	splitMarkdownProgressive,
 	shouldUseProgressiveOpen,
 	buildFenceMask,
 	looksLikeTableLine,
+	estimateTableDensity,
+	resolveProgressiveChunkSizes,
 };

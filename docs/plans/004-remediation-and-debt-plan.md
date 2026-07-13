@@ -150,7 +150,7 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 | RD-1.3b | ~~全量 1MB P95≤2s~~ → 见 **RD-1.4b**（table 算法） | 改挂 |
 | RD-1.4a | 按需加载（滚动近底装块，不全量预取） | ✅ |
 | RD-1.4 | **产品限速提示**：banner +「加载剩余」+ 首次 toast；`openProgress` | ✅ 2026-07-13 |
-| RD-1.4b | （可选）table 算法/D：全量 1MB Ready ≤2s / 5MB ≤8s | 待 · 不阻塞发布 |
+| RD-1.4b | table **自适应分块**（密度 low/med/high → 缩小 first/next）；不替换 GFM parser | ✅ 2026-07-13 |
 
 **非目标**：极致 RSS（RD-3）；为性能永久关掉 GFM 表格。
 

@@ -58,8 +58,7 @@ import {
 import {
 	shouldUseProgressiveOpen,
 	splitMarkdownProgressive,
-	VSWORD_FIRST_CHUNK_CHARS,
-	VSWORD_NEXT_CHUNK_CHARS,
+	resolveProgressiveChunkSizes,
 } from './markdown-chunk.mjs';
 // RD-5.2 · Pretext 版心/行宽预演（lazy import 在 measure 内）
 import {
@@ -207,6 +206,9 @@ let pendingChunks = /** @type {string[]} */([]);
 /** 总块数 / 已装块数（含首屏）。 */
 let progressiveTotalChunks = 0;
 let progressiveLoadedChunks = 0;
+/** RD-1.4b · 本轮分块档位 / 表格密度（openProgress 附带）。 */
+let progressiveChunkTier = 'low';
+let progressiveTableDensity = 0;
 /** 打开时的完整原文（未改时 getFullMarkdown 可直接返回）。 */
 let progressiveOriginalMarkdown = '';
 let progressiveScrollBound = false;
@@ -416,6 +418,9 @@ function postOpenProgress(phase, loadedChunks, totalChunks, sourceChars) {
 			loadedChunks,
 			totalChunks,
 			sourceChars,
+			// RD-1.4b · 可选诊断字段（host 可打日志）
+			tableDensity: progressiveTableDensity,
+			chunkTier: progressiveChunkTier,
 		});
 	} catch { /* disposed */ }
 }
@@ -463,9 +468,12 @@ function setLargeDocBannerVisible(visible) {
 		const chars = progressiveOriginalMarkdown
 			? Math.round(progressiveOriginalMarkdown.length / 1000) + 'k 字'
 			: '';
+		const tierHint = progressiveChunkTier === 'high'
+			? ' · 表格密文小块'
+			: (progressiveChunkTier === 'med' ? ' · 表格适中块' : '');
 		largeDocMsg.textContent =
 			'大文档按需加载：已装 ' + progressiveLoadedChunks + '/' + progressiveTotalChunks
-			+ ' 段' + (chars ? ' · 约 ' + chars : '')
+			+ ' 段' + (chars ? ' · 约 ' + chars : '') + tierHint
 			+ ' · 下滚继续 · 查找/跳转在未加载段可能不完整';
 	}
 	if (largeDocLoadAllBtn) {
@@ -727,10 +735,14 @@ async function createEditor(markdown) {
 		blockHandleController = undefined;
 	}
 
-	// RD-1.4: 大文档 progressive —— **只装首屏**；其余 pending，滚动近底再装（不全量灌 PM）。
+	// RD-1.4 / 1.4b: 大文档 progressive —— **只装首屏**；其余 pending，滚动近底再装。
+	// table 密文：自适应缩小 first/next chunk，压低单块 GFM-table 超线性代价。
 	const useProgressive = shouldUseProgressiveOpen(markdown);
+	const chunkSizes = useProgressive
+		? resolveProgressiveChunkSizes(markdown)
+		: { firstMax: markdown.length, nextMax: markdown.length, tableDensity: 0, tier: 'low' };
 	const chunks = useProgressive
-		? splitMarkdownProgressive(markdown, VSWORD_FIRST_CHUNK_CHARS, VSWORD_NEXT_CHUNK_CHARS)
+		? splitMarkdownProgressive(markdown, chunkSizes.firstMax, chunkSizes.nextMax)
 		: [markdown];
 	const head = chunks[0] ?? '';
 	progressiveUserEdited = false;
@@ -742,11 +754,21 @@ async function createEditor(markdown) {
 	pendingChunks = useProgressive && chunks.length > 1 ? chunks.slice(1) : [];
 	// 每次新 open 重置 banner 关闭态，保证大文档提示可见
 	largeDocBannerDismissed = false;
+	progressiveChunkTier = chunkSizes.tier;
+	progressiveTableDensity = chunkSizes.tableDensity;
 	if (pendingChunks.length > 0) {
 		progressiveLoading = true;
-		setStatus('已加载 1/' + chunks.length + ' 段 · 下滚加载更多（未全量，保流畅）', 'dirty');
+		const densHint = chunkSizes.tier === 'high'
+			? ' · 表格密文小块装载'
+			: (chunkSizes.tier === 'med' ? ' · 表格适中' : '');
+		setStatus(
+			'已加载 1/' + chunks.length + ' 段 · 下滚加载更多（未全量，保流畅）' + densHint,
+			'dirty',
+		);
 		setLargeDocBannerVisible(true);
 	} else {
+		progressiveChunkTier = 'low';
+		progressiveTableDensity = 0;
 		setLargeDocBannerVisible(false);
 	}
 

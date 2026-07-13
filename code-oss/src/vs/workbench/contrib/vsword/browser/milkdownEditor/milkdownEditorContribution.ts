@@ -383,8 +383,11 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			case 'openProgress': {
 				// RD-1.3/1.4 · 大文档 progressive 进度
 				if (msg.phase === 'first' || msg.phase === 'done') {
+					const dens = typeof msg.tableDensity === 'number'
+						? ` dens=${msg.tableDensity.toFixed(3)} tier=${msg.chunkTier || '?'}`
+						: '';
 					this.logService.debug(
-						`[VSWord Milkdown] openProgress ${msg.phase} ${msg.loadedChunks}/${msg.totalChunks} chars=${msg.sourceChars} progressive=${msg.progressive}`,
+						`[VSWord Milkdown] openProgress ${msg.phase} ${msg.loadedChunks}/${msg.totalChunks} chars=${msg.sourceChars} progressive=${msg.progressive}${dens}`,
 					);
 				}
 				// RD-1.4 · 产品显著提示：首次遇到 progressive 时 toast 一次（webview 内另有常驻条）

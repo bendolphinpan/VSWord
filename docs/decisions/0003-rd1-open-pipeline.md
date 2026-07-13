@@ -1,7 +1,7 @@
 # Decision 0003 · RD-1 大文档 open pipeline（阶段结论）
 
 - **日期**：2026-07-13  
-- **状态**：RD-1-lite / RD-1.4a / **RD-1.4 产品限速提示** 已落地；**全量** 1MB Ready ≤2s 仍受 GFM table 超线性限制，挂 **RD-1.4b（算法 D，可选）**  
+- **状态**：RD-1-lite / 1.4a / 1.4 提示 / **1.4b 自适应分块** 已落地；**不保证** 一次灌满 1MB PM ≤2s（GFM table 仍超线性，靠小块摊销）  
 - **关联**：`004-remediation-and-debt-plan.md` RD-1 · 历史 `phase-3.9-perf.md`
 
 ---
@@ -49,7 +49,8 @@ unified().use(remarkParse).parse(整篇 markdown)  → 仅为 setext hint 抽 bl
 | A. 大文档关闭 GFM/table | 快 | 破坏 Typora 表格对等 | ❌ 不做默认 |
 | B. Worker 全量 parse | 不卡死 UI | 首交互仍等全量 | 备选 |
 | **C. Progressive 分块 open** | 首屏 ~100–200k GFM ≤1s 级 | 跨块表格需安全切点 | ✅ **已实现** |
-| D. 裁剪/替换 table 实现 | 全量也快 | 兼容矩阵 | 后续可选 |
+| D. 裁剪/替换 table 实现 | 全量也快 | 兼容矩阵 | ⏸ 未做（替换 parser 风险高） |
+| **D' 自适应分块（RD-1.4b）** | table 密文缩小 first/next | 块数增多 | ✅ **已实现** |
 
 ### C 实现要点（RD-1.2 · 2026-07-13）
 
@@ -65,8 +66,9 @@ unified().use(remarkParse).parse(整篇 markdown)  → 仅为 setext hint 抽 bl
 | 等级 | 指标 | 状态 |
 |------|------|------|
 | **RD-1-lite**（发布硬门槛） | 1MB：首屏可编辑（TTI）≈ 首块 GFM parse；目标 ≤2s；加载中可输入 | ✅ progressive + 首块 48k + 进度/脏标记修复 |
-| **RD-1.3 全量** | 1MB 全量 Ready P95 ≤2s | 🔴 仍受 table 超线性限制 → **RD-1.4b**（可选） |
+| **RD-1.3 全量** | 1MB 一次灌满 PM ≤2s | 🔴 **不保证**（产品路径改为按需 + 小块） |
 | **RD-1.4 产品路径** | 不全量预取 + **显著限速提示** + 用户可「加载剩余」 | ✅ 2026-07-13 |
+| **RD-1.4b** | table 密度 → first/next 自适应（low 48k / med 32–24k / high 24–16k） | ✅ 2026-07-13 |
 
 **产品提示（RD-1.4）**：
 
@@ -103,5 +105,6 @@ node code-oss/test/scripts/perf-3.9.1-bench.mjs --fixture 1mb --runs 3 --skip-ty
 | 2026-07-13 | RD-1.3：首块 64k、openProgress、加载中编辑 dirty 修复；全量 2s 改挂 RD-1.4 |
 | 2026-07-13 | RD-1.4a：默认 **不全量预取**；首块 48k + 滚动近底再装下一块；find 改 fixed 浮层 |
 | 2026-07-13 | RD-1.4：banner + 加载剩余 + 首次 toast；全量 ≤2s 改挂 **RD-1.4b** 可选算法 |
+| 2026-07-13 | RD-1.4b：`estimateTableDensity` + `resolveProgressiveChunkSizes`；密表 high=24k/16k |
 
 **Decision End · 0003**
