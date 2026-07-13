@@ -264,11 +264,30 @@ export function createFindWidget(deps) {
 		broadcast();
 	}
 
+	function setWidgetVisible(visible) {
+		if (!el) { return; }
+		if (visible) {
+			el.classList.remove('vsword-hidden');
+			el.classList.add('is-open');
+			el.style.display = '';
+			el.setAttribute('aria-hidden', 'false');
+		} else {
+			el.classList.add('vsword-hidden');
+			el.classList.remove('is-open');
+			// 双保险：即使主题/层叠把 .vsword-hidden 冲掉，也强制不占位
+			el.style.display = 'none';
+			el.setAttribute('aria-hidden', 'true');
+		}
+	}
+
 	function open() {
 		if (!el) { return; }
 		state.widgetOpen = true;
-		el.classList.remove('vsword-hidden');
-		if (replaceRowEl) { replaceRowEl.classList.add('vsword-hidden'); }
+		setWidgetVisible(true);
+		if (replaceRowEl) {
+			replaceRowEl.classList.add('vsword-hidden');
+			replaceRowEl.style.display = 'none';
+		}
 		recompute();
 		try { findInputEl?.focus(); findInputEl?.select?.(); } catch { /* noop */ }
 	}
@@ -276,11 +295,12 @@ export function createFindWidget(deps) {
 	function openReplace() {
 		if (!el) { return; }
 		state.widgetOpen = true;
-		el.classList.remove('vsword-hidden');
+		setWidgetVisible(true);
 		const readOnly = getMode() === 'reading';
 		if (replaceRowEl) {
 			// reading mode 下允许显示但把 replace 按钮 disabled（c 卡再补真事务）；此卡先显示。
 			replaceRowEl.classList.remove('vsword-hidden');
+			replaceRowEl.style.display = '';
 			replaceRowEl.classList.toggle('vsword-find-replace-disabled', readOnly);
 			const btnOne = replaceRowEl.querySelector('.vsword-replace-one');
 			const btnAll = replaceRowEl.querySelector('.vsword-replace-all');
@@ -296,8 +316,11 @@ export function createFindWidget(deps) {
 		state.widgetOpen = false;
 		state.matches = [];
 		state.activeIndex = -1;
-		el.classList.add('vsword-hidden');
-		if (replaceRowEl) { replaceRowEl.classList.add('vsword-hidden'); }
+		setWidgetVisible(false);
+		if (replaceRowEl) {
+			replaceRowEl.classList.add('vsword-hidden');
+			replaceRowEl.style.display = 'none';
+		}
 		renderCount();
 		kickPlugin();
 		broadcast();
@@ -329,6 +352,8 @@ export function createFindWidget(deps) {
 		const wrap = doc.createElement('div');
 		wrap.id = 'vsword-find-widget';
 		wrap.className = 'vsword-find-widget vsword-hidden';
+		wrap.style.display = 'none';
+		wrap.setAttribute('aria-hidden', 'true');
 		wrap.setAttribute('role', 'search');
 		wrap.setAttribute('aria-label', '查找与替换');
 
@@ -376,6 +401,7 @@ export function createFindWidget(deps) {
 
 		const replaceRow = doc.createElement('div');
 		replaceRow.className = 'vsword-replace-row vsword-hidden';
+		replaceRow.style.display = 'none';
 		const replaceInput = doc.createElement('input');
 		replaceInput.type = 'text';
 		replaceInput.className = 'vsword-replace-input';

@@ -155,17 +155,19 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 
 ---
 
-### RD-2 — 真实 IME 手测矩阵 + 回归锁 · P0
+### RD-2 — 真实 IME / 输入 手测 + auto-save 静默 · P0
 
-**背景**：T-3.12.1 + T-3.13.1 已修 host `save()` gate；自动化 151 相关用例绿；**Rime 人肉仍是 open**。
+**背景**：用户反馈（Rime/英文均现）——auto-save 后失焦，且页面回退到触发瞬间的内容。  
+**根因（2026-07-13 代码确认）**：不单是 IME composition gate；**save 写盘后的文件 watcher 回声**在 `_saving=false` 后仍被当成 external change → `load` → webview `reload`/`createEditor` → 失焦 + 用 snapshot 覆盖用户已继续输入的内容。
 
-| 子项 | 内容 | DoD |
-|------|------|-----|
-| RD-2.1 | 填 `phase-3.9.2-ime-checklist.md` 骨架 14 行 | 微软拼音 + 搜狗（或用户主力）+ Rime 至少签字 |
-| RD-2.2 | 锁定回归步骤：连续输入「人工智能大语言模型」期间 auto-save 触发、不失焦、不丢字 | 写进 checklist Round-2 section |
-| RD-2.3 | 若仍 fail：开 **RD-2.x fix**（沿 T-3.13.1 假设 A/B/C 继续），禁止只加单测结案 | 手测 pass 才能 close RD-2 |
+| 子项 | 内容 | 状态 |
+|------|------|------|
+| RD-2.0 | **代码 fix**：save 后 suppress watcher 2s；save 期间 diverged re-dirty；external 与内存一致则不 reload | ✅ |
+| RD-2.0b | find-widget 默认 `display:none` + CSS 双保险（底部浮动条） | ✅ |
+| RD-2.1 | 手测清单签字 | ⏸ 待用户重测 |
+| RD-2.2 | 「连续输入 + auto-save」不失焦、不回退 | ⏸ 待用户重测 |
 
-**Gate**：中文主力 IME（用户环境）AC-1.1 级场景 pass。日/韩可标「延后」但不得冒充全矩阵完成。
+**Gate**：任意输入法（含英文）连续输入时 auto-save 静默；不 reload、不失焦、不丢字。
 
 ---
 

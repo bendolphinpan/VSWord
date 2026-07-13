@@ -223,6 +223,43 @@ suite('VSWord Milkdown WorkingCopy', () => {
 		disposables.dispose();
 	});
 
+	test('RD-2 · save 完成后的延迟 watcher 回声被 suppress（不 fire external）', async () => {
+		const { copy, resource, fs, disposables } = make('# initial\n');
+		await copy.load();
+		copy.updateContent('# edit\n');
+
+		let externalHits = 0;
+		copy.onExternalChange(() => externalHits++, undefined, disposables);
+
+		await copy.save({ reason: SaveReason.AUTO });
+		await flush();
+		// 模拟 watcher 在 _saving=false 之后才到
+		fs.emitChange(resource, FileChangeType.UPDATED);
+		await flush();
+		assert.strictEqual(externalHits, 0, 'post-save echo within suppress window must be ignored');
+		disposables.dispose();
+	});
+
+	test('RD-2 · save 期间继续输入 → 结束后仍 dirty 且磁盘为 snapshot', async () => {
+		const { copy, fs, disposables } = make('# initial\n');
+		await copy.load();
+		copy.updateContent('# snap\n');
+
+		const originalWriteFile = fs.service.writeFile;
+		fs.service.writeFile = async (r: URI, buf: VSBuffer) => {
+			// 模拟 write 期间用户又输入
+			copy.updateContent('# snap\nand more\n');
+			return originalWriteFile.call(fs.service, r, buf);
+		};
+
+		await copy.save({ reason: SaveReason.AUTO });
+		await flush();
+		assert.strictEqual(fs.writeCalls.at(-1)?.contents, '# snap\n', '磁盘应是 save 开始时的 snapshot');
+		assert.strictEqual(copy.isDirty(), true, '内存已前进 → 必须仍 dirty');
+		assert.strictEqual(copy.getContent(), '# snap\nand more\n');
+		disposables.dispose();
+	});
+
 	// ---- T-3.8.2 · 三分支保存路径 -------------------------------------
 
 	/** 构造一个 safe session payload —— 与 roundtripSerializer.test 中的 fixture 同形。 */

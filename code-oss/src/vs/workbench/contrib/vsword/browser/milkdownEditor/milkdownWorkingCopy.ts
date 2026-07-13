@@ -132,6 +132,15 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 
 	/** Autosave debounce timer id (any because Node vs. DOM types differ). */
 	private _autoSaveTimer: any = undefined;
+	/**
+	 * RD-2 fix · 抑制「自己的 writeFile 回声」被当成 external change。
+	 * 仅 `_saving` 不够：watcher 事件常在 finally 把 `_saving=false` **之后**才到，
+	 * 此时 isDirty 已清 → onExternalChange 静默 load → webview reload → 失焦 + 回退到
+	 * save 开始时的 snapshot（用户在 save 期间继续输入的字全丢）。
+	 */
+	private _suppressExternalUntil = 0;
+	/** 最近一次成功写入的字节指纹（长度 + 简单 hash），用于二次确认回声。 */
+	private _lastWriteFingerprint: string | null = null;
 
 	private readonly _fileWatcher = this._register(new DisposableStore());
 
@@ -326,6 +335,7 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 			return true; // already in flight; callers may retry after
 		}
 		this._saving = true;
+		// 写盘用保存开始时的快照；期间用户继续输入会更新 _current，结束后必须 re-dirty。
 		const snapshot = this._current;
 		const forcePath = this._pendingForcePath;
 		// forcePath 是一次性 —— 无论 save 是否成功都消耗掉，避免下一次 typing 意外走 C。
@@ -363,13 +373,13 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 			}
 
 			// 保存成功后同步内部状态：
-			//   - _saved 追到 snapshot（B/C 分支）或磁盘上原始文本（A 分支）；
-			//   - A 分支 _openedBytes 原样保留；B/C 分支刷新为新写入的 bytes；
-			//   - dirtyBlocks 清空（tracker 侧会在下一轮 markdownUpdated 重发）；
-			//   - session 保留（sourceText 已过期，需要下一次 sessionReady 刷新，但保留期间
-			//     pickSavePath 会因为 dirty 判定重新走 C 直到新 session 落地 —— 这条不变式
-			//     在 pickSavePath 的 8 分支里由 forcePath / dirty 覆盖）。
+			//   - 磁盘权威内容 = snapshot（写入的那一版）
+			//   - 若 save 期间 _current 已前进 → 保持 dirty 并重新 arm auto-save（绝不 reload）
+			//   - 抑制文件 watcher 回声，避免 silent external load 把编辑器打回 snapshot
 			this._saved = snapshot;
+			this._lastWriteFingerprint = fingerprintBytes(bytesWritten);
+			// watcher 延迟常见 0–500ms；给足 2s 窗口。真正 external 编辑若在窗口内会延后到下次变更。
+			this._suppressExternalUntil = Date.now() + 2000;
 			if (chosen !== 'A') {
 				const nb = new Uint8Array(bytesWritten.length);
 				nb.set(bytesWritten);
@@ -380,7 +390,15 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 			this._dirtyBlockIds = null;
 			this._dirtyBlockContents = null;
 
-			if (this._dirty) {
+			const diverged = this._current !== snapshot;
+			if (diverged) {
+				// save 期间用户又输入了：磁盘是 snapshot，内存是更新内容 → 必须仍 dirty。
+				if (!this._dirty) {
+					this._dirty = true;
+					this._onDidChangeDirty.fire();
+				}
+				// 不在 finally 前 schedule：等 _saving=false 后再 arm，避免 gate 误判
+			} else if (this._dirty) {
 				this._dirty = false;
 				this._onDidChangeDirty.fire();
 			}
@@ -391,6 +409,10 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 			return false;
 		} finally {
 			this._saving = false;
+			// save 期间若有新输入，重新排 auto-save（静默落盘，不 reload webview）
+			if (this._dirty && !this._webviewComposing) {
+				this.scheduleAutoSave();
+			}
 		}
 	}
 
@@ -447,6 +469,10 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 		if (this._saving) {
 			return; // our own write is echoing back
 		}
+		// RD-2 · save 完成后的延迟 watcher 回声（最常见失焦/回退根因）
+		if (Date.now() < this._suppressExternalUntil) {
+			return;
+		}
 		if (!event.contains(this.resource)) {
 			return;
 		}
@@ -468,6 +494,19 @@ export class MilkdownWorkingCopy extends Disposable implements IWorkingCopy {
 		this._session = null;
 		this._dirtyBlockIds = null;
 		this._dirtyBlockContents = null;
+		this._lastWriteFingerprint = null;
 		super.dispose();
 	}
+}
+
+/** 轻量指纹：长度 + 采样 hash，足够区分「自己的 write 回声」与真·外部改写。 */
+function fingerprintBytes(bytes: Uint8Array): string {
+	let h = 2166136261 >>> 0;
+	const step = Math.max(1, Math.floor(bytes.length / 64));
+	for (let i = 0; i < bytes.length; i += step) {
+		h ^= bytes[i];
+		h = Math.imul(h, 16777619) >>> 0;
+	}
+	h ^= bytes.length;
+	return `${bytes.length}:${h.toString(16)}`;
 }

@@ -500,8 +500,16 @@ export class VswordMilkdownEditorContribution extends Disposable implements IWor
 			this.post(input, { type: 'hostError', message: 'File was deleted on disk.' });
 			return;
 		}
+		// RD-2 · 静默 reload 会 post `reload` → webview createEditor 整页重建 → 失焦 + 丢字。
+		// 仅在「非 dirty」时自动跟盘；dirty 时弹窗。自身 save 的回声由 workingCopy 抑制。
 		if (!input.workingCopy.isDirty()) {
 			try {
+				// 若磁盘内容与内存已一致，load 会再 fire onDidReload 仍会重建编辑器——避免无意义 reload。
+				const disk = await this.fileService.readFile(input.resource);
+				const diskText = disk.value.toString();
+				if (diskText === input.workingCopy.getContent()) {
+					return;
+				}
 				await input.workingCopy.load('externalChange');
 			} catch (err) {
 				this.logService.error('[VSWord Milkdown] silent reload on external change failed:', err);

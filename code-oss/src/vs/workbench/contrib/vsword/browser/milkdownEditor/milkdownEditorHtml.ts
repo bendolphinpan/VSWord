@@ -1296,9 +1296,60 @@ export function getMilkdownEditorHtml(options: MilkdownEditorHtmlOptions): strin
 			white-space: nowrap;
 		}
 
-		/* T-3.13.6: 底部查找栏受控开关 · find-widget 通过 .vsword-hidden 切换显隐 ·
-		   !important 防被 layer/主题 CSS 覆盖 · replace-row 复用同一 class 一并生效. */
+		/* T-3.13.6 / RD-2: 查找栏默认隐藏；.vsword-hidden 与 :not(.is-open) 双保险 */
 		.vsword-hidden { display: none !important; }
+		.vsword-find-widget {
+			position: sticky;
+			bottom: 0;
+			left: 0;
+			right: 0;
+			z-index: 200;
+			display: none;
+			flex-direction: column;
+			gap: 6px;
+			padding: 8px 12px;
+			background: var(--vscode-editorWidget-background, var(--vsword-bg));
+			border-top: 1px solid var(--vsword-border);
+			box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.18);
+			font-size: 12px;
+		}
+		.vsword-find-widget.is-open { display: flex !important; }
+		.vsword-find-widget.vsword-hidden,
+		.vsword-find-widget:not(.is-open) { display: none !important; }
+		.vsword-find-row,
+		.vsword-replace-row {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			flex-wrap: wrap;
+		}
+		.vsword-find-input,
+		.vsword-replace-input {
+			flex: 1 1 140px;
+			min-width: 100px;
+			padding: 4px 8px;
+			border: 1px solid var(--vsword-border);
+			border-radius: 4px;
+			background: var(--vscode-input-background, transparent);
+			color: var(--vsword-fg);
+		}
+		.vsword-find-count { color: var(--vsword-muted); min-width: 4.5em; }
+		.vsword-find-opt,
+		.vsword-find-prev,
+		.vsword-find-next,
+		.vsword-find-close,
+		.vsword-replace-one,
+		.vsword-replace-all {
+			border: 1px solid var(--vsword-border);
+			background: transparent;
+			color: var(--vsword-fg);
+			border-radius: 4px;
+			padding: 2px 8px;
+			cursor: pointer;
+		}
+		.vsword-find-opt-on { border-color: var(--vsword-accent); color: var(--vsword-accent); }
+		.vsword-find-error { border-color: var(--vsword-error) !important; }
+		.vsword-replace-row.vsword-hidden { display: none !important; }
 
 		${getThemesCss()}
 	</style>
