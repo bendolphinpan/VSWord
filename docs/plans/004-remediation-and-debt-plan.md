@@ -66,6 +66,7 @@
 | **RD-10** | Phase 7 最小可发布 DoD | master §6 | **P0** · 形态 **B Portable** · **UI 后** | 产品化 | 5–10d | **是**（给外人用） |
 | **RD-11** | Round-trip 保真语义复核 | Gate E 通过但超越 Typora 主张需钉死 | P1 · **✅** | 质量 | 1d | 否 |
 | **RD-12** | 扩展市场冒烟（Open VSX + VSIX） | P0 硬需求 | P1 · **清单就绪 · 待手测签字** | 兼容 | 1d | 发布前建议 |
+| **RD-13** | HTML 源码/预览同页签切换 | 用户请求（写作周边） | P1 · **✅ 已实现** | 功能 | 0.5–1d | 否 |
 
 **执行顺序（推荐，不可再把 Canvas 叫「下一步 Phase」）**：
 
@@ -323,6 +324,21 @@ Gate E 全绿已声明。本卡不重做实现，只钉：
 | VSIX 本地安装 | 成功激活 |
 | 写作向扩展（如 Markdown 增强类，若 Open VSX 有） | 命令可用、不拖垮 Milkdown |
 | 失败路径 | 文档写清「非 Microsoft Marketplace」 |
+
+---
+
+### RD-13 — HTML 源码/预览同页签切换 · P1 · ✅
+
+| 交付 | 状态 |
+|------|------|
+| `contrib/vsword/browser/htmlPreview/*`（shell + iframe srcdoc + Input/Contribution） | ✅ |
+| 标题栏「预览 / 源码」+ `vsword.html.togglePreview`（`Ctrl+Shift+V`，仅 HTML 上下文） | ✅ |
+| 预览读 TextModel 缓冲（含 dirty）；`vsword.htmlPreview.allowScripts` + 工作区信任门闩 | ✅ |
+| 纯函数单测 `htmlPreviewContent.test.ts`（12） | ✅ |
+
+**用法**：打开 `.html`/`.htm`（默认 Monaco 源码）→ 编辑器标题栏预览图标 / 命令面板「预览 HTML」→ 同页签渲染；预览顶栏「源码」或再次 toggle 返回。
+
+**非目标**：侧边并排、Live Server、HTML WYSIWYG 编辑。
 
 ---
 

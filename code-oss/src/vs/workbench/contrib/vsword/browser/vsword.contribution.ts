@@ -11,6 +11,7 @@ import { VswordMilkdownEditorContribution } from './milkdownEditor/milkdownEdito
 import { MilkdownWorkingCopyEditorHandler } from './milkdownEditor/milkdownWorkingCopyEditorHandler.js';
 import { VswordMilkdownThemeStatusContribution } from './milkdownEditor/vswordMilkdownThemeStatus.js';
 import { VswordPandocDetectionContribution } from './milkdownEditor/exportPandocContribution.js';
+import { VswordHtmlPreviewContribution } from './htmlPreview/htmlPreviewContribution.js';
 
 // Effects-only imports. Each sub-module is responsible for its own registration.
 import './vswordHelloAction.js';
@@ -37,6 +38,7 @@ import './milkdownEditor/exportPdfContribution.js';
 // T-3.8b.3: register 3 pandoc Action2（docx/epub/latex）—— import 触发 registerAction2 副作用；
 // contribution 类往 workbench 里注册探测器（idle probe → 写 ContextKey vsword.pandocAvailable）。
 import './milkdownEditor/exportPandocContribution.js';
+// RD-HTML-1：VswordHtmlPreviewContribution 的 import 已带 Action2 + 配置 schema 副作用
 
 registerWorkbenchContribution2(VswordWorkbenchShellContribution.ID, VswordWorkbenchShellContribution, WorkbenchPhase.AfterRestored);
 registerWorkbenchContribution2(VswordWordCountContribution.ID, VswordWordCountContribution, WorkbenchPhase.AfterRestored);
@@ -49,3 +51,5 @@ registerWorkbenchContribution2(VswordMilkdownThemeStatusContribution.ID, VswordM
 // T-3.8b.3 · Pandoc 检测器：workbench idle 后跑一次 detectPandoc，把结果写进 ContextKey
 // vsword.pandocAvailable；三条 pandoc Action2 的 precondition 挂在此 key 上。
 registerWorkbenchContribution2(VswordPandocDetectionContribution.ID, VswordPandocDetectionContribution, WorkbenchPhase.AfterRestored);
+// RD-HTML-1 · HTML 源码/预览同页签切换（默认仍走文本编辑器；预览为 option priority）
+registerWorkbenchContribution2(VswordHtmlPreviewContribution.ID, VswordHtmlPreviewContribution, WorkbenchPhase.AfterRestored);
