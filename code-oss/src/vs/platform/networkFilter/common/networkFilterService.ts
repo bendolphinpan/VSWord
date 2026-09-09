@@ -6,6 +6,7 @@
 import { Emitter, Event } from '../../../base/common/event.js';
 import { Disposable } from '../../../base/common/lifecycle.js';
 import { LRUCache } from '../../../base/common/map.js';
+import { matchesScheme, Schemas } from '../../../base/common/network.js';
 import { URI } from '../../../base/common/uri.js';
 import { localize } from '../../../nls.js';
 import { IConfigurationService } from '../../configuration/common/configuration.js';
@@ -14,6 +15,13 @@ import { extractDomainFromUri, isDomainAllowed } from './domainMatcher.js';
 import { AgentNetworkDomainSettingId } from './settings.js';
 
 export const IAgentNetworkFilterService = createDecorator<IAgentNetworkFilterService>('agentNetworkFilterService');
+
+function isFilteredNetworkScheme(uri: URI): boolean {
+	return matchesScheme(uri, Schemas.http)
+		|| matchesScheme(uri, Schemas.https)
+		|| matchesScheme(uri, 'ws')
+		|| matchesScheme(uri, 'wss');
+}
 
 /**
  * Service that filters network requests made by agent tools (fetch tool,
@@ -31,7 +39,7 @@ export interface IAgentNetworkFilterService {
 	/**
 	 * Extracts the domain from a URI and checks it against the configured
 	 * allowed/denied domain filter.
-	 * File URIs and URIs without an authority always pass.
+	 * File URIs and unfiltered schemes without an authority always pass.
 	 * @returns `true` if the URI's domain is allowed, `false` if blocked.
 	 */
 	isUriAllowed(uri: URI): boolean;
@@ -93,14 +101,15 @@ export class AgentNetworkFilterService extends Disposable implements IAgentNetwo
 			return true;
 		}
 
-		// File URIs and URIs without authority always pass
-		if (uri.scheme === 'file' || !uri.authority) {
+		// File URIs and unfiltered schemes without authority always pass
+		if (matchesScheme(uri, Schemas.file)
+			|| (!uri.authority && !isFilteredNetworkScheme(uri))) {
 			return true;
 		}
 
 		const domain = extractDomainFromUri(uri);
 		if (!domain) {
-			return true;
+			return !isFilteredNetworkScheme(uri);
 		}
 
 		let result = this.domainCache.get(domain);

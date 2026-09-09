@@ -39,9 +39,9 @@
 		}
 
 		// minimal color configuration (works with or without persisted data)
-		let baseTheme = 'vs-dark';
-		let shellBackground = '#1E1E1E';
-		let shellForeground = '#CCCCCC';
+		let baseTheme = 'vs';
+		let shellBackground = '#FFFFFF';
+		let shellForeground = '#3B3B3B';
 		if (data) {
 			baseTheme = data.baseTheme;
 			shellBackground = data.baseTheme === 'vs'
@@ -69,7 +69,6 @@
 				shellForeground = '#000000';
 			}
 		} else {
-			// 与 workbench 冷启动一致：无 splash 时默认浅色，避免白/黑/白。
 			baseTheme = 'vs';
 			shellBackground = '#FFFFFF';
 			shellForeground = '#3B3B3B';
@@ -116,6 +115,9 @@
 		// Compute base URL and set as global
 		const baseUrl = new URL(`${fileUriFromPath(configuration.appRoot, { isWindows: safeProcess.platform === 'win32', scheme: 'vscode-file', fallbackAuthority: 'vscode-app' })}/out/`);
 		globalThis._VSCODE_FILE_ROOT = baseUrl.toString();
+
+		// Set product configuration as global (used e.g. to select the ASAR path in `amdX`)
+		globalThis._VSCODE_PRODUCT_JSON = { ...configuration.product };
 
 		// Dev only: CSS import map tricks
 		setupCSSImportMaps<T>(configuration, baseUrl);

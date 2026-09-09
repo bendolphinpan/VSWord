@@ -17,6 +17,7 @@ import { IConfigurationService, ConfigurationTarget } from '../../../../platform
 import { isWeb } from '../../../../base/common/platform.js';
 import { ColorScheme } from '../../../../platform/theme/common/theme.js';
 import { IHostColorSchemeService } from './hostColorSchemeService.js';
+import { IColorScheme } from '../../../../platform/window/common/window.js';
 
 // Configuration: Themes
 const configurationRegistry = Registry.as<IConfigurationRegistry>(ConfigurationExtensions.Configuration);
@@ -34,8 +35,7 @@ export const COLOR_THEME_CONFIGURATION_SETTINGS_TAG = 'colorThemeConfiguration';
 const colorThemeSettingSchema: IConfigurationPropertySchema = {
 	type: 'string',
 	markdownDescription: nls.localize({ key: 'colorTheme', comment: ['{0} will become a link to another setting.'] }, "Specifies the color theme used in the workbench when {0} is not enabled.", formatSettingAsLink(ThemeSettings.DETECT_COLOR_SCHEME)),
-	// VSWord / Code-OSS 写作产品：桌面与 web 统一默认浅色，避免冷启动先 DARK 再切浅色。
-	// （上游 VS Code 桌面默认深色；本 fork 以写作为主，与 vswordWriterModeDefaults 对齐。）
+	// VSWord: desktop+web default light (avoid DARK flash).
 	default: ThemeSettingDefaults.COLOR_THEME_LIGHT,
 	tags: [COLOR_THEME_CONFIGURATION_SETTINGS_TAG],
 	enum: colorThemeSettingEnum,
@@ -345,8 +345,23 @@ export class ThemeConfiguration {
 		return undefined;
 	}
 
+	public isDetectingHighContrast(): boolean {
+		return this.configurationService.getValue(ThemeSettings.DETECT_HC);
+	}
+
 	public isDetectingColorScheme(): boolean {
 		return this.configurationService.getValue(ThemeSettings.DETECT_COLOR_SCHEME);
+	}
+
+	public isPreferredColorSchemeChange(previous: IColorScheme): boolean {
+		const darkChanged = previous.dark !== this.hostColorService.dark;
+		if (this.isDetectingColorScheme() && darkChanged) {
+			return true;
+		}
+		if (this.isDetectingHighContrast()) {
+			return previous.highContrast !== this.hostColorService.highContrast || (this.hostColorService.highContrast && darkChanged);
+		}
+		return false;
 	}
 
 	public getColorThemeSettingId(): ThemeSettings {

@@ -52,7 +52,7 @@ export class ExtensionGalleryManifestIPCService extends ExtensionGalleryManifest
 	}
 
 	private setExtensionGalleryManifest(manifest: IExtensionGalleryManifest | null): void {
-		this.logService.trace(`[Marketplace] Setting manifest ${manifest ? 'available' : 'unavailable'}`, manifest);
+		this.logService.trace(`[Marketplace] Setting manifest ${manifest ? 'available' : 'unavailable'}`);
 		this._extensionGalleryManifest = manifest;
 		this._onDidChangeExtensionGalleryManifest.fire(manifest);
 		this._onDidChangeExtensionGalleryManifestStatus.fire(this.extensionGalleryManifestStatus);
