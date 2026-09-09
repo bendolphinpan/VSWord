@@ -152,8 +152,6 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			themeData = undefined;
 		}
 
-		// 首帧色板：仅当 settingsId 精确匹配内置 light/dark 默认时注入（VSWord 默认 Light 2026）。
-		// 旧 id（Default Light Modern 等）不会命中 → 曾导致桌面端先按 DARK 起色再切浅色。
 		const migratedColorTheme = migrateThemeSettingsId(colorThemeSetting);
 		const defaultColorMap =
 			(colorThemeSetting === ThemeSettingDefaults.COLOR_THEME_LIGHT || migratedColorTheme === ThemeSettingDefaults.COLOR_THEME_LIGHT || migratedColorTheme === 'Light Modern')
@@ -168,7 +166,6 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 			}
 		}
 		if (!themeData) {
-			// 无 preferred scheme 时：按配置的 colorTheme 推断 light/dark，勿再硬编码桌面=DARK。
 			let colorScheme = this.settings.getPreferredColorScheme();
 			if (!colorScheme) {
 				if (defaultColorMap === COLOR_THEME_LIGHT_INITIAL_COLORS) {
@@ -467,8 +464,11 @@ export class WorkbenchThemeService extends Disposable implements IWorkbenchTheme
 	// preferred scheme handling
 
 	private installPreferredSchemeListener() {
+		let previous = { dark: this.hostColorService.dark, highContrast: this.hostColorService.highContrast };
 		this._register(this.hostColorService.onDidChangeColorScheme(() => {
-			if (this.settings.isDetectingColorScheme()) {
+			const restoreColorTheme = this.settings.isPreferredColorSchemeChange(previous);
+			previous = { dark: this.hostColorService.dark, highContrast: this.hostColorService.highContrast };
+			if (restoreColorTheme) {
 				this.restoreColorTheme();
 			}
 		}));

@@ -210,7 +210,6 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 	}
 
 	private getStoredBaseTheme(): ThemeTypeSelector {
-		// 冷启动无 state 时默认浅色（VSWord 写作产品）；有用户/会话缓存则仍读缓存。
 		const baseTheme = this.stateService.getItem<ThemeTypeSelector>(THEME_STORAGE_KEY, ThemeTypeSelector.VS).split(' ')[0];
 		switch (baseTheme) {
 			case ThemeTypeSelector.VS: return ThemeTypeSelector.VS;
@@ -389,12 +388,17 @@ export class ThemeMainService extends Disposable implements IThemeMainService {
 			auxiliaryBarWidth = 0; // technically not true if configured 'visible', but we never store splash per empty window, so we decide on a default here
 		}
 
+		const partBounds = sideBarWidth === partSplash.layoutInfo.sideBarWidth && auxiliaryBarWidth === partSplash.layoutInfo.auxiliaryBarWidth
+			? partSplash.layoutInfo.partBounds
+			: undefined;
+
 		return {
 			...partSplash,
 			layoutInfo: {
 				...partSplash.layoutInfo,
 				sideBarWidth,
-				auxiliaryBarWidth
+				auxiliaryBarWidth,
+				partBounds
 			}
 		};
 	}

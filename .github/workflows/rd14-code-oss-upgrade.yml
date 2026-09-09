@@ -1,0 +1,40 @@
+name: RD-14 Code-OSS 1.136.2 upgrade
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [chore/rd14-code-oss-1.136.2]
+    paths:
+      - .github/workflows/rd14-code-oss-upgrade.yml
+      - scripts/rd14-upgrade.py
+
+permissions:
+  contents: write
+
+jobs:
+  overlay:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: chore/rd14-code-oss-1.136.2
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Overlay vscode 1.136.2 and re-apply VSWord patches
+        run: python scripts/rd14-upgrade.py
+
+      - name: Commit overlay if the tree changed
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No file changes"
+            exit 0
+          fi
+          git commit -m "chore(code-oss): RD-14 · 上游基线 1.124.2 → 1.136.2"
+          git push origin chore/rd14-code-oss-1.136.2

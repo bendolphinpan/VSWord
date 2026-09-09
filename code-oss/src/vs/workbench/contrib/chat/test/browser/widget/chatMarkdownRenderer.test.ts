@@ -4,10 +4,12 @@
  *--------------------------------------------------------------------------------------------*/
 
 import assert from 'assert';
+import { allowedMarkdownHtmlAttributes } from '../../../../../../base/browser/markdownRenderer.js';
 import { MarkdownString } from '../../../../../../base/common/htmlContent.js';
 import { assertSnapshot } from '../../../../../../base/test/common/snapshot.js';
 import { ensureNoDisposablesAreLeakedInTestSuite } from '../../../../../../base/test/common/utils.js';
-import { ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
+import { MarkedKatexSupport } from '../../../../markdown/browser/markedKatexSupport.js';
+import { allowedChatMarkdownHtmlTags, ChatContentMarkdownRenderer } from '../../../browser/widget/chatContentMarkdownRenderer.js';
 import { workbenchInstantiationService } from '../../../../../test/browser/workbenchTestServices.js';
 
 suite('ChatMarkdownRenderer', () => {
@@ -25,16 +27,16 @@ suite('ChatMarkdownRenderer', () => {
 		await assertSnapshot(result.element.textContent);
 	});
 
-	test('plain text fast path preserves rendered markdown shape', () => {
-		const md = new MarkdownString('Hello, world. This is plain.', { isTrusted: true, supportHtml: true, supportThemeIcons: true });
+	test('plain text fast path preserves rendered markdown shape and single tildes', () => {
+		const md = new MarkdownString('Hello, ~world~. This is plain.', { isTrusted: true, supportHtml: true, supportThemeIcons: true });
 		const result = store.add(testRenderer.render(md));
 
 		assert.deepStrictEqual({
 			outerHTML: result.element.outerHTML,
 			textContent: result.element.textContent,
 		}, {
-			outerHTML: '<div class="rendered-markdown"><p>Hello, world. This is plain.</p></div>',
-			textContent: 'Hello, world. This is plain.',
+			outerHTML: '<div class="rendered-markdown"><p>Hello, ~world~. This is plain.</p></div>',
+			textContent: 'Hello, ~world~. This is plain.',
 		});
 	});
 
@@ -50,6 +52,19 @@ suite('ChatMarkdownRenderer', () => {
 		}, {
 			sameElement: true,
 			outerHTML: '<div class="rendered-markdown"><p>Hello, world.</p></div>',
+		});
+	});
+
+	test('only renders strikethrough with double tildes', () => {
+		const md = new MarkdownString('Keep ~single tildes~ but strike ~~double tildes~~.');
+		const result = store.add(testRenderer.render(md, { markedOptions: { gfm: true } }));
+
+		assert.deepStrictEqual({
+			outerHTML: result.element.outerHTML,
+			textContent: result.element.textContent,
+		}, {
+			outerHTML: '<div class="rendered-markdown"><p>Keep ~single tildes~ but strike <del>double tildes</del>.</p></div>',
+			textContent: 'Keep ~single tildes~ but strike double tildes.',
 		});
 	});
 
@@ -141,6 +156,19 @@ suite('ChatMarkdownRenderer', () => {
 		md.supportHtml = true;
 		const result = store.add(testRenderer.render(md));
 		await assertSnapshot(result.element.outerHTML);
+	});
+
+	test('raw style elements are not allowed by the math sanitizer', () => {
+		const md = new MarkdownString('<style>.example { background-image: none; }</style><div class="example">content</div>');
+		md.supportHtml = true;
+		const result = store.add(testRenderer.render(md, {
+			sanitizerConfig: MarkedKatexSupport.getSanitizerOptions({
+				allowedTags: allowedChatMarkdownHtmlTags,
+				allowedAttributes: allowedMarkdownHtmlAttributes,
+			}),
+		}));
+
+		assert.strictEqual(result.element.querySelector('style'), null);
 	});
 
 	test('code block ending at end of content does not leak body tag', async () => {

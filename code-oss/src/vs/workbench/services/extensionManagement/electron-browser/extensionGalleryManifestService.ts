@@ -69,9 +69,17 @@ export class WorkbenchExtensionGalleryManifestService extends ExtensionGalleryMa
 		if (remoteConnection) {
 			channels.push(remoteConnection.getChannel('extensionGalleryManifest'));
 		}
-		this.getExtensionGalleryManifest().then(manifest => {
-			this.logService.trace(`[Marketplace] Initializing channels with manifest ${manifest ? 'available' : 'unavailable'}`);
+		const updateChannels = (manifest: IExtensionGalleryManifest | null) => {
+			this.logService.trace(`[Marketplace] Updating channels with manifest ${manifest ? 'available' : 'unavailable'}`);
 			channels.forEach(channel => channel.call('setExtensionGalleryManifest', [manifest]));
+		};
+		this.getExtensionGalleryManifest().then(manifest => {
+			if (this._store.isDisposed) {
+				this.logService.trace('[Marketplace] Store is already disposed, skipping channel initialization');
+				return;
+			}
+			updateChannels(manifest);
+			this._register(this.onDidChangeExtensionGalleryManifest(manifest => updateChannels(manifest)));
 		});
 	}
 
@@ -92,7 +100,7 @@ export class WorkbenchExtensionGalleryManifestService extends ExtensionGalleryMa
 
 		const configuredServiceUrl = this.configurationService.getValue<string>(ExtensionGalleryServiceUrlConfigKey);
 		if (configuredServiceUrl) {
-			this.logService.trace(`[Marketplace] Private marketplace configured, checking access and fetching manifest`, configuredServiceUrl);
+			this.logService.trace('[Marketplace] Private marketplace configured, checking access and fetching manifest', configuredServiceUrl);
 			await this.handleDefaultAccountAccess(configuredServiceUrl);
 			this._register(this.defaultAccountService.onDidChangeDefaultAccount(() => this.handleDefaultAccountAccess(configuredServiceUrl)));
 		} else {
