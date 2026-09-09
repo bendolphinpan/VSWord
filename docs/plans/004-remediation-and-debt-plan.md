@@ -7,7 +7,8 @@
 > - 本文件 → **唯一债务 / 修复执行清单**（RD- 号）  
 > - 历史归档不改结论，只加指针 → `docs/decisions/phase-3-acceptance.md`  
 > **创建**：2026-07-13  
-> **基线**：Code OSS `1.124.2` · 分支 `dev` · 功能线收官至 `T-3.13.7`（`1889e82e`）
+> **基线**：Code OSS `1.124.2` · 分支 `dev` · 功能线收官至 `T-3.13.7`（`1889e82e`）  
+> **上游目标**：稳定 **1.136.2**（RD-14，见 `docs/decisions/0008-rd14-code-oss-upgrade.md`）
 
 ---
 
@@ -20,7 +21,8 @@
 1. **写作场景硬体验**（大文档 open、真实 IME）  
 2. **交付形态降级**（backlinks footer、Pretext 未做、字体 Settings 未闭合）  
 3. **规划治理债**（T 号漂移、文档互相矛盾、「转交 Phase 4」命名错误）  
-4. **可分发能力几乎为零**（Phase 7 未启动）
+4. **可分发能力几乎为零**（Phase 7 未启动）  
+5. **上游安全滞后**（Code-OSS 1.124.2 vs 稳定 1.136.2，**RD-14**）
 
 ### 0.2 既往问题（已发生，需纠偏）
 
@@ -67,6 +69,7 @@
 | **RD-11** | Round-trip 保真语义复核 | Gate E 通过但超越 Typora 主张需钉死 | P1 · **✅** | 质量 | 1d | 否 |
 | **RD-12** | 扩展市场冒烟（Open VSX + VSIX） | P0 硬需求 | P1 · **清单就绪 · 待手测签字** | 兼容 | 1d | 发布前建议 |
 | **RD-13** | HTML 源码/预览同页签切换 | 用户请求（写作周边） | P1 · **✅ 已实现** | 功能 | 0.5–1d | 否 |
+| **RD-14** | Code-OSS 上游升级 1.124.2 → 1.136.2 | 用户 2026-09-09；GHSA-x5qc webview 路径 | **P0** · ▶ 决策已落 | 安全/兼容 | 3–7d | **是**（webview + 对外发布） |
 
 **执行顺序（推荐，不可再把 Canvas 叫「下一步 Phase」）**：
 
@@ -77,6 +80,8 @@ RD-2 IME 手测签字（可与 RD-0 并行；用户环境）
   ↓
 RD-1 大文档 open（技术主线）
   ├─ 可选合并 RD-8 lazy split
+  ↓
+RD-14 Code-OSS 1.136.2（本机 git rebase；不与 RD-10 Portable 同步做）
   ↓
 RD-11 Round-trip 语义复核（短）
 RD-7 字体 Settings（短）
@@ -108,7 +113,6 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 | 结构快照（2026-07-13） | Page 1：`Section 1`（组件库碎片）+ **`main interface`**（`11:48`/`31:87`）含 left side / main editor / titlebar / toolbar |
 | 约定 | **定稿前不按稿实现**；定稿后对指定 Frame 做 `get_design_context` 再拆 UI 阶段任务 |
 | UI 档位 | 见 **`docs/decisions/0002-ui-modification-boundary.md`**（壳层允许 L2，扩展契约不可破） |
-
 
 ---
 
@@ -290,6 +294,7 @@ Phase 6 多维表 —— 仍标记后期，本计划不启动
 2. RD-1 至少 **RD-1-lite**（1MB open 达标）或文档**显著**写明限制且产品内提示  
 3. RD-10.1–10.4 完成  
 4. RD-12 扩展安装至少 1 个主题 + 1 个实用扩展成功  
+5. **RD-14 Gate-R14**（主机已到 1.136.2，或发布说明明确写「基于 1.124.2，webview 路径 GHSA 未补」）  
 
 ---
 
@@ -333,12 +338,27 @@ Gate E 全绿已声明。本卡不重做实现，只钉：
 |------|------|
 | `contrib/vsword/browser/htmlPreview/*`（shell + iframe srcdoc + Input/Contribution） | ✅ |
 | 标题栏「预览 / 源码」+ `vsword.html.togglePreview`（`Ctrl+Shift+V`，仅 HTML 上下文） | ✅ |
-| 预览读 TextModel 缓冲（含 dirty）；`vsword.htmlPreview.allowScripts` + 工作区信任门闩 | ✅ |
+| 预览读 TextModel 缓冲（含 dirty）；`vsword.htmlPreview.allowScripts` + 工作区信任门门 | ✅ |
 | 纯函数单测 `htmlPreviewContent.test.ts`（12） | ✅ |
 
 **用法**：打开 `.html`/`.htm`（默认 Monaco 源码）→ 编辑器标题栏预览图标 / 命令面板「预览 HTML」→ 同页签渲染；预览顶栏「源码」或再次 toggle 返回。
 
 **非目标**：侧边并排、Live Server、HTML WYSIWYG 编辑。
+
+---
+
+### RD-14 — Code-OSS 上游 1.124.2 → 1.136.2 · P0 · ▶ 决策已落
+
+权威决策：`docs/decisions/0008-rd14-code-oss-upgrade.md`。
+
+| 子项 | 内容 | 状态 |
+|------|------|------|
+| RD-14.0 | 对账上游稳定 1.136.2、product.json 资源钉、GHSA-x5qc webview 路径 | ✅ 2026-09-09 |
+| RD-14.1 | 本机 `D:\GIT\VSWord` 临时分支 rebase / rsync 1.136.2（保留 `contrib/vsword`） | ⏸ 待本机 git |
+| RD-14.2 | 重做浅色启动补丁 `ae139d1` + `workbench.common.main.ts` import | ⏸ |
+| RD-14.3 | Gate-R14：version=1.136.2 · Open VSX+no Copilot · mocha 绿 · webview 资源正常 | ⏸ |
+
+**禁止**：在 1.124.2 主机上单独跳 `js-profile-table` / Electron / 上游 `product.json` 全文；禁止用 GitHub Contents API 覆盖整棵 `code-oss/`。
 
 ---
 
@@ -363,7 +383,7 @@ Gate E 全绿已声明。本卡不重做实现，只钉：
 | U-3 | **RD-3** | 不变 P2 |
 | U-4 | **RD-4** | 对账为主，多半已半完成 |
 | U-5 | **RD-8** | 与 RD-1 合并优先 |
-| （无） | **RD-5~RD-7, RD-9~RD-12** | 审查新增 |
+| （无） | **RD-5~RD-7, RD-9~RD-14** | 审查新增 |
 
 历史文档可保留 U- 号，但**新 commit / kanban / 汇报一律用 RD- 号**。
 
@@ -405,5 +425,6 @@ NODE_OPTIONS="--max-old-space-size=8192" node node_modules/typescript/bin/tsc --
 |------|------|------|
 | 2026-07-13 | v1 | 首建：纠偏 Phase 4 误用、U→RD 映射、发布前硬门槛；RD-0 文档收敛 |
 | 2026-07-13 | v1.1 | 用户拍板 RD-5=A / RD-6=footer / RD-10=B；Figma 连通性探测（MyOwn 可见、无 fileKey 不深读） |
+| 2026-09-09 | v1.2 | **RD-14** Code-OSS 1.124.2 → 1.136.2；禁止单独跳 product.json 资源 |
 
-**文档 End · 004 Debt Backlog v1 · RD-0 ✅**
+**文档 End · 004 Debt Backlog v1.2 · RD-14 ▶**
